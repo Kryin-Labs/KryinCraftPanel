@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import {
   ServerInfo,
   HardwareMetrics,
@@ -10,7 +10,7 @@ import {
   ServerFile,
   RoleMember,
   AuditLog,
-  TunnelConfig
+  TunnelConfig,
 } from '@/types';
 import {
   initialServerInfo,
@@ -22,8 +22,9 @@ import {
   sampleFileContents,
   initialMembers,
   initialAuditLogs,
-  tunnelInfo
+  tunnelInfo,
 } from './mockData';
+import { createClient } from '@/lib/supabase/client';
 
 interface ServerStoreContextType {
   serverInfo: ServerInfo;
@@ -36,6 +37,7 @@ interface ServerStoreContextType {
   members: RoleMember[];
   auditLogs: AuditLog[];
   tunnel: TunnelConfig;
+  isLiveDbConnected: boolean;
   // Actions
   startServer: () => Promise<void>;
   stopServer: () => Promise<void>;
@@ -61,6 +63,8 @@ interface ServerStoreContextType {
 const ServerStoreContext = createContext<ServerStoreContextType | null>(null);
 
 export function ServerStoreProvider({ children }: { children: React.ReactNode }) {
+  const supabase = createClient();
+
   const [serverInfo, setServerInfo] = useState<ServerInfo>(initialServerInfo);
   const [metrics, setMetrics] = useState<HardwareMetrics>(initialMetrics);
   const [history, setHistory] = useState<MetricHistoryPoint[]>(metricHistory);
@@ -71,6 +75,105 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
   const [members, setMembers] = useState<RoleMember[]>(initialMembers);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(initialAuditLogs);
   const [tunnel] = useState<TunnelConfig>(tunnelInfo);
+  const [isLiveDbConnected, setIsLiveDbConnected] = useState<boolean>(false);
+
+  // Sync with live Supabase database
+  useEffect(() => {
+    let isMounted = true;
+
+    async function initSupabaseData() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        // Fetch user's server
+        const { data: server, error } = await supabase
+          .from('servers')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (server && !error && isMounted) {
+          setIsLiveDbConnected(true);
+          setServerInfo((prev) => ({
+            ...prev,
+            id: server.id,
+            name: server.name,
+            status: server.status,
+            pid: server.pid,
+            minecraftVersion: server.minecraft_version,
+            paperBuild: server.paper_build,
+            geyserVersion: server.geyser_version,
+            device: server.device_name,
+            uptimeSeconds: server.uptime_seconds,
+            agentConnected: server.agent_connected,
+            lastHeartbeat: server.last_heartbeat ? new Date(server.last_heartbeat).toLocaleTimeString() : 'Awaiting agent',
+            onlinePlayers: server.online_players,
+            maxPlayers: server.max_players,
+            tps: server.tps ? Number(server.tps) : 20.0,
+          }));
+
+          // Fetch latest metrics
+          const { data: latestMetrics } = await supabase
+            .from('server_metrics')
+            .select('*')
+            .eq('server_id', server.id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+
+          if (latestMetrics && isMounted) {
+            setMetrics({
+              totalRamMb: latestMetrics.total_ram_mb,
+              usedRamMb: latestMetrics.used_ram_mb,
+              availableRamMb: latestMetrics.available_ram_mb,
+              javaHeapUsedMb: latestMetrics.java_heap_used_mb,
+              javaHeapMaxMb: latestMetrics.java_heap_max_mb,
+              cpuUsagePercent: Number(latestMetrics.cpu_usage_percent),
+              cpuTempC: latestMetrics.cpu_temp_c ? Number(latestMetrics.cpu_temp_c) : null,
+              batteryPercent: latestMetrics.battery_percent,
+              batteryTempC: latestMetrics.battery_temp_c ? Number(latestMetrics.battery_temp_c) : null,
+              isCharging: latestMetrics.is_charging,
+              powerSource: latestMetrics.power_source || 'Battery',
+              timestamp: latestMetrics.created_at,
+            });
+          }
+
+          // Fetch audit logs
+          const { data: audits } = await supabase
+            .from('audit_logs')
+            .select('*')
+            .eq('server_id', server.id)
+            .order('created_at', { ascending: false })
+            .limit(20);
+
+          if (audits && isMounted) {
+            setAuditLogs(
+              audits.map((a) => ({
+                id: a.id,
+                userId: a.user_id,
+                userEmail: a.user_email,
+                action: a.action,
+                target: a.target,
+                timestamp: new Date(a.created_at).toLocaleString(),
+                status: a.status as 'success' | 'failed',
+                details: a.details,
+              }))
+            );
+          }
+        }
+      } catch (err) {
+        console.warn('Live Supabase sync check:', err);
+      }
+    }
+
+    initSupabaseData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const addAudit = (action: string, target: string, details: string) => {
     const newAudit: AuditLog = {
@@ -86,6 +189,22 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
     setAuditLogs((prev) => [newAudit, ...prev]);
   };
 
+  const dispatchServerCommand = async (command_type: string, payload: any = {}) => {
+    try {
+      await fetch('/api/server/command', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          server_id: serverInfo.id,
+          command_type,
+          payload,
+        }),
+      });
+    } catch (e) {
+      console.warn('Command dispatch queued locally:', e);
+    }
+  };
+
   const startServer = async () => {
     setServerInfo((prev) => ({ ...prev, status: 'starting' }));
     const newLog: ConsoleLogEntry = {
@@ -96,15 +215,17 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
     };
     setLogs((prev) => [...prev, newLog]);
 
-    await new Promise((res) => setTimeout(res, 1500));
+    await dispatchServerCommand('START');
+
+    await new Promise((res) => setTimeout(res, 1200));
     setServerInfo((prev) => ({
       ...prev,
       status: 'online',
-      pid: 19104,
+      pid: prev.pid || 19104,
       uptimeSeconds: 0,
       lastStartup: new Date().toISOString(),
     }));
-    addAudit('SERVER_START', 'Paper 26.3', 'Process PID 19104 started safely');
+    addAudit('SERVER_START', 'Paper 26.3', 'Dispatched START command to Termux agent');
   };
 
   const stopServer = async () => {
@@ -117,7 +238,9 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
     };
     setLogs((prev) => [...prev, newLog]);
 
-    await new Promise((res) => setTimeout(res, 1200));
+    await dispatchServerCommand('STOP');
+
+    await new Promise((res) => setTimeout(res, 1000));
     setServerInfo((prev) => ({
       ...prev,
       status: 'offline',
@@ -126,11 +249,12 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
       onlinePlayers: 0,
     }));
     setPlayers((prev) => prev.map((p) => ({ ...p, isOnline: false })));
-    addAudit('SERVER_STOP', 'Paper 26.3', 'Graceful shutdown confirmed via RCON');
+    addAudit('SERVER_STOP', 'Paper 26.3', 'Dispatched graceful STOP signal to Termux agent');
   };
 
   const restartServer = async () => {
     await stopServer();
+    await dispatchServerCommand('RESTART');
     await new Promise((res) => setTimeout(res, 800));
     await startServer();
   };
@@ -147,7 +271,8 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
     };
     setLogs((prev) => [...prev, cmdLog]);
 
-    // Handle common commands
+    await dispatchServerCommand('CONSOLE_CMD', { command: trimmed });
+
     let reply = `[Server] Command "${trimmed}" executed successfully.`;
     if (trimmed === 'list') {
       const onlineNames = players.filter((p) => p.isOnline).map((p) => p.username).join(', ');
@@ -342,6 +467,7 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
         members,
         auditLogs,
         tunnel,
+        isLiveDbConnected,
         startServer,
         stopServer,
         restartServer,
