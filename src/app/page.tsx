@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import AnimatedConsolePreview from '@/components/AnimatedConsolePreview';
 import {
   Server,
   ArrowRight,
@@ -1368,52 +1369,9 @@ export default function HomePage() {
                   </p>
                 </div>
 
-                {/* Terminal Console Mockup */}
-                <div className="mt-8 bg-[#090b10] border border-[#1a1522]/30 rounded-md overflow-hidden text-neutral-200 font-mono text-[13px] shadow-2xl">
-                  {/* Console Header Bar */}
-                  <div className="bg-[#12151e] px-4 py-2.5 border-b border-[#262c3d] flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-red-500/80"></span>
-                      <span className="w-2.5 h-2.5 rounded-full bg-yellow-500/80"></span>
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80"></span>
-                      <span className="ml-2 text-[12px] text-neutral-400">
-                        kryin-console — mumbai-node-01 (Paper 26.3)
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-3 text-[11px] text-neutral-400">
-                      <span className="flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                        ONLINE
-                      </span>
-                      <span>Port: 25565 / 19132</span>
-                    </div>
-                  </div>
-
-                  {/* Console Output */}
-                  <div className="p-4 space-y-1.5 max-h-72 overflow-y-auto leading-relaxed text-[12px]">
-                    <p className="text-neutral-500">[12:00:01 INFO]: Loading libraries, please wait...</p>
-                    <p className="text-emerald-400">[12:00:04 INFO]: [Paper] Starting minecraft server version 26.3</p>
-                    <p className="text-blue-400">[12:00:06 INFO]: [Geyser-Spigot] Started Geyser on 0.0.0.0:19132</p>
-                    <p className="text-neutral-300">[12:00:08 INFO]: Preparing start region for dimension minecraft:overworld</p>
-                    <p className="text-emerald-400">[12:00:11 INFO]: [KryinNode] Indian Node 01 ready! (20.0 TPS, 11ms MSPT)</p>
-                    <p className="text-amber-400">[12:02:14 INFO]: Player [Java] 'Alex' logged in from Delhi (Ping: 19ms)</p>
-                    <p className="text-purple-400">[12:02:20 INFO]: [Floodgate] Bedrock player '.RahulXbox' joined from Mumbai (Ping: 4ms)</p>
-                    <p className="text-neutral-400">[12:05:00 INFO]: Auto-save complete. World saved safely to NVMe.</p>
-                  </div>
-
-                  {/* Terminal Input Line */}
-                  <div className="bg-[#0f1118] px-4 py-2 border-t border-[#1e2330] flex items-center gap-2 text-neutral-400">
-                    <span className="text-emerald-400 font-bold">&gt;</span>
-                    <input
-                      type="text"
-                      readOnly
-                      value="op RahulXbox"
-                      className="bg-transparent border-0 outline-none w-full text-neutral-200 font-mono text-[12px]"
-                    />
-                    <span className="text-[11px] px-2 py-0.5 rounded bg-white/10 text-neutral-300">
-                      ENTER
-                    </span>
-                  </div>
+                {/* Animated Real-Time Minecraft Console Preview */}
+                <div className="mt-8">
+                  <AnimatedConsolePreview />
                 </div>
               </div>
             </section>
