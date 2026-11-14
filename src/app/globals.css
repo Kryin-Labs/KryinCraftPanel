@@ -1,103 +1,147 @@
 @import "tailwindcss";
 @import "./warp-theme.css";
 
-@layer base {
-  :root {
-    color-scheme: dark;
-    --background: #000000;
-    --foreground: #f3f4f6;
-    --card: #090b10;
-    --card-foreground: #f3f4f6;
-    --popover: #090b10;
-    --popover-foreground: #f3f4f6;
-    --primary: #ffffff;
-    --primary-foreground: #000000;
-    --secondary: #12151e;
-    --secondary-foreground: #f3f4f6;
-    --muted: #12151e;
-    --muted-foreground: #94a3b8;
-    --accent: #1e2433;
-    --accent-foreground: #38bdf8;
-    --destructive: #ef4444;
-    --destructive-foreground: #ffffff;
-    --border: #1a1e29;
-    --input: #1a1e29;
-    --ring: #38bdf8;
+:root {
+  --font-azeret-semimono: 'Azeret Mono', ui-monospace, Menlo, Monaco, monospace;
+  --font-matter: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  
+  --w-font-display: var(--font-azeret-semimono);
+  --w-font-text: var(--font-matter);
+  
+  --w-ink: #1a1522;
+  --w-ink-body: #1a1522b3;
+  --w-ink-muted: #1a152273;
+  --w-ink-ghost: #1a152233;
+  --w-line: #1a15221f;
+  --w-accent: #2a1eff;
+  --w-on-ink: #fff;
+  --w-fill-yield: #eef17c;
+  --w-surface-control: #fff;
+  --w-control-border: #1a15222e;
+  --w-surface-page: #fff;
+  --w-surface-raised: #fff;
+  --w-surface-sunken: #f6f5fb;
+  --w-surface-grid: #fbf9fe;
+  --w-scrim: #1a15228c;
+  --w-grid-dot: #1a152214;
+  --w-grid-size: 22px;
+  --w-wrap-max: 1180px;
+  --w-wrap-inset: 48px;
+  --w-grid-tick-height: 6px;
+  --w-grid-line-outset: 24px;
+}
 
-    --brand: #38bdf8;
-    --brand-glow: rgba(56, 189, 248, 0.15);
+body {
+  background-color: #ffffff;
+  color: #1a1522;
+  font-family: var(--font-matter);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+}
+
+/* Monospace font for Warp headers, badges, ordinals, buttons & code */
+.font-mono,
+h1, h2, h3, h4, h5, h6,
+.w-headline,
+.w-title,
+.w-lead-strong,
+.w-code,
+.w-code-tree,
+.w-code-pane,
+.w-code-entry,
+.w-code-path,
+.w-code-line,
+.w-code-n,
+.w-code-key,
+.w-topnav-top,
+.w-topnav-logo,
+.w-btn,
+.w-nav-ordinal,
+.w-fig-caption,
+.w-fig-meta,
+.w-fig-cell,
+.w-fig-key,
+.w-roi,
+.w-metric {
+  font-family: var(--font-azeret-semimono), 'Azeret Mono', monospace !important;
+}
+
+/* Explicit Continuous Left and Right Guide Lines for Warp Layout */
+[data-ds="warp-next"] .w-visual-grid-tracks > span {
+  border-left: 1px solid rgba(26, 21, 34, 0.12) !important;
+  width: 0;
+  display: block !important;
+}
+
+/* The distinct Left Line in wrap requested by the user */
+[data-ds="warp-next"] .w-visual-grid-tracks > span:first-child {
+  border-left: 1.5px solid rgba(26, 21, 34, 0.22) !important;
+  opacity: 1 !important;
+}
+
+/* The Right Line in wrap */
+[data-ds="warp-next"] .w-visual-grid-tracks > span:last-child {
+  border-left: 1.5px solid rgba(26, 21, 34, 0.22) !important;
+  opacity: 1 !important;
+}
+
+/* Ensure w-wrap boundaries have guidelines */
+.w-wrap {
+  width: 100%;
+  max-width: var(--w-wrap-max, 1180px);
+  padding-inline: var(--w-wrap-inset, 48px);
+  margin-inline: auto;
+  position: relative;
+}
+
+/* Section dividers with clean hairline border */
+.w-section {
+  position: relative;
+  border-top: 1px solid rgba(26, 21, 34, 0.12);
+  padding: 64px 0;
+}
+
+/* Responsive topnav links */
+@media (min-width: 861px) {
+  [data-ds="warp-next"] .w-topnav-links {
+    display: flex !important;
   }
-
-  body {
-    background-color: var(--background);
-    color: var(--foreground);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    min-height: 100vh;
+  [data-ds="warp-next"] .w-topnav-signin {
+    display: inline-flex !important;
+  }
+  [data-ds="warp-next"] .w-topnav-demo {
+    display: inline-flex !important;
+  }
+  [data-ds="warp-next"] .w-topnav-burger {
+    display: none !important;
   }
 }
 
-/* Modern tight headings (Warp style) */
-h1, h2, h3, h4, h5, h6 {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  letter-spacing: -0.03em;
-  font-weight: 700;
+@media (max-width: 860px) {
+  [data-ds="warp-next"] .w-topnav-links {
+    display: none;
+  }
+  [data-ds="warp-next"] .w-topnav-signin {
+    display: none;
+  }
+  [data-ds="warp-next"] .w-topnav-burger {
+    display: inline-flex !important;
+  }
 }
 
-/* Monospace code styling */
-.font-mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-}
-
-/* Warp card style */
-.warp-card {
-  background: #090b10;
-  border: 1px solid #1a1e29;
-  border-radius: 16px;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.warp-card:hover {
-  border-color: #2e3547;
-  background: #0d0f16;
-}
-
-/* Warp terminal window frame */
-.warp-terminal {
-  background: #07080c;
-  border: 1px solid #1c202d;
-  border-radius: 14px;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.05);
-}
-
-/* Hairline dividers */
-.warp-divider {
-  height: 1px;
-  background: linear-gradient(90deg, transparent, #1c202d 30%, #1c202d 70%, transparent);
-}
-
-/* Subtle dot grid */
-.warp-grid {
-  background-image: radial-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1px);
-  background-size: 28px 28px;
-  mask-image: radial-gradient(ellipse 60% 50% at 50% 10%, #000 60%, transparent 100%);
-}
-
-/* Custom terminal scrollbars */
+/* Custom scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
-
 ::-webkit-scrollbar-track {
-  background: #000000;
+  background: #f6f5fb;
 }
-
 ::-webkit-scrollbar-thumb {
-  background: #1a1e29;
+  background: #1a152220;
   border-radius: 999px;
 }
-
 ::-webkit-scrollbar-thumb:hover {
-  background: #2a3142;
+  background: #1a152240;
 }
