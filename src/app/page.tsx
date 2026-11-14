@@ -785,19 +785,19 @@ export default function HomePage() {
                 </div>
 
                 {/* Right: Console Panel & Sign In */}
-                <div className="w-topnav-actions flex items-center gap-3">
-                  <Link className="w-btn w-btn-outline" href="/panel">
+                <div className="w-topnav-actions flex items-center gap-2">
+                  <Link className="w-btn w-btn-outline hidden sm:inline-flex" href="/panel">
                     Console Panel
                   </Link>
 
-                  <Link href="/login" className="w-btn w-btn-solid">
+                  <Link href="/login" className="w-btn w-btn-solid text-[12px] sm:text-[13px] px-3 sm:px-4 py-1.5">
                     Sign In
                   </Link>
 
                   {/* Mobile Burger Toggle */}
                   <button
                     type="button"
-                    className="w-topnav-burger"
+                    className="w-topnav-burger p-1.5 md:hidden"
                     aria-label="Open menu"
                     onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                   >
@@ -813,40 +813,38 @@ export default function HomePage() {
 
             {/* Mobile Dropdown Panel */}
             {mobileMenuOpen && (
-              <div className="md:hidden bg-white border-b border-[#1a1522]/15 px-6 py-4 space-y-3 font-mono text-[14px]">
+              <div className="md:hidden bg-white border-b border-[#1a1522]/15 px-6 py-4 space-y-3 font-mono text-[14px] shadow-lg relative z-50">
                 <Link
                   href="#configuration"
                   className="block py-2 text-[#1a1522] border-b border-[#1a1522]/10"
-                  onClick={() => setMobileMenuOpen(false)}
+                  onClick={() => setTimeout(() => setMobileMenuOpen(false), 80)}
                 >
                   Features
                 </Link>
                 <Link
                   href="#plans"
                   className="block py-2 text-[#1a1522] border-b border-[#1a1522]/10"
-                  onClick={() => setMobileMenuOpen(false)}
+                  onClick={() => setTimeout(() => setMobileMenuOpen(false), 80)}
                 >
                   Plans
                 </Link>
                 <Link
                   href="#faq"
                   className="block py-2 text-[#1a1522] border-b border-[#1a1522]/10"
-                  onClick={() => setMobileMenuOpen(false)}
+                  onClick={() => setTimeout(() => setMobileMenuOpen(false), 80)}
                 >
                   FAQ
                 </Link>
                 <div className="pt-2 flex flex-col gap-2">
                   <Link
                     href="/panel"
-                    className="w-btn w-btn-outline text-center py-2"
-                    onClick={() => setMobileMenuOpen(false)}
+                    className="w-btn w-btn-outline text-center py-2.5 w-full flex items-center justify-center font-bold"
                   >
                     Console Panel
                   </Link>
                   <Link
                     href="/login"
-                    className="w-btn w-btn-solid text-center py-2"
-                    onClick={() => setMobileMenuOpen(false)}
+                    className="w-btn w-btn-solid text-center py-2.5 w-full flex items-center justify-center font-bold"
                   >
                     Sign In
                   </Link>
@@ -869,9 +867,9 @@ export default function HomePage() {
               <div className="w-wrap">
                 <div className="w-hero-body">
                   <div className="w-hero-head">
-                    <h1 className="w-headline">The software factory infrastructure platform</h1>
+                    <h1 className="w-headline">High-performance Indian Minecraft server hosting</h1>
                     <p className="w-lead">
-                      build on Kryin: factories as code, bare-metal high-frequency compute, with evals, automated hibernation, and instant cross-play built in.
+                      Deploy in seconds on dedicated bare-metal Mumbai nodes with automated smart hibernation, zero lag, and instant Java &amp; Bedrock cross-play.
                     </p>
                     <div className="w-hero-actions">
                       <a href="#plans" className="w-btn w-btn-solid">
@@ -885,11 +883,11 @@ export default function HomePage() {
                 </div>
 
                 {/* Hero Media: Fig. 1 Live Animated Cluster Matrix */}
-                <div className="w-hero-media">
-                  <figure className="w-fig">
+                <div className="w-hero-media w-full max-w-full overflow-hidden">
+                  <figure className="w-fig w-full max-w-full overflow-hidden">
                     <figcaption className="w-fig-bar">
                       <span className="w-fig-control-slot"></span>
-                      <span className="w-fig-caption">[ fig. 1 — the factory / cluster ]</span>
+                      <span className="w-fig-caption">[ fig. 1 — live server core cluster ]</span>
                       <span className="w-fig-control-slot" data-end="true">
                         <button
                           type="button"
@@ -901,9 +899,9 @@ export default function HomePage() {
                       </span>
                     </figcaption>
 
-                    <div className="w-fig-well">
-                      <div className="w-fig-figure">
-                        <div className="w-fig-body">
+                    <div className="w-fig-well w-full max-w-full overflow-hidden">
+                      <div className="w-fig-figure w-full max-w-full overflow-hidden">
+                        <div className="w-fig-body w-full max-w-full overflow-hidden">
                           <div className="w-fig-meta font-mono">
                             <span>[ fig. t4 · mumbai node 01 ]</span>
                             <span className="text-emerald-700 font-bold">8 × 28 · 20.0 TPS live</span>
@@ -911,7 +909,7 @@ export default function HomePage() {
 
                           {/* 28-Column Live Animated Cluster Matrix */}
                           <div
-                            className="w-fig-plane"
+                            className="w-fig-plane overflow-hidden"
                             style={{ gridTemplateColumns: `repeat(${CLUSTER_COLUMNS}, minmax(0, 1fr))` }}
                           >
                             {cellTones.map((tone, i) => (
@@ -1135,9 +1133,8 @@ export default function HomePage() {
 
                               const lineMarkup = (
                                 <span
-                                  className={`w-code-line ${
-                                    isAnnotated ? 'cursor-pointer hover:bg-blue-50/60' : ''
-                                  } ${isAnnotationActive ? 'bg-blue-50/80 font-medium' : ''}`}
+                                  className={`w-code-line ${isAnnotated ? 'cursor-pointer hover:bg-blue-50/60' : ''
+                                    } ${isAnnotationActive ? 'bg-blue-50/80 font-medium' : ''}`}
                                   onClick={() => isAnnotated && setActiveAnnotation(lineNum)}
                                 >
                                   <span className="w-code-n" aria-hidden="true">
@@ -1380,21 +1377,19 @@ export default function HomePage() {
                     return (
                       <div
                         key={plan.ram}
-                        className={`flex flex-col justify-between p-6 bg-white border rounded-md transition-all ${
-                          plan.highlight
-                            ? 'border-indigo-600 shadow-lg ring-1 ring-indigo-600/30'
-                            : 'border-[#1a1522]/15 hover:border-[#1a1522]/40'
-                        }`}
+                        className={`flex flex-col justify-between p-6 bg-white border rounded-md transition-all ${plan.highlight
+                          ? 'border-indigo-600 shadow-lg ring-1 ring-indigo-600/30'
+                          : 'border-[#1a1522]/15 hover:border-[#1a1522]/40'
+                          }`}
                       >
                         <div>
                           {/* Plan Badge */}
                           <div className="flex items-center justify-between font-mono text-[11px] mb-3">
                             <span
-                              className={`px-2 py-0.5 rounded font-bold uppercase ${
-                                plan.highlight
-                                  ? 'bg-indigo-100 text-indigo-800'
-                                  : 'bg-[#1a1522]/5 text-[#1a1522]/70'
-                              }`}
+                              className={`px-2 py-0.5 rounded font-bold uppercase ${plan.highlight
+                                ? 'bg-indigo-100 text-indigo-800'
+                                : 'bg-[#1a1522]/5 text-[#1a1522]/70'
+                                }`}
                             >
                               {plan.badge}
                             </span>
@@ -1434,11 +1429,10 @@ export default function HomePage() {
                         <div className="pt-2">
                           <Link
                             href="/login"
-                            className={`w-full py-2.5 text-center font-mono text-[13px] font-bold rounded flex items-center justify-center gap-1.5 transition-colors ${
-                              plan.highlight
-                                ? 'bg-[#eef17c] text-[#1a1522] hover:bg-[#e4e86a]'
-                                : 'bg-[#1a1522] text-white hover:bg-[#2b2438]'
-                            }`}
+                            className={`w-full py-2.5 text-center font-mono text-[13px] font-bold rounded flex items-center justify-center gap-1.5 transition-colors ${plan.highlight
+                              ? 'bg-[#eef17c] text-[#1a1522] hover:bg-[#e4e86a]'
+                              : 'bg-[#1a1522] text-white hover:bg-[#2b2438]'
+                              }`}
                           >
                             Deploy {plan.ram} Node
                             <ArrowRight className="w-3.5 h-3.5" />

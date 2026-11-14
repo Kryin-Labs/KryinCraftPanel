@@ -125,11 +125,6 @@ export default function LoginPage() {
     }
   };
 
-  const handleDemoAccess = () => {
-    // Instant demo operator access to the control panel
-    router.push('/panel');
-  };
-
   const handleResetPassword = async () => {
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail) {
@@ -365,23 +360,6 @@ export default function LoginPage() {
               )}
             </button>
           </form>
-
-          {/* Divider */}
-          <div className="relative flex items-center justify-center border-t border-[#1a1522]/10 pt-4">
-            <span className="bg-white px-3 font-mono text-[11px] text-[#1a1522]/40 uppercase tracking-widest absolute -top-2.5">
-              OR QUICK ACCESS
-            </span>
-          </div>
-
-          {/* Quick Demo Access Button */}
-          <button
-            type="button"
-            onClick={handleDemoAccess}
-            className="w-full py-2.5 bg-[#f6f5fb] hover:bg-[#ece9f5] border border-[#1a1522]/15 text-[#1a1522] font-mono text-[12px] font-semibold rounded-lg transition-colors flex items-center justify-center gap-2 cursor-pointer"
-          >
-            <Terminal className="w-4 h-4 text-emerald-700" />
-            <span>Enter Console Panel as Demo Operator →</span>
-          </button>
         </div>
       </div>
 

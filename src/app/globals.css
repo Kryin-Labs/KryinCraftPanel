@@ -171,3 +171,83 @@ h1, h2, h3, h4, h5, h6,
 .w-fig-cell {
   transition: background-color 0.25s ease, color 0.25s ease, transform 0.15s ease !important;
 }
+
+/* Mobile Overflow & Viewport Fixes */
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+  position: relative;
+}
+
+[data-ds="warp-next"] {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+.w-visual-grid,
+.w-visual-grid-content,
+.w-visual-grid-art,
+.w-page {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+@media (max-width: 640px) {
+  :root {
+    --w-wrap-inset: 16px !important;
+  }
+  .w-wrap {
+    padding-inline: 16px !important;
+    max-width: 100vw !important;
+    overflow-x: hidden !important;
+  }
+
+  /* Prevent cluster matrix from blowing out mobile width */
+  [data-ds="warp-next"] .w-fig-plane {
+    grid-template-columns: repeat(14, minmax(0, 1fr)) !important;
+    font-size: 8px !important;
+    gap: 2px !important;
+  }
+
+  /* Stack bottom 8 numbered nav items in 1 column */
+  [data-ds="warp-next"] .w-nav {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  [data-ds="warp-next"] .w-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+/* Stack code editor on mobile so it doesn't force 12-column overflow */
+@media (max-width: 768px) {
+  [data-ds="warp-next"] .w-code {
+    display: flex !important;
+    flex-direction: column !important;
+    aspect-ratio: auto !important;
+    height: auto !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+  }
+  [data-ds="warp-next"] .w-code-tree {
+    width: 100% !important;
+    border-right: none !important;
+    border-bottom: 1px solid var(--w-line) !important;
+    max-height: 180px !important;
+    overflow-y: auto !important;
+  }
+  [data-ds="warp-next"] .w-code-pane {
+    width: 100% !important;
+    min-height: 280px !important;
+    max-height: 400px !important;
+    overflow: hidden !important;
+  }
+  [data-ds="warp-next"] .w-code-body {
+    overflow-x: auto !important;
+    max-width: 100% !important;
+  }
+}
