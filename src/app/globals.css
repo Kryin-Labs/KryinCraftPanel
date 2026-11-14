@@ -2,32 +2,35 @@
 
 @layer base {
   :root {
-    color-scheme: dark;
-    --background: #0f1115;
-    --foreground: #f4f4f5;
-    --card: #16181d;
-    --card-foreground: #f4f4f5;
-    --secondary: #22252b;
-    --secondary-foreground: #f4f4f5;
-    --muted: #22252b;
-    --muted-foreground: #a1a1aa;
-    --accent: #22252b;
-    --accent-foreground: #f4f4f5;
-    --border: rgba(255, 255, 255, 0.1);
-    --input: rgba(255, 255, 255, 0.12);
-    --ring: #f4f4f5;
-    --sidebar: #121417;
+    color-scheme: light;
+    --background: #ffffff;
+    --foreground: #17191c;
+    --card: #ffffff;
+    --card-foreground: #17191c;
+    --popover: #ffffff;
+    --popover-foreground: #17191c;
+    --primary: #17191c;
+    --primary-foreground: #ffffff;
+    --secondary: #f2f2f3;
+    --secondary-foreground: #17191c;
+    --muted: #f2f2f3;
+    --muted-foreground: #777b86;
+    --accent: #fbe1d1;
+    --accent-foreground: #5d2a1a;
+    --destructive: #b23b2e;
+    --destructive-foreground: #ffffff;
+    --border: #ececec;
+    --input: #ececec;
+    --ring: #17191c;
 
-    --sienna: #d97706;
-    --peach: rgba(217, 119, 6, 0.12);
-    --fog: #1a1d24;
-    --ash: #71717a;
-    --emerald-accent: #10b981;
-    --grid-dot: rgba(255, 255, 255, 0.08);
-
-    --status-online: #10b981;
-    --status-offline: #ef4444;
-    --status-warning: #f59e0b;
+    /* Steep named surfaces + accent pair (KryinOffice exact tokens) */
+    --mist: #f2f2f3;
+    --fog: #fafafb;
+    --peach: #fbe1d1;
+    --sienna: #5d2a1a;
+    --ash: #979799;
+    --smoke: #a3a6af;
+    --shadow-art: 0 0 0 1px rgba(4, 23, 43, 0.05), 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
   }
 
   body {
@@ -39,19 +42,57 @@
   }
 }
 
-/* Tabular numbers for metrics */
-.tnum {
-  font-variant-numeric: tabular-nums;
+/* Serif headings matching KryinOffice */
+.theme-v3 h1,
+.theme-v3 h2,
+.theme-v3 h3 {
+  font-family: Georgia, "Times New Roman", Garamond, serif;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
 }
 
-/* Radial dotted grid used behind the hero */
+/* Italic phrase in KryinOffice */
+.v3-em {
+  font-style: italic;
+  font-weight: 400;
+}
+
+/* Typographic category tag */
+.v3-tag {
+  font-size: 13px;
+  color: var(--ash);
+  letter-spacing: 0.02em;
+}
+
+/* Floating product artifact */
+.v3-art {
+  background: #ffffff;
+  border-radius: 20px;
+  box-shadow: var(--shadow-art);
+  border: 1px solid var(--border);
+}
+
+/* Text link with arrow */
+.v3-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--foreground);
+  text-underline-offset: 3px;
+}
+.v3-link:hover {
+  text-decoration: underline;
+}
+
+/* Radial dotted grid */
 .kryin-grid {
-  background-image: radial-gradient(var(--grid-dot) 1px, transparent 1px);
-  background-size: 28px 28px;
+  background-image: radial-gradient(rgba(23, 25, 28, 0.07) 1px, transparent 1px);
+  background-size: 24px 24px;
   mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, #000 40%, transparent 75%);
 }
 
-/* Floating animation */
+/* Floating bob animation */
 @keyframes kryin-float {
   0%, 100% {
     transform: translateY(0);
@@ -65,10 +106,10 @@
   animation: kryin-float 6s ease-in-out infinite;
 }
 
-/* Gradient hairline divider */
+/* Hairline divider */
 .kryin-divider {
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  background: linear-gradient(90deg, transparent, var(--border), transparent);
 }
 
 /* Infinite marquee */
@@ -85,21 +126,21 @@
   animation: kryin-marquee 30s linear infinite;
 }
 
-/* Thin executive scrollbars */
+/* Subtle scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #0f1115;
+  background: #ffffff;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
+  background: #ececec;
   border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.25);
+  background: #d4d4d8;
 }

@@ -21,17 +21,20 @@ import {
   Clock,
   Layers,
   Sparkles,
+  FileText,
+  Search,
+  CheckCircle2,
 } from 'lucide-react';
 
 /* ------------------------------------------------------------------ */
-/* Primitives matching KryinOffice UI                                  */
+/* Primitives directly matching KryinOffice UI                         */
 /* ------------------------------------------------------------------ */
 
 function FilledPill({ href, children }: { href: string; children: ReactNode }) {
   return (
     <Link
       href={href}
-      className="inline-flex items-center justify-center gap-2 rounded-full bg-[#f4f4f5] text-[#0f1115] px-6 py-2.5 text-xs sm:text-sm font-semibold transition-all hover:bg-white hover:scale-[1.02] shadow-sm"
+      className="inline-flex items-center justify-center gap-2 rounded-full bg-[var(--foreground)] px-5 py-2.5 text-[14px] font-medium text-[var(--primary-foreground)] transition-all hover:opacity-90 shadow-sm"
     >
       {children}
     </Link>
@@ -42,24 +45,38 @@ function GhostPill({ href, children }: { href: string; children: ReactNode }) {
   return (
     <Link
       href={href}
-      className="inline-flex items-center justify-center gap-2 rounded-full border border-white/20 px-6 py-2.5 text-xs sm:text-sm text-[#f4f4f5] transition-all hover:bg-white/10 hover:border-white/30"
+      className="inline-flex items-center justify-center gap-2 rounded-full border border-[var(--foreground)] px-5 py-2.5 text-[14px] font-medium text-[var(--foreground)] transition-colors hover:bg-[var(--foreground)] hover:text-[var(--primary-foreground)]"
     >
       {children}
     </Link>
   );
 }
 
+function ArrowLink({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <Link href={href} className="v3-link text-[14px]">
+      {children} <span aria-hidden>→</span>
+    </Link>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Draggable-Float Wrapper (KryinOffice exact logic)                   */
+/* ------------------------------------------------------------------ */
+
 function DraggableFloat({
   className,
+  delay,
   children,
 }: {
   className?: string;
+  delay?: string;
   children: ReactNode;
 }) {
   const [d, setD] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const drag = useRef<{ px: number; py: number } | null>(null);
 
-  const clamp = (v: number) => Math.max(-36, Math.min(36, v));
+  const clamp = (v: number) => Math.max(-40, Math.min(40, v));
 
   function onDown(e: React.PointerEvent) {
     drag.current = { px: e.clientX - d.x, py: e.clientY - d.y };
@@ -87,7 +104,9 @@ function DraggableFloat({
           transition: drag.current ? 'none' : 'transform 0.4s cubic-bezier(0.22, 1, 0.36, 1)',
         }}
       >
-        <div className="kryin-float">{children}</div>
+        <div className="kryin-float" style={delay ? { animationDelay: delay } : undefined}>
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -97,23 +116,22 @@ function DraggableFloat({
 /* Floating Artifact Cards (KryinOffice style)                         */
 /* ------------------------------------------------------------------ */
 
-function TpsArt() {
+function StatArt() {
   return (
-    <div className="w-[240px] p-4 border border-white/10 bg-[#16181d]/95 backdrop-blur-md rounded-[18px] shadow-xl text-left">
+    <div className="v3-art w-[230px] p-4 bg-white/95 backdrop-blur-md shadow-md transition-all duration-300 hover:shadow-lg hover:-translate-y-1 rounded-[18px]">
       <div className="flex items-center justify-between">
-        <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Tick Performance</span>
-        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-950/80 px-2 py-0.5 text-[10px] font-bold text-emerald-400 border border-emerald-800/80">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-          Locked
+        <p className="v3-tag font-medium text-[12px]">Performance</p>
+        <span className="inline-flex items-center gap-1 rounded-full bg-[var(--peach)] px-2 py-0.5 text-[10px] font-semibold text-[var(--sienna)]">
+          Live
         </span>
       </div>
-      <p className="mt-2 font-mono text-[28px] font-bold leading-none text-white">20.0 TPS</p>
-      <p className="mt-1 text-[11px] text-zinc-400">0.0% tick loss • 50.0ms target</p>
-      <svg viewBox="0 0 200 36" className="mt-2.5 w-full" aria-hidden>
+      <p className="mt-1.5 font-medium text-[28px] leading-none text-[var(--foreground)] font-mono">20.0</p>
+      <p className="mt-1 text-[12px] text-[var(--muted-foreground)]">stable TPS · 0.0% tick drop</p>
+      <svg viewBox="0 0 200 40" className="mt-2.5 w-full" aria-hidden>
         <polyline
           points="0,20 25,20 50,19 75,20 100,20 125,19 150,20 175,20 200,20"
           fill="none"
-          stroke="#10b981"
+          stroke="var(--sienna)"
           strokeWidth="2.5"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -123,40 +141,74 @@ function TpsArt() {
   );
 }
 
-function GeyserArt() {
+function InsightArt() {
   return (
-    <div className="w-[230px] p-4 border border-white/10 bg-[#16181d]/95 backdrop-blur-md rounded-[18px] shadow-xl text-left">
-      <div className="flex items-center justify-between">
-        <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Bedrock Bridge</span>
-        <Globe className="w-3.5 h-3.5 text-emerald-400" />
+    <div className="v3-art w-[230px] p-4 bg-white/95 backdrop-blur-md shadow-md transition-all duration-300 hover:shadow-lg hover:-translate-y-1 rounded-[18px]">
+      <div className="flex items-center gap-2">
+        <Radio className="size-3.5 text-[var(--sienna)]" />
+        <p className="v3-tag font-medium text-[12px]">Network Latency</p>
       </div>
-      <p className="mt-2 text-xs font-semibold text-zinc-100">Cross-Play Active</p>
-      <div className="mt-2 rounded-[8px] bg-[#1a1d24] p-2 font-mono text-[10px] text-zinc-400 border border-white/5 space-y-1">
-        <div className="flex justify-between"><span>Java:</span> <span className="text-zinc-200">25565</span></div>
-        <div className="flex justify-between"><span>Bedrock:</span> <span className="text-emerald-400">19132</span></div>
-      </div>
-      <p className="mt-2 text-[10px] text-zinc-500">Geyser + Floodgate preconfigured</p>
+      <p className="mt-2 text-[13px] leading-snug text-[var(--foreground)] font-medium">
+        &lt; 15ms global routing with Tier 1 fiber uplinks
+      </p>
+      <p className="mt-2 text-[11px] text-[var(--muted-foreground)]">Region: US-East & Frankfurt</p>
     </div>
   );
 }
 
-function TerminalArt() {
+function DecisionArt() {
   return (
-    <div className="w-full max-w-md p-4 border border-white/10 bg-[#16181d]/95 backdrop-blur-md rounded-[20px] shadow-2xl text-left font-mono text-xs">
-      <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/5">
-        <div className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full bg-zinc-700" />
-          <span className="w-2.5 h-2.5 rounded-full bg-zinc-700" />
-          <span className="w-2.5 h-2.5 rounded-full bg-zinc-700" />
-          <span className="text-[11px] text-zinc-400 ml-1.5">Paper 26.3 • Live Console</span>
-        </div>
-        <span className="text-[10px] text-emerald-400 font-bold">ONLINE</span>
+    <div className="v3-art w-[235px] p-4 bg-white/95 backdrop-blur-md shadow-md transition-all duration-300 hover:shadow-lg hover:-translate-y-1 rounded-[18px]">
+      <div className="flex items-center justify-between">
+        <p className="v3-tag font-medium text-[12px]">Active Build</p>
+        <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
       </div>
-      <div className="space-y-1 text-[11px] text-zinc-300">
-        <p className="text-zinc-500">[INFO]: Loading server.properties</p>
-        <p className="text-zinc-400">[INFO]: Using 8 worker threads for worldgen</p>
-        <p className="text-emerald-400">[INFO]: [Geyser-Spigot] Started Bedrock listener on port 19132</p>
-        <p className="text-zinc-200">[INFO]: Done (3.81s)! Listening on 0.0.0.0:25565</p>
+      <p className="mt-2 text-[14px] font-medium leading-snug text-[var(--foreground)]">
+        Paper 26.3 (Build #249) Running
+      </p>
+      <div className="mt-2.5 pt-2.5 border-t border-[var(--border)] flex items-center justify-between text-[11px] text-[var(--muted-foreground)]">
+        <span className="truncate max-w-[140px]">ROG Phone 5s Node</span>
+        <span className="font-semibold text-[var(--sienna)]">Online</span>
+      </div>
+    </div>
+  );
+}
+
+function McpArt() {
+  return (
+    <div className="v3-art w-[230px] p-4 bg-white/95 backdrop-blur-md shadow-md transition-all duration-300 hover:shadow-lg hover:-translate-y-1 rounded-[18px]">
+      <div className="flex items-center justify-between">
+        <p className="v3-tag font-medium text-[12px]">Unified Cross-Play</p>
+        <Plug className="size-3.5 text-[var(--sienna)]" />
+      </div>
+      <div className="mt-2 rounded-[10px] bg-[var(--fog)] p-2.5 font-mono text-[11px] leading-relaxed text-[var(--muted-foreground)] border border-[var(--border)]">
+        <span className="text-[var(--sienna)] font-semibold">GeyserBridge</span>(Java: 25565, Bedrock: 19132)
+      </div>
+      <p className="mt-2 text-[11px] text-[var(--muted-foreground)]">iOS, Android, Consoles & PC</p>
+    </div>
+  );
+}
+
+/* Floating ask-anything composer matching KryinOffice */
+function ComposerArt() {
+  return (
+    <div className="v3-art w-full max-w-lg p-3 shadow-lg border border-[var(--border)] transition-all duration-300 hover:shadow-xl hover:border-black/20 bg-white/95 backdrop-blur-md rounded-[20px]">
+      <div className="flex items-center gap-2.5">
+        <div className="flex items-center justify-center size-9 rounded-full bg-[var(--fog)] border border-[var(--border)] text-[var(--sienna)]">
+          <Terminal className="size-4" />
+        </div>
+        <span className="flex-1 text-[13px] sm:text-[14px] text-[var(--muted-foreground)] font-normal text-left truncate">
+          Deploy Paper 26.3 with Bedrock crossplay…
+        </span>
+        <div className="hidden sm:flex items-center gap-1.5 mr-1">
+          <span className="rounded-md bg-[var(--fog)] px-2 py-0.5 text-[11px] font-mono text-[var(--ash)] border border-[var(--border)]">
+            ⌘K
+          </span>
+        </div>
+        <FilledPill href="/login">
+          <span>Deploy</span>
+          <ArrowRight className="size-3.5" />
+        </FilledPill>
       </div>
     </div>
   );
@@ -166,90 +218,69 @@ function TerminalArt() {
 /* Data constants                                                      */
 /* ------------------------------------------------------------------ */
 
-const MARQUEE_ITEMS = [
-  'Paper 26.3',
-  'Purpur',
-  'Fabric',
-  'Geyser Cross-Play',
-  '2.5+ Tbps Anti-DDoS',
-  'Gen4 NVMe Arrays',
-  'Sub-15ms Latency',
-  'Automated Backups',
-  'Web Terminal',
-  'Zero Tick Lag',
-  'Custom Subdomains',
-  '1-Click Modpacks',
+const TRUST = ['Paper 26.3', 'Purpur', 'Fabric', 'Geyser Cross-Play', '2.5 Tbps Anti-DDoS', 'Gen4 NVMe', 'Low Ping'];
+
+const FEATURES: Array<{ tag: string; title: string; body: string; peach?: boolean }> = [
+  {
+    tag: 'Cross-Platform Engine',
+    title: 'Java & Bedrock unified',
+    body: 'Geyser and Floodgate are pre-configured out of the box. Friends on mobile, consoles, and PC join the same world seamlessly.',
+  },
+  {
+    tag: 'Smart Eco Architecture',
+    title: 'Hibernation & instant wake',
+    body: 'Servers sleep when empty to conserve memory and power, booting up automatically in under 2 seconds the moment a player connects.',
+  },
+  {
+    tag: 'Dedicated Performance',
+    title: 'Pure single-thread speed',
+    body: 'High-frequency processors, Gen4 NVMe arrays, and zero CPU throttling ensure your server holds a rock-solid 20.0 TPS.',
+    peach: true,
+  },
+];
+
+const STEPS = [
+  { n: '01', title: 'Pick your software', body: 'Choose Paper 26.3, Purpur, or Fabric. Instant 60-second activation.' },
+  { n: '02', title: 'Share your address', body: 'Connect from Java edition or Bedrock with your free *.kryin.gg domain.' },
+  { n: '03', title: 'Control from the web', body: 'Live web console, player inventory viewer, and automatic daily backups.' },
 ];
 
 const CAPABILITIES = [
-  { icon: Globe, label: 'Java & Bedrock Cross-Play', note: 'Preconfigured Geyser & Floodgate' },
-  { icon: Zap, label: 'Smart Hibernation & Wake', note: 'Auto-sleep when empty, instant wake' },
+  { icon: Globe, label: 'Java & Bedrock Cross-Play', note: 'Pre-configured Geyser & Floodgate' },
+  { icon: Zap, label: 'Smart Hibernation & Wake', note: 'Zero resource waste when idle' },
   { icon: RefreshCw, label: '1-Click Modpack Switcher', note: 'Paper, Purpur, Fabric & Forge' },
-  { icon: Shield, label: 'Enterprise Anti-DDoS', note: '2.5+ Tbps multilayer traffic filtering' },
-  { icon: HardDrive, label: 'Gen4 NVMe Storage', note: '7,000 MB/s speed, zero chunk stutter' },
-  { icon: Terminal, label: 'Real-Time Web Console', note: 'Live command execution & log streaming' },
-  { icon: Users, label: 'Visual Player Inspector', note: 'Inspect inventory, health & coordinates' },
-  { icon: Clock, label: 'Automated Daily Backups', note: 'Hourly snapshots & 1-click restore' },
+  { icon: Shield, label: 'Enterprise Anti-DDoS', note: '2.5+ Tbps multilayer protection' },
+  { icon: HardDrive, label: 'Gen4 NVMe Storage', note: '7,000 MB/s speed, zero chunk lag' },
+  { icon: Terminal, label: 'Real-Time Web Console', note: 'Live command streaming & RCON' },
+  { icon: Users, label: 'Visual Player Inspector', note: 'Inspect inventory, health & coords' },
+  { icon: Clock, label: 'Automated Daily Backups', note: 'Daily snapshots & 1-click restore' },
 ];
 
-const PLANS_DATA = [
+const FAQ = [
   {
-    name: 'Free Starter',
-    badge: 'Popular for Friends',
-    price: '$0.00',
-    cycle: 'forever',
-    ram: '2 GB',
-    cpu: '1 vCPU',
-    storage: '10 GB SSD',
-    slots: '5 Slots',
-    features: ['Smart Auto-Hibernation', 'Instant Auto-Wake on Join', 'Java & Bedrock Cross-Play', 'Web Console & Player Manager'],
-    highlight: false,
-    cta: 'Deploy Free',
+    q: 'How fast is my server ready after registration?',
+    a: 'Instantly. Your Paper 26.3 server instance is provisioned and joinable in under 60 seconds.',
   },
   {
-    name: 'Grass Explorer',
-    badge: 'Entry Level',
-    price: '$3.99',
-    cycle: 'month',
-    ram: '4 GB DDR4',
-    cpu: '2 vCPU',
-    storage: '35 GB NVMe',
-    slots: '20 Slots',
-    features: ['24/7 Always-On (No Sleep)', 'High-Speed Gen4 NVMe', 'Daily Automated Backups', 'Full Web File Manager & SFTP'],
-    highlight: false,
-    cta: 'Select Explorer',
+    q: 'How does Bedrock & Java Cross-Play work?',
+    a: 'Every server has Geyser and Floodgate preconfigured. Java edition players join with port 25565, while Bedrock players on mobile or console join with port 19132 into the exact same world.',
   },
   {
-    name: 'Iron Standard',
-    badge: 'Most Popular',
-    price: '$7.99',
-    cycle: 'month',
-    ram: '8 GB DDR4/DDR5',
-    cpu: '3 vCPU',
-    storage: '80 GB NVMe',
-    slots: '60 Slots',
-    features: ['Optimized Paper, Purpur & Fabric', 'Full Modpack & Plugin Support', 'Enterprise Anti-DDoS Scrubbing', 'Offsite Cloud Backups & Free MySQL'],
-    highlight: true,
-    cta: 'Select Iron',
+    q: 'Can I upload my existing Minecraft singleplayer world?',
+    a: 'Yes. You have full access to our web file manager and SFTP. Simply drag and drop your world folder or zip archive.',
   },
   {
-    name: 'Diamond Performance',
-    badge: 'Extreme Power',
-    price: '$14.99',
-    cycle: 'month',
-    ram: '12 GB High-Freq',
-    cpu: '4 vCPU',
-    storage: '150 GB NVMe',
-    slots: 'Unlimited',
-    features: ['Dedicated High-Clock CPU Priority', 'Zero Tick-Lag Guarantee', 'Heavy Modpacks (ATM 9, Better MC)', 'Hourly Snapshot Restores'],
-    highlight: false,
-    cta: 'Select Diamond',
+    q: 'How does the Free Starter plan hibernation work?',
+    a: 'Similar to MineKeep, free servers enter a low-power hibernation state when all players disconnect. As soon as someone attempts to join, it wakes automatically in under 2 seconds.',
   },
 ];
+
+/* ------------------------------------------------------------------ */
+/* Main Page Component                                                */
+/* ------------------------------------------------------------------ */
 
 export default function HomePage() {
   const [scrolled, setScrolled] = useState(false);
-  const [activeFaq, setActiveFaq] = useState<number | null>(null);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
@@ -259,37 +290,32 @@ export default function HomePage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#0f1115] text-[#f4f4f5] selection:bg-emerald-600 selection:text-white">
-      {/* Navigation matching KryinOffice executive style */}
+    <div className="theme-v3 relative min-h-dvh">
+      {/* Navigation matching KryinOffice */}
       <header
-        className={`fixed inset-x-0 top-0 z-50 transition-all duration-300 ${
-          scrolled
-            ? 'bg-[#0f1115]/90 backdrop-blur-md border-b border-white/10 py-3 shadow-lg'
-            : 'bg-transparent py-4'
+        className={`fixed inset-x-0 top-0 z-50 flex flex-col items-center overflow-hidden px-5 transition-all duration-300 ${
+          scrolled ? 'bg-white/90 backdrop-blur-md border-b border-[var(--border)] py-3 shadow-xs' : 'bg-transparent py-4'
         }`}
       >
-        <div className="max-w-[1200px] mx-auto px-5 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center text-white shadow-sm group-hover:bg-emerald-500 transition-colors">
-              <Server className="w-4 h-4" />
+        <div className="flex w-full max-w-[1200px] items-center justify-between">
+          <Link href="/" className="flex items-center gap-2.5">
+            <div className="flex size-8 items-center justify-center rounded-lg bg-[var(--foreground)] text-white shadow-xs">
+              <Server className="size-4" />
             </div>
-            <div>
-              <span className="font-bold text-white text-base tracking-tight">KryinHost</span>
-              <span className="text-[10px] text-zinc-500 block leading-none">Game Server Infrastructure</span>
-            </div>
+            <span className="font-bold text-[17px] tracking-tight text-[var(--foreground)]">KryinHost</span>
           </Link>
 
-          <nav className="hidden md:flex items-center gap-7 text-xs font-semibold text-zinc-400">
-            <Link href="#features" className="hover:text-white transition-colors">
+          <nav className="hidden items-center gap-7 md:flex text-[14px] text-[var(--muted-foreground)]">
+            <Link href="#features" className="hover:text-[var(--foreground)] transition-colors">
               Features
             </Link>
-            <Link href="/plans" className="hover:text-white transition-colors">
+            <Link href="/plans" className="hover:text-[var(--foreground)] transition-colors">
               Plans & Pricing
             </Link>
-            <Link href="#hardware" className="hover:text-white transition-colors">
-              Hardware
+            <Link href="#capabilities" className="hover:text-[var(--foreground)] transition-colors">
+              Capabilities
             </Link>
-            <Link href="#faq" className="hover:text-white transition-colors">
+            <Link href="#faq" className="hover:text-[var(--foreground)] transition-colors">
               FAQ
             </Link>
           </nav>
@@ -297,388 +323,422 @@ export default function HomePage() {
           <div className="flex items-center gap-3">
             <Link
               href="/login"
-              className="text-xs font-semibold px-3 py-1.5 text-zinc-300 hover:text-white transition-colors"
+              className="hidden text-[14px] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors sm:inline-flex"
             >
-              Sign In
+              Sign in
             </Link>
-            <FilledPill href="/login">Get Started</FilledPill>
+            <FilledPill href="/login">Get started</FilledPill>
           </div>
         </div>
       </header>
 
-      {/* Hero Section with radial dotted background */}
-      <section className="relative pt-32 sm:pt-40 pb-20 px-5 overflow-hidden">
-        {/* Kryin-grid background */}
-        <div className="kryin-grid absolute inset-0 pointer-events-none" />
+      {/* ===== Hero: serif headline + artifact collage (KryinOffice exact layout) ===== */}
+      <section className="relative min-h-[75vh] lg:min-h-[82vh] flex flex-col justify-center items-center overflow-hidden pt-36 pb-16 sm:pt-44 sm:pb-20 lg:pt-48 lg:pb-24">
+        {/* Peach atmospheric wash & ambient mesh */}
+        <div
+          className="pointer-events-none absolute inset-x-0 top-0 h-[580px] w-full"
+          style={{
+            background:
+              'radial-gradient(55% 65% at 50% 20%, var(--peach) 0%, oklch(0.96 0.03 160 / 0.18) 50%, transparent 80%)',
+            opacity: 0.85,
+          }}
+          aria-hidden
+        />
+        <div className="kryin-grid pointer-events-none absolute inset-0 opacity-40" aria-hidden />
 
-        <div className="max-w-[1100px] mx-auto text-center relative z-10 space-y-6">
-          {/* Micro-badge */}
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-[#16181d]/80 px-3.5 py-1 text-xs text-zinc-300 backdrop-blur-md">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span>High-frequency nodes online • Java 26 & Bedrock cross-play ready</span>
-          </div>
+        <div className="relative mx-auto w-full max-w-[1240px] px-6">
+          {/* Floating artifacts around the hero (positioned flanking the content) */}
+          <DraggableFloat className="absolute -left-2 top-8 z-20 hidden xl:block -rotate-[2deg]" delay="0s">
+            <StatArt />
+          </DraggableFloat>
+          <DraggableFloat className="absolute -left-6 top-[18rem] z-20 hidden lg:block rotate-[2deg]" delay="1.2s">
+            <InsightArt />
+          </DraggableFloat>
+          <DraggableFloat className="absolute -right-2 top-10 z-20 hidden xl:block rotate-[3deg]" delay="1.5s">
+            <DecisionArt />
+          </DraggableFloat>
+          <DraggableFloat className="absolute -right-6 top-[19rem] z-20 hidden lg:block -rotate-[2deg]" delay="0.8s">
+            <McpArt />
+          </DraggableFloat>
 
-          {/* Headline */}
-          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white leading-[1.12]">
-            High-performance Minecraft hosting.
-            <span className="block text-emerald-400 mt-1">Built with zero lag & instant cross-play.</span>
-          </h1>
-
-          {/* Subtitle */}
-          <p className="text-sm sm:text-base text-zinc-400 max-w-2xl mx-auto leading-relaxed">
-            Instant deployment, 2.5+ Tbps Anti-DDoS mitigation, ultra-fast NVMe storage, and built-in mobile/console cross-play. Start free or scale with high-frequency hardware.
-          </p>
-
-          {/* Action Pills */}
-          <div className="flex items-center justify-center gap-3.5 pt-2">
-            <FilledPill href="/login">
-              <span>Deploy Free Server</span>
-              <ArrowRight className="w-4 h-4" />
-            </FilledPill>
-            <GhostPill href="/plans">
-              <span>Explore Server Plans</span>
-            </GhostPill>
-          </div>
-
-          {/* Floating Product Artifacts Showcase (KryinOffice style) */}
-          <div className="pt-12 relative max-w-4xl mx-auto flex flex-col md:flex-row items-center justify-center gap-4">
-            <DraggableFloat className="w-full md:w-auto">
-              <TerminalArt />
-            </DraggableFloat>
-            <div className="flex flex-col sm:flex-row md:flex-col gap-4">
-              <DraggableFloat>
-                <TpsArt />
-              </DraggableFloat>
-              <DraggableFloat>
-                <GeyserArt />
-              </DraggableFloat>
+          {/* Hero text & CTA container */}
+          <div className="relative z-10 mx-auto max-w-4xl text-center flex flex-col items-center">
+            {/* Top pill badge */}
+            <div className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-white/90 px-3.5 py-1 text-[12px] font-medium text-[var(--foreground)] shadow-xs backdrop-blur-md mb-6 transition-all hover:bg-white hover:shadow-sm">
+              <span className="flex size-2 rounded-full bg-[var(--sienna)] animate-pulse" />
+              <span className="text-[var(--sienna)] font-semibold">Kryin Server Engine v3.0</span>
+              <span className="h-3 w-[1px] bg-[var(--border)]" />
+              <span className="text-[var(--muted-foreground)]">High-Performance Game Hosting</span>
+              <ArrowRight className="size-3 text-[var(--muted-foreground)]" />
             </div>
-          </div>
-        </div>
-      </section>
 
-      {/* Hairline Divider */}
-      <div className="kryin-divider max-w-6xl mx-auto my-4" />
+            {/* Main Serif Headline */}
+            <h1 className="text-[40px] leading-[1.04] text-[var(--foreground)] sm:text-[60px] md:text-[72px] lg:text-[80px]">
+              Minecraft hosting for pure performance and <span className="v3-em">zero lag</span>
+            </h1>
 
-      {/* Infinite Keyword Marquee Strip */}
-      <section className="py-6 overflow-hidden">
-        <div className="flex whitespace-nowrap kryin-marquee gap-8 text-xs font-mono text-zinc-400">
-          {[...MARQUEE_ITEMS, ...MARQUEE_ITEMS].map((item, idx) => (
-            <span key={idx} className="flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-              <span>{item}</span>
-            </span>
-          ))}
-        </div>
-      </section>
-
-      {/* Hairline Divider */}
-      <div className="kryin-divider max-w-6xl mx-auto my-4" />
-
-      {/* Core Advantages (KryinOffice 3-block feature presentation) */}
-      <section id="features" className="py-20 px-5 max-w-[1200px] mx-auto space-y-12">
-        <div className="text-center space-y-2">
-          <p className="text-[11px] font-mono text-emerald-400 uppercase tracking-wider font-semibold">
-            Engineered For Pure Performance
-          </p>
-          <h2 className="text-2xl sm:text-4xl font-extrabold text-white tracking-tight">
-            Everything your Minecraft community needs to thrive.
-          </h2>
-          <p className="text-xs sm:text-sm text-zinc-400 max-w-xl mx-auto">
-            No lag spikes, no convoluted configurations, and zero compromises on hardware quality.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          <div className="p-6 rounded-[20px] bg-[#16181d] border border-white/10 space-y-3 shadow-lg">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-mono uppercase text-zinc-400 font-semibold">Cross-Platform</span>
-              <Globe className="w-4 h-4 text-emerald-400" />
-            </div>
-            <h3 className="text-base font-bold text-white">Java & Bedrock Unified</h3>
-            <p className="text-xs text-zinc-400 leading-relaxed">
-              Geyser and Floodgate are pre-installed. Players on mobile (iOS/Android), consoles (Xbox/PS5/Switch), and PC join the exact same world effortlessly.
+            {/* Subtitle */}
+            <p className="mx-auto mt-6 max-w-2xl text-[15px] leading-relaxed text-[var(--muted-foreground)] sm:text-[17px]">
+              KryinHost transforms high-frequency hardware into effortless server hosting — instant Java & Bedrock cross-play, 2.5 Tbps Anti-DDoS, and real-time web management.
             </p>
-          </div>
 
-          <div className="p-6 rounded-[20px] bg-[#16181d] border border-white/10 space-y-3 shadow-lg">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-mono uppercase text-zinc-400 font-semibold">Zero Waste</span>
-              <Zap className="w-4 h-4 text-emerald-400" />
-            </div>
-            <h3 className="text-base font-bold text-white">Smart Hibernation & Wake</h3>
-            <p className="text-xs text-zinc-400 leading-relaxed">
-              Similar to MineKeep, free-tier servers sleep when empty to conserve resources, waking in under 2 seconds the moment a player connects.
-            </p>
-          </div>
-
-          <div className="p-6 rounded-[20px] bg-[#16181d] border border-white/10 space-y-3 shadow-lg">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-mono uppercase text-zinc-400 font-semibold">Unmetered IO</span>
-              <HardDrive className="w-4 h-4 text-emerald-400" />
-            </div>
-            <h3 className="text-base font-bold text-white">Gen4 NVMe Solid State</h3>
-            <p className="text-xs text-zinc-400 leading-relaxed">
-              Blazing 7,000 MB/s read speeds ensure rapid chunk loading, zero autosave hitches, and near-instant world initialization.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* 3 Numbered Steps (01, 02, 03) like KryinOffice */}
-      <section className="py-16 px-5 bg-[#121417] border-y border-white/10">
-        <div className="max-w-[1200px] mx-auto space-y-10">
-          <div className="text-center space-y-1">
-            <p className="text-[11px] font-mono text-emerald-400 uppercase tracking-wider font-semibold">
-              Instant Workflow
-            </p>
-            <h3 className="text-xl sm:text-3xl font-bold text-white">How it works in three steps</h3>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="p-6 rounded-[18px] bg-[#16181d] border border-white/10 space-y-2">
-              <span className="text-2xl font-mono font-bold text-emerald-400">01</span>
-              <h4 className="text-sm font-bold text-white">Deploy in 60 seconds</h4>
-              <p className="text-xs text-zinc-400 leading-relaxed">
-                Choose your Minecraft version (Paper 26.3, Purpur, or Fabric) and launch instantly with zero credit card required.
-              </p>
+            {/* Ask-anything Composer CTA */}
+            <div className="relative z-10 mx-auto mt-9 flex w-full max-w-xl justify-center">
+              <ComposerArt />
             </div>
 
-            <div className="p-6 rounded-[18px] bg-[#16181d] border border-white/10 space-y-2">
-              <span className="text-2xl font-mono font-bold text-emerald-400">02</span>
-              <h4 className="text-sm font-bold text-white">Connect from any device</h4>
-              <p className="text-xs text-zinc-400 leading-relaxed">
-                Share your free subdomain (`yourname.kryin.gg`) with friends on PC or consoles using port 19132.
-              </p>
-            </div>
-
-            <div className="p-6 rounded-[18px] bg-[#16181d] border border-white/10 space-y-2">
-              <span className="text-2xl font-mono font-bold text-emerald-400">03</span>
-              <h4 className="text-sm font-bold text-white">Control from the web</h4>
-              <p className="text-xs text-zinc-400 leading-relaxed">
-                Stream live logs, inspect player inventories, manage plugins, and configure backups directly from your browser.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 8-Grid Capabilities Stack */}
-      <section className="py-20 px-5 max-w-[1200px] mx-auto space-y-10">
-        <div className="text-center space-y-2">
-          <p className="text-[11px] font-mono text-emerald-400 uppercase tracking-wider font-semibold">
-            Complete Infrastructure
-          </p>
-          <h2 className="text-2xl sm:text-3xl font-bold text-white">
-            Built-in tools for total server sovereignty
-          </h2>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {CAPABILITIES.map((cap, i) => {
-            const Icon = cap.icon;
-            return (
-              <div
-                key={i}
-                className="p-4 rounded-[16px] bg-[#16181d] border border-white/10 space-y-2 hover:border-white/20 transition-all"
-              >
-                <div className="w-8 h-8 rounded-lg bg-[#22252b] border border-white/10 flex items-center justify-center text-emerald-400">
-                  <Icon className="w-4 h-4" />
-                </div>
-                <h4 className="text-xs font-bold text-white">{cap.label}</h4>
-                <p className="text-[11px] text-zinc-400 leading-snug">{cap.note}</p>
+            {/* Feature highlights strip under CTA */}
+            <div className="mt-8 flex flex-wrap items-center justify-center gap-6 text-[13px] font-medium text-[var(--muted-foreground)]">
+              <div className="flex items-center gap-1.5">
+                <Check className="size-3.5 text-[var(--sienna)]" />
+                <span>Paper 26.3 & Purpur Ready</span>
               </div>
-            );
-          })}
+              <div className="flex items-center gap-1.5">
+                <Check className="size-3.5 text-[var(--sienna)]" />
+                <span>Geyser Cross-Play Active</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Check className="size-3.5 text-[var(--sienna)]" />
+                <span>Zero Configuration Setup</span>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* Server Plans Section with KryinOffice Card Design */}
-      <section className="py-20 px-5 bg-[#121417] border-y border-white/10">
-        <div className="max-w-[1200px] mx-auto space-y-10">
-          <div className="text-center space-y-2">
-            <p className="text-[11px] font-mono text-emerald-400 uppercase tracking-wider font-semibold">
-              Transparent Pricing
-            </p>
-            <h2 className="text-2xl sm:text-4xl font-extrabold text-white">
+      {/* ===== Product artifact showcase (big floating card) ===== */}
+      <section className="relative px-6 pb-24">
+        <div className="mx-auto max-w-4xl">
+          <div className="v3-art overflow-hidden p-2">
+            <div className="rounded-[16px] bg-[var(--fog)] p-6 sm:p-10">
+              <div className="grid gap-4 sm:grid-cols-5">
+                <div className="rounded-[16px] border border-[var(--border)] bg-white p-5 sm:col-span-2">
+                  <p className="v3-tag">Server Instance</p>
+                  <div className="mt-3 flex items-center gap-3 rounded-[12px] border border-[var(--border)] bg-[var(--fog)] p-3">
+                    <span className="flex size-9 items-center justify-center rounded-[10px] bg-[var(--peach)] text-[var(--sienna)]">
+                      <Server className="size-4" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-[15px] font-medium text-[var(--foreground)]">Paper 26.3 (Build #249)</p>
+                      <p className="flex items-center gap-1 text-[13px] text-[var(--muted-foreground)]">
+                        <Check className="size-3 text-emerald-500" /> 20.0 TPS Stable
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {['paper', 'geyser', 'crossplay', 'nvme'].map((t) => (
+                      <span key={t} className="v3-tag bg-[var(--fog)] px-2 py-0.5 rounded border border-[var(--border)]">
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-[16px] border border-[var(--border)] bg-white p-5 sm:col-span-3">
+                  <p className="v3-tag">Active State & Controls</p>
+                  <div className="mt-3 space-y-2.5">
+                    <div className="rounded-[12px] border border-[var(--border)] bg-[var(--fog)] p-3">
+                      <p className="text-[12px] text-[var(--muted-foreground)]">Network Endpoint</p>
+                      <p className="text-[14px] font-mono text-[var(--foreground)]">play.kryin.gg • Ports: 25565 / 19132</p>
+                    </div>
+                    <div className="flex items-center justify-between rounded-[12px] border border-[var(--border)] bg-[var(--fog)] p-3">
+                      <p className="text-[14px] text-[var(--foreground)]">Hardware Node Status</p>
+                      <span className="rounded-full bg-[var(--peach)] px-2 py-0.5 text-[12px] font-semibold text-[var(--sienna)]">
+                        Snapdragon 888
+                      </span>
+                    </div>
+                    <div className="rounded-[12px] border border-[var(--peach)] bg-[var(--peach)]/40 p-3">
+                      <p className="text-[12px] text-[var(--sienna)] font-semibold">Anti-DDoS Shield</p>
+                      <p className="text-[14px] text-[var(--foreground)]">2.5 Tbps active scrub enabled • 0 packet drops</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ===== Trusted-by strip ===== */}
+      <section className="px-6 pb-20">
+        <div className="mx-auto max-w-[1200px]">
+          <p className="text-center v3-tag">One engine for everything your Minecraft community runs</p>
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-x-10 gap-y-3">
+            {TRUST.map((t) => (
+              <span key={t} className="text-[16px] font-medium text-[var(--ash)]">
+                {t}
+              </span>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ===== Feature trio (one peach accent card) ===== */}
+      <section id="features" className="bg-[var(--fog)] px-6 py-24">
+        <div className="mx-auto max-w-[1200px]">
+          <h2 className="max-w-2xl text-[34px] leading-tight text-[var(--foreground)] sm:text-[56px]">
+            Hosting <span className="v3-em">platform</span>
+          </h2>
+          <div className="mt-12 grid gap-6 md:grid-cols-3">
+            {FEATURES.map((f) => (
+              <div
+                key={f.title}
+                className="rounded-[24px] p-8 border border-[var(--border)] transition-all hover:shadow-md"
+                style={
+                  f.peach
+                    ? { background: 'var(--peach)', color: 'var(--sienna)' }
+                    : { background: 'var(--mist)' }
+                }
+              >
+                <p className="text-[13px] font-medium" style={{ color: f.peach ? 'var(--sienna)' : 'var(--ash)' }}>
+                  {f.tag}
+                </p>
+                <h3 className="mt-2 text-[24px]" style={{ color: f.peach ? 'var(--sienna)' : 'var(--foreground)' }}>
+                  {f.title}
+                </h3>
+                <p className="mt-3 text-[15px] leading-relaxed" style={{ color: f.peach ? 'var(--sienna)' : 'var(--foreground)' }}>
+                  {f.body}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ===== 3 Numbered Steps ===== */}
+      <section className="px-6 py-24 bg-white border-b border-[var(--border)]">
+        <div className="mx-auto max-w-[1200px] space-y-12">
+          <div>
+            <p className="v3-tag">Fast Provisioning</p>
+            <h2 className="text-[34px] sm:text-[50px] text-[var(--foreground)] mt-1">
+              How it works in three steps
+            </h2>
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-3">
+            {STEPS.map((s) => (
+              <div key={s.n} className="rounded-[20px] bg-[var(--fog)] p-8 border border-[var(--border)] space-y-3">
+                <span className="text-3xl font-mono font-medium text-[var(--sienna)]">{s.n}</span>
+                <h3 className="text-[20px] text-[var(--foreground)]">{s.title}</h3>
+                <p className="text-[14px] text-[var(--muted-foreground)] leading-relaxed">{s.body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ===== Capabilities Grid ===== */}
+      <section id="capabilities" className="px-6 py-24 bg-[var(--fog)]">
+        <div className="mx-auto max-w-[1200px] space-y-10">
+          <div>
+            <p className="v3-tag">Server Infrastructure</p>
+            <h2 className="text-[34px] sm:text-[50px] text-[var(--foreground)] mt-1">
+              Built-in tools for total sovereignty
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {CAPABILITIES.map((c, i) => {
+              const Icon = c.icon;
+              return (
+                <div
+                  key={i}
+                  className="rounded-[18px] bg-white p-5 border border-[var(--border)] shadow-xs hover:shadow-md transition-all space-y-2"
+                >
+                  <div className="size-9 rounded-xl bg-[var(--peach)] flex items-center justify-center text-[var(--sienna)]">
+                    <Icon className="size-4" />
+                  </div>
+                  <h4 className="text-[15px] font-semibold text-[var(--foreground)]">{c.label}</h4>
+                  <p className="text-[12px] text-[var(--muted-foreground)]">{c.note}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* ===== Plans Showcase ===== */}
+      <section id="plans" className="px-6 py-24 bg-white border-y border-[var(--border)]">
+        <div className="mx-auto max-w-[1200px] space-y-10">
+          <div className="text-center space-y-1">
+            <p className="v3-tag">Simple Pricing</p>
+            <h2 className="text-[34px] sm:text-[52px] text-[var(--foreground)]">
               Choose your server tier
             </h2>
-            <p className="text-xs sm:text-sm text-zinc-400 max-w-md mx-auto">
+            <p className="text-[15px] text-[var(--muted-foreground)] max-w-md mx-auto">
               Start free with automatic hibernation or scale up with 24/7 dedicated resources.
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {PLANS_DATA.map((plan, idx) => (
+            {[
+              {
+                name: 'Free Starter',
+                badge: 'Popular for Friends',
+                price: '$0.00',
+                cycle: 'forever',
+                ram: '2 GB',
+                cpu: '1 vCPU',
+                storage: '10 GB SSD',
+                slots: '5 Slots',
+                features: ['Smart Auto-Hibernation', 'Instant Auto-Wake on Join', 'Java & Bedrock Cross-Play', 'Web Console & Player Manager'],
+                highlight: false,
+                cta: 'Deploy Free',
+              },
+              {
+                name: 'Grass Explorer',
+                badge: 'Entry Level',
+                price: '$3.99',
+                cycle: 'month',
+                ram: '4 GB DDR4',
+                cpu: '2 vCPU',
+                storage: '35 GB NVMe',
+                slots: '20 Slots',
+                features: ['24/7 Always-On (No Sleep)', 'High-Speed Gen4 NVMe', 'Daily Automated Backups', 'Full Web File Manager & SFTP'],
+                highlight: false,
+                cta: 'Select Explorer',
+              },
+              {
+                name: 'Iron Standard',
+                badge: 'Most Popular',
+                price: '$7.99',
+                cycle: 'month',
+                ram: '8 GB DDR4/DDR5',
+                cpu: '3 vCPU',
+                storage: '80 GB NVMe',
+                slots: '60 Slots',
+                features: ['Optimized Paper & Fabric', 'Modpack & Plugin Support', 'Enterprise Anti-DDoS Shield', 'Offsite Cloud Backups & MySQL'],
+                highlight: true,
+                cta: 'Select Iron',
+              },
+              {
+                name: 'Diamond Extreme',
+                badge: 'High Performance',
+                price: '$14.99',
+                cycle: 'month',
+                ram: '12 GB High-Freq',
+                cpu: '4 vCPU',
+                storage: '150 GB NVMe',
+                slots: 'Unlimited',
+                features: ['Dedicated CPU Clock Priority', 'Zero Tick-Lag Guarantee', 'Heavy Modpacks (ATM 9)', 'Hourly Snapshot Restores'],
+                highlight: false,
+                cta: 'Select Diamond',
+              },
+            ].map((p, idx) => (
               <div
                 key={idx}
-                className={`p-6 rounded-[22px] flex flex-col justify-between transition-all ${
-                  plan.highlight
-                    ? 'bg-[#181d26] border-2 border-emerald-500/80 shadow-xl'
-                    : 'bg-[#16181d] border border-white/10 hover:border-white/20'
+                className={`rounded-[22px] p-6 flex flex-col justify-between transition-all ${
+                  p.highlight
+                    ? 'border-2 border-[var(--sienna)] bg-[var(--peach)]/30 shadow-lg'
+                    : 'border border-[var(--border)] bg-[var(--fog)] hover:bg-white hover:shadow-md'
                 }`}
               >
                 <div>
-                  <span
-                    className={`text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
-                      plan.highlight
-                        ? 'bg-emerald-950 text-emerald-300 border border-emerald-700/60'
-                        : 'bg-[#22252b] text-zinc-400 border border-white/10'
-                    }`}
-                  >
-                    {plan.badge}
+                  <span className="text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-white border border-[var(--border)] text-[var(--sienna)]">
+                    {p.badge}
                   </span>
-                  <h4 className="text-base font-bold text-white mt-2">{plan.name}</h4>
+                  <h4 className="text-[18px] font-bold text-[var(--foreground)] mt-2.5">{p.name}</h4>
 
-                  <div className="my-4 pb-4 border-b border-white/10">
-                    <span className="text-3xl font-extrabold text-white font-mono">{plan.price}</span>
-                    <span className="text-xs text-zinc-500 ml-1">/ {plan.cycle}</span>
+                  <div className="my-4 pb-4 border-b border-[var(--border)]">
+                    <span className="text-3xl font-extrabold text-[var(--foreground)] font-mono">{p.price}</span>
+                    <span className="text-xs text-[var(--muted-foreground)] ml-1">/ {p.cycle}</span>
                   </div>
 
-                  <div className="space-y-1.5 text-xs text-zinc-300 mb-4 pb-4 border-b border-white/10 font-mono">
-                    <div className="flex justify-between"><span className="text-zinc-500 font-sans">RAM:</span> <span>{plan.ram}</span></div>
-                    <div className="flex justify-between"><span className="text-zinc-500 font-sans">vCPU:</span> <span>{plan.cpu}</span></div>
-                    <div className="flex justify-between"><span className="text-zinc-500 font-sans">Storage:</span> <span>{plan.storage}</span></div>
-                    <div className="flex justify-between"><span className="text-zinc-500 font-sans">Slots:</span> <span>{plan.slots}</span></div>
+                  <div className="space-y-1.5 text-xs text-[var(--foreground)] mb-4 pb-4 border-b border-[var(--border)]">
+                    <div className="flex justify-between"><span className="text-[var(--muted-foreground)]">RAM:</span> <span>{p.ram}</span></div>
+                    <div className="flex justify-between"><span className="text-[var(--muted-foreground)]">vCPU:</span> <span>{p.cpu}</span></div>
+                    <div className="flex justify-between"><span className="text-[var(--muted-foreground)]">Storage:</span> <span>{p.storage}</span></div>
+                    <div className="flex justify-between"><span className="text-[var(--muted-foreground)]">Slots:</span> <span>{p.slots}</span></div>
                   </div>
 
-                  <ul className="space-y-2 text-[11px] text-zinc-400 mb-6">
-                    {plan.features.map((f, fi) => (
+                  <ul className="space-y-2 text-[12px] text-[var(--muted-foreground)] mb-6">
+                    {p.features.map((f, fi) => (
                       <li key={fi} className="flex items-center gap-2">
-                        <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                        <Check className="size-3.5 text-[var(--sienna)]" />
                         <span>{f}</span>
                       </li>
                     ))}
                   </ul>
                 </div>
 
-                <Link
-                  href="/login"
-                  className={`w-full py-2.5 rounded-full text-xs font-bold text-center transition-all ${
-                    plan.highlight
-                      ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                      : 'bg-[#22252b] hover:bg-zinc-700 text-zinc-200 border border-white/10'
-                  }`}
-                >
-                  {plan.cta}
-                </Link>
+                <FilledPill href="/login">{p.cta}</FilledPill>
               </div>
             ))}
           </div>
 
           <div className="text-center pt-2">
-            <Link
-              href="/plans"
-              className="inline-flex items-center gap-1.5 text-xs text-emerald-400 hover:underline font-semibold"
-            >
-              <span>Compare all 5 server plans & feature matrix</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
+            <ArrowLink href="/plans">Compare all 5 server plans & full feature matrix</ArrowLink>
           </div>
         </div>
       </section>
 
-      {/* FAQ Accordion */}
-      <section id="faq" className="max-w-3xl mx-auto px-5 py-20 space-y-8">
+      {/* ===== FAQ Accordion ===== */}
+      <section id="faq" className="px-6 py-24 max-w-3xl mx-auto space-y-8">
         <div className="text-center space-y-1">
-          <p className="text-[11px] font-mono text-emerald-400 uppercase tracking-wider font-semibold">
-            Common Questions
-          </p>
-          <h2 className="text-2xl sm:text-3xl font-bold text-white">Frequently Asked Questions</h2>
+          <p className="v3-tag">Questions & Answers</p>
+          <h2 className="text-[34px] sm:text-[46px] text-[var(--foreground)]">Frequently Asked Questions</h2>
         </div>
 
         <div className="space-y-3">
-          {[
-            {
-              q: 'How fast is my server ready after registration?',
-              a: 'Instantly. Your Paper 26.3 server instance is provisioned and listening for connections within 60 seconds.',
-            },
-            {
-              q: 'How does Bedrock & Java Cross-Play work?',
-              a: 'Every server has Geyser and Floodgate built-in. Java edition players join with port 25565, while Bedrock players on mobile or console join with port 19132 into the exact same world.',
-            },
-            {
-              q: 'Can I upload my existing Minecraft singleplayer world?',
-              a: 'Yes. You have full access to our web file manager and SFTP. Simply drag and drop your world folder or zip archive.',
-            },
-            {
-              q: 'How does the Free Starter plan hibernation work?',
-              a: 'Similar to MineKeep, free servers enter a low-power hibernation state when all players disconnect. As soon as someone attempts to join, it wakes automatically in under 2 seconds.',
-            },
-          ].map((item, idx) => (
-            <div
+          {FAQ.map((item, idx) => (
+            <details
               key={idx}
-              className="bg-[#16181d] border border-white/10 rounded-[16px] overflow-hidden"
+              className="group rounded-[18px] border border-[var(--border)] bg-[var(--fog)] p-5 transition-all [&_summary::-webkit-details-marker]:hidden"
             >
-              <button
-                type="button"
-                onClick={() => setActiveFaq(activeFaq === idx ? null : idx)}
-                className="w-full p-4 text-left flex items-center justify-between text-xs font-semibold text-zinc-100 hover:text-emerald-400 transition-colors"
-              >
+              <summary className="flex cursor-pointer items-center justify-between text-[15px] font-medium text-[var(--foreground)] hover:text-[var(--sienna)] transition-colors">
                 <span>{item.q}</span>
-                <ChevronDown
-                  className={`w-4 h-4 text-zinc-400 transition-transform ${
-                    activeFaq === idx ? 'rotate-180 text-emerald-400' : ''
-                  }`}
-                />
-              </button>
-              {activeFaq === idx && (
-                <div className="px-4 pb-4 pt-1 text-xs text-zinc-400 leading-relaxed border-t border-white/5">
-                  {item.a}
-                </div>
-              )}
-            </div>
+                <ChevronDown className="size-4 text-[var(--muted-foreground)] transition-transform duration-200 group-open:rotate-180" />
+              </summary>
+              <p className="mt-3 text-[14px] leading-relaxed text-[var(--muted-foreground)] border-t border-[var(--border)] pt-3">
+                {item.a}
+              </p>
+            </details>
           ))}
         </div>
       </section>
 
-      {/* Call to Action Banner */}
-      <section className="py-20 px-5 bg-[#121417] border-t border-white/10 text-center">
-        <div className="max-w-2xl mx-auto space-y-5">
-          <h2 className="text-2xl sm:text-4xl font-extrabold text-white tracking-tight">
+      {/* ===== Bottom CTA Banner ===== */}
+      <section className="px-6 py-24 bg-[var(--fog)] border-t border-[var(--border)] text-center">
+        <div className="mx-auto max-w-2xl space-y-6">
+          <h2 className="text-[34px] sm:text-[54px] text-[var(--foreground)]">
             Ready to deploy your Minecraft world?
           </h2>
-          <p className="text-xs sm:text-sm text-zinc-400 leading-relaxed">
-            Create your world in under 60 seconds with our free starter tier or choose high-frequency dedicated hardware.
+          <p className="text-[16px] text-[var(--muted-foreground)] leading-relaxed">
+            Create your server in under 60 seconds on our free tier or scale with dedicated high-frequency hardware.
           </p>
           <div className="flex items-center justify-center gap-3 pt-2">
-            <FilledPill href="/login">
-              <span>Deploy Server Now</span>
-              <ArrowRight className="w-4 h-4" />
-            </FilledPill>
-            <GhostPill href="/plans">
-              <span>Browse All Plans</span>
-            </GhostPill>
+            <FilledPill href="/login">Deploy Server Now</FilledPill>
+            <GhostPill href="/plans">Browse All Plans</GhostPill>
           </div>
         </div>
       </section>
 
-      {/* Executive Footer */}
-      <footer className="border-t border-white/10 bg-[#0f1115] py-12 px-5 text-xs text-zinc-500">
-        <div className="max-w-[1200px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+      {/* ===== Executive Footer matching KryinOffice ===== */}
+      <footer className="border-t border-[var(--border)] bg-white py-12 px-6 text-[13px] text-[var(--muted-foreground)]">
+        <div className="mx-auto max-w-[1200px] flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2.5">
-            <div className="w-6 h-6 rounded bg-emerald-600 flex items-center justify-center text-white">
-              <Server className="w-3.5 h-3.5" />
+            <div className="flex size-6 items-center justify-center rounded bg-[var(--foreground)] text-white">
+              <Server className="size-3.5" />
             </div>
-            <span className="font-bold text-zinc-200 text-sm tracking-tight">KryinHost</span>
-            <span className="text-zinc-600">|</span>
-            <span className="text-zinc-500">Game Server Infrastructure</span>
+            <span className="font-bold text-[14px] text-[var(--foreground)]">KryinHost</span>
+            <span className="text-[var(--ash)]">·</span>
+            <span>Game Server Infrastructure</span>
           </div>
 
-          <div className="flex items-center gap-5 text-[11px] text-zinc-400">
-            <Link href="/" className="hover:text-white transition-colors">Home</Link>
-            <Link href="/plans" className="hover:text-white transition-colors">Plans</Link>
-            <Link href="/login" className="hover:text-white transition-colors">Client Area</Link>
-            <span className="inline-flex items-center gap-1.5 text-emerald-400">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+          <div className="flex items-center gap-6 text-[13px]">
+            <Link href="/" className="hover:text-[var(--foreground)] transition-colors">Home</Link>
+            <Link href="/plans" className="hover:text-[var(--foreground)] transition-colors">Plans</Link>
+            <Link href="/login" className="hover:text-[var(--foreground)] transition-colors">Client Area</Link>
+            <span className="inline-flex items-center gap-1.5 text-emerald-600 font-medium">
+              <span className="size-1.5 rounded-full bg-emerald-600" />
               All Systems Operational
             </span>
           </div>
         </div>
 
-        <div className="max-w-[1200px] mx-auto mt-6 pt-6 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-zinc-600">
+        <div className="mx-auto max-w-[1200px] mt-6 pt-6 border-t border-[var(--border)] flex flex-col sm:flex-row items-center justify-between gap-2 text-[12px] text-[var(--ash)]">
           <p>© 2026 KryinHost Inc. All rights reserved. Not an official Minecraft product.</p>
-          <p className="font-mono">ASUS ROG Phone 5s Node • Snapdragon 888 • OpenJDK 25</p>
+          <p className="font-mono">ASUS ROG Phone 5s Node · Snapdragon 888 · OpenJDK 25</p>
         </div>
       </footer>
     </div>

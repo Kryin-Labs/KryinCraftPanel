@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'KryinHost — High Performance Minecraft Server Hosting',
-  description: 'Enterprise-grade, low-latency Minecraft server hosting. Java 26 and Bedrock cross-play, 1-click modpacks, anti-DDoS protection, and custom management control panel.',
+  title: 'KryinHost — High-Performance Minecraft Server Hosting',
+  description: 'Enterprise game server infrastructure. Instant Java and Bedrock cross-play, 2.5+ Tbps Anti-DDoS, and modern web management.',
 };
 
 export default function RootLayout({
@@ -12,8 +12,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
-      <body className="bg-[#0e1117] text-zinc-100 min-h-screen antialiased selection:bg-emerald-600 selection:text-white">
+    <html lang="en">
+      <body className="bg-white text-[#17191c] min-h-screen antialiased selection:bg-[#fbe1d1] selection:text-[#5d2a1a]">
         {children}
       </body>
     </html>
