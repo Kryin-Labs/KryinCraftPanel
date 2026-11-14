@@ -306,9 +306,8 @@ public class KryinAgent {
         }
 
         try {
-            // Wake lock command for Termux
             try {
-                Runtime.getRuntime().exec("termux-wake-lock");
+                new ProcessBuilder("termux-wake-lock").start();
             } catch (Exception ignored) {}
 
             File dir = new File(serverDir);
