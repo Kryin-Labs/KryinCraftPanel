@@ -1,6 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # ==============================================================================
-# KryinCraftPanel - Agent Launcher for Termux (ASUS ROG Phone 5s)
+# KryinCraftPanel - Agent Launcher for Termux
 # ==============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -15,10 +15,15 @@ if [ -f ".agent.pid" ]; then
     fi
 fi
 
-# Acquire Termux wake lock to prevent CPU sleep
+# Acquire Termux wake lock to prevent Android CPU sleep
 termux-wake-lock 2>/dev/null
 
-echo "[KryinAgent] Launching KryinAgent via OpenJDK 25..."
+# If agent.json does not exist, copy from agent.example.json
+if [ ! -f "agent.json" ] && [ -f "agent.example.json" ]; then
+    cp agent.example.json agent.json
+fi
+
+echo "[KryinAgent] Launching KryinAgent via OpenJDK..."
 nohup java KryinAgent.java > agent.log 2>&1 &
 AGENT_PID=$!
 

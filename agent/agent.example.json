@@ -1,6 +1,6 @@
 {
-  "backendUrl": "https://kryinpanel.vercel.app",
-  "agentToken": "kryin_agent_rog5s_token",
+  "backendUrl": "https://kryincraftpanel.vercel.app",
+  "agentToken": "kryin_agent_node_token",
   "serverDir": "/data/data/com.termux/files/home/minecraft/server",
   "rconHost": "127.0.0.1",
   "rconPort": 25575,

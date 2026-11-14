@@ -1,7 +1,7 @@
 /*
  * KryinCraftPanel - Lightweight Android/Termux Server Management Agent
- * Targeted for: ASUS ROG Phone 5s (Snapdragon 888, Android 13, Termux aarch64)
- * Runtime: OpenJDK 25 (Standard libraries ONLY - Zero external dependencies)
+ * Targeted for: Dedicated High-Performance Indian Node (Termux ARM64)
+ * Runtime: OpenJDK (Standard libraries ONLY - Zero external dependencies)
  */
 
 import java.io.*;
@@ -19,8 +19,8 @@ import java.util.zip.GZIPInputStream;
 public class KryinAgent {
 
     // Default Configuration
-    private static String backendUrl = "https://kryinpanel.vercel.app";
-    private static String agentToken = "kryin_agent_rog5s_token";
+    private static String backendUrl = "https://kryincraftpanel.vercel.app";
+    private static String agentToken = "kryin_agent_node_token";
     private static String serverDir = System.getProperty("user.home") + "/minecraft/server";
     private static String rconHost = "127.0.0.1";
     private static int rconPort = 25575;
@@ -43,9 +43,9 @@ public class KryinAgent {
 
     public static void main(String[] args) {
         System.out.println("==================================================");
-        System.out.println("   KryinCraftPanel Lightweight Termux Agent");
-        System.out.println("   Target: ASUS ROG Phone 5s (Android 13 / aarch64)");
-        System.out.println("   Runtime: OpenJDK 25.0.3 (Standard Libraries Only)");
+        System.out.println("   KryinCraftPanel Lightweight Termux Node Agent");
+        System.out.println("   Target: Indian Node (Android / Termux aarch64)");
+        System.out.println("   Runtime: OpenJDK (Standard Libraries Only)");
         System.out.println("==================================================");
 
         loadConfig();
@@ -381,6 +381,17 @@ public class KryinAgent {
         if (minecraftProcess != null && minecraftProcess.isAlive()) {
             return minecraftProcess.pid();
         }
+
+        // Fallback: search process list for running server.jar or paper
+        try {
+            Process p = new ProcessBuilder("pgrep", "-f", "paper.*\\.jar|server\\.jar").start();
+            try (BufferedReader r = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
+                String line = r.readLine();
+                if (line != null && !line.trim().isEmpty()) {
+                    return Long.parseLong(line.trim().split("\\s+")[0]);
+                }
+            }
+        } catch (Exception ignored) {}
 
         return null;
     }
