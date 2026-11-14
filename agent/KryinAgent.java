@@ -18,12 +18,12 @@ import java.util.regex.*;
 public class KryinAgent {
 
     // Default Configuration
-    private static String backendUrl = "https://qekhtvzzllaufevvljxj.supabase.co";
+    private static String backendUrl = "https://kryinpanel.vercel.app";
     private static String agentToken = "kryin_agent_rog5s_token";
     private static String serverDir = System.getProperty("user.home") + "/minecraft/server";
     private static String rconHost = "127.0.0.1";
     private static int rconPort = 25575;
-    private static String rconPassword = "SECRET_LOCAL_RCON_PASS";
+    private static String rconPassword = "334001";
 
     // Polling Intervals (milliseconds)
     private static int heartbeatIntervalMs = 30000; // 30 sec

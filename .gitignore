@@ -43,3 +43,5 @@ supabase/.temp/
 agent.json
 agent.log
 
+
+.vercel
