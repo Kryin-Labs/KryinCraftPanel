@@ -1,0 +1,37 @@
+import { NextResponse } from 'next/server';
+import { verifyAgentToken } from '@/lib/agentAuth';
+
+export async function POST(req: Request) {
+  try {
+    const authResult = await verifyAgentToken(req);
+    if ('error' in authResult) {
+      return NextResponse.json({ error: authResult.error }, { status: authResult.status });
+    }
+
+    const { server, supabase } = authResult;
+    const body = await req.json();
+
+    const { logs = [] } = body;
+    if (!Array.isArray(logs) || logs.length === 0) {
+      return NextResponse.json({ success: true, count: 0 });
+    }
+
+    // Map logs to server_logs schema
+    const rows = logs.slice(0, 50).map((l: any) => ({
+      server_id: server.id,
+      timestamp: l.timestamp || new Date().toISOString(),
+      level: l.level || 'INFO',
+      message: String(l.message || l).slice(0, 1000),
+    }));
+
+    const { error: insertError } = await supabase.from('server_logs').insert(rows);
+
+    if (insertError) {
+      return NextResponse.json({ error: insertError.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true, count: rows.length });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message || 'Log ingestion error' }, { status: 500 });
+  }
+}

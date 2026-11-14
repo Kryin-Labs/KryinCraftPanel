@@ -56,7 +56,7 @@ public class KryinAgent {
             running = false;
         }));
 
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(3);
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(4);
 
         // Task 1: Heartbeat (every 30s)
         scheduler.scheduleAtFixedRate(KryinAgent::sendHeartbeat, 0, heartbeatIntervalMs, TimeUnit.MILLISECONDS);
@@ -69,6 +69,9 @@ public class KryinAgent {
 
         // Task 4: Player & Stats Synchronization (every 20s)
         scheduler.scheduleWithFixedDelay(KryinAgent::syncPlayers, 4000, 20000, TimeUnit.MILLISECONDS);
+
+        // Task 5: Live Console Log Streaming (every 2.5s)
+        scheduler.scheduleWithFixedDelay(KryinAgent::syncConsoleLogs, 1500, 2500, TimeUnit.MILLISECONDS);
 
         System.out.println("[Agent] Agent initialized and polling outbound to: " + backendUrl);
 
@@ -774,6 +777,66 @@ public class KryinAgent {
         } catch (Exception e) {
             System.err.println("[Agent] Player sync error: " + e.getMessage());
         }
+    }
+
+    // =========================================================================
+    // 5. CONSOLE LOG STREAMING (reads latest.log and syncs to portal)
+    // =========================================================================
+    private static long lastLogFilePointer = 0;
+
+    private static void syncConsoleLogs() {
+        try {
+            File logFile = new File(serverDir, "logs/latest.log");
+            if (!logFile.exists()) {
+                logFile = new File("logs/latest.log");
+                if (!logFile.exists()) return;
+            }
+
+            long fileLen = logFile.length();
+            if (fileLen < lastLogFilePointer) {
+                lastLogFilePointer = 0;
+            }
+
+            if (fileLen <= lastLogFilePointer) {
+                return;
+            }
+
+            // On first pass: start near the tail (last 12KB) to avoid flooding old history
+            if (lastLogFilePointer == 0 && fileLen > 12000) {
+                lastLogFilePointer = fileLen - 12000;
+            }
+
+            List<String> newLines = new ArrayList<>();
+            try (RandomAccessFile raf = new RandomAccessFile(logFile, "r")) {
+                raf.seek(lastLogFilePointer);
+                String rawLine;
+                while ((rawLine = raf.readLine()) != null && newLines.size() < 30) {
+                    String utf8Line = new String(rawLine.getBytes(StandardCharsets.ISO_8859_1), StandardCharsets.UTF_8).trim();
+                    if (!utf8Line.isEmpty()) {
+                        newLines.add(utf8Line);
+                    }
+                }
+                lastLogFilePointer = raf.getFilePointer();
+            }
+
+            if (!newLines.isEmpty()) {
+                StringBuilder json = new StringBuilder("{\"logs\":[");
+                String timeStr = new java.text.SimpleDateFormat("HH:mm:ss").format(new Date());
+                for (int i = 0; i < newLines.size(); i++) {
+                    if (i > 0) json.append(",");
+                    String l = newLines.get(i);
+                    String level = "INFO";
+                    if (l.contains("/WARN]")) level = "WARN";
+                    else if (l.contains("/ERROR]")) level = "ERROR";
+
+                    json.append("{\"timestamp\":\"").append(timeStr).append("\",");
+                    json.append("\"level\":\"").append(level).append("\",");
+                    json.append("\"message\":\"").append(escapeJson(l)).append("\"}");
+                }
+                json.append("]}");
+                postHttp("/api/agent/logs", json.toString());
+            }
+        } catch (Exception ignored) {}
     }
 
     // =========================================================================

@@ -80,161 +80,124 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
   const [tunnel] = useState<TunnelConfig>(tunnelInfo);
   const [isLiveDbConnected, setIsLiveDbConnected] = useState<boolean>(false);
 
-  // Sync with live Supabase database
+  // Sync with live server API and database
   useEffect(() => {
     let isMounted = true;
 
-    async function initSupabaseData() {
+    async function syncLiveServerData() {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
+        const res = await fetch('/api/server/live');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data || !isMounted) return;
 
-        // Fetch user's server
-        const { data: server, error } = await supabase
-          .from('servers')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single();
-
-        if (server && !error && isMounted) {
+        if (data.server) {
           setIsLiveDbConnected(true);
           setServerInfo((prev) => ({
             ...prev,
-            id: server.id,
-            name: server.name,
-            status: server.status,
-            pid: server.pid,
-            minecraftVersion: server.minecraft_version,
-            paperBuild: server.paper_build,
-            geyserVersion: server.geyser_version,
-            device: server.device_name,
-            uptimeSeconds: server.uptime_seconds,
-            agentConnected: server.agent_connected,
-            lastHeartbeat: server.last_heartbeat ? new Date(server.last_heartbeat).toLocaleTimeString() : 'Awaiting agent',
-            onlinePlayers: server.online_players,
-            maxPlayers: server.max_players,
-            tps: server.tps ? Number(server.tps) : 20.0,
+            id: data.server.id,
+            name: data.server.name,
+            status: data.server.status,
+            pid: data.server.pid,
+            device: data.server.device,
+            uptimeSeconds: data.server.uptime_seconds,
+            agentConnected: data.online,
+            lastHeartbeat: data.server.last_heartbeat ? new Date(data.server.last_heartbeat).toLocaleTimeString() : 'Standby',
+            onlinePlayers: data.server.online_players,
+            maxPlayers: data.server.max_players,
+            tps: data.server.tps,
           }));
+        }
 
-          // Fetch latest metrics
-          const { data: latestMetrics } = await supabase
-            .from('server_metrics')
-            .select('*')
-            .eq('server_id', server.id)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single();
+        if (data.metrics) {
+          setMetrics((prev) => ({
+            ...prev,
+            totalRamMb: data.metrics.totalRamMb,
+            usedRamMb: data.metrics.usedRamMb,
+            availableRamMb: data.metrics.totalRamMb - data.metrics.usedRamMb,
+            javaHeapUsedMb: data.metrics.javaHeapUsedMb,
+            javaHeapMaxMb: data.metrics.javaHeapMaxMb,
+            cpuUsagePercent: data.metrics.cpuUsagePercent,
+            cpuTempC: data.metrics.cpuTempC,
+            batteryPercent: data.metrics.batteryPercent,
+            isCharging: data.metrics.isCharging,
+            powerSource: data.metrics.powerSource || 'Battery',
+          }));
+        }
 
-          if (latestMetrics && isMounted) {
-            setMetrics({
-              totalRamMb: latestMetrics.total_ram_mb,
-              usedRamMb: latestMetrics.used_ram_mb,
-              availableRamMb: latestMetrics.available_ram_mb,
-              javaHeapUsedMb: latestMetrics.java_heap_used_mb,
-              javaHeapMaxMb: latestMetrics.java_heap_max_mb,
-              cpuUsagePercent: Number(latestMetrics.cpu_usage_percent),
-              cpuTempC: latestMetrics.cpu_temp_c ? Number(latestMetrics.cpu_temp_c) : null,
-              batteryPercent: latestMetrics.battery_percent,
-              batteryTempC: latestMetrics.battery_temp_c ? Number(latestMetrics.battery_temp_c) : null,
-              isCharging: latestMetrics.is_charging,
-              powerSource: latestMetrics.power_source || 'Battery',
-              timestamp: latestMetrics.created_at,
-            });
-          }
+        if (Array.isArray(data.logs) && data.logs.length > 0) {
+          setLogs(data.logs.map((l: any) => ({
+            id: l.id,
+            timestamp: l.timestamp ? (l.timestamp.includes('T') ? new Date(l.timestamp).toLocaleTimeString() : l.timestamp) : new Date().toLocaleTimeString(),
+            level: l.level || 'INFO',
+            message: l.message,
+          })));
+        }
 
-          // Fetch audit logs
-          const { data: audits } = await supabase
-            .from('audit_logs')
-            .select('*')
-            .eq('server_id', server.id)
-            .order('created_at', { ascending: false })
-            .limit(20);
+        if (Array.isArray(data.players) && data.players.length > 0) {
+          setPlayers(
+            data.players.map((p: any) => {
+              const inv = p.inventory || {};
+              const parsed = parseMinecraftStats(p.statistics);
 
-          if (audits && isMounted) {
-            setAuditLogs(
-              audits.map((a) => ({
-                id: a.id,
-                userId: a.user_id,
-                userEmail: a.user_email,
-                action: a.action,
-                target: a.target,
-                timestamp: new Date(a.created_at).toLocaleString(),
-                status: a.status as 'success' | 'failed',
-                details: a.details,
-              }))
-            );
-          }
-
-          // Fetch real players from Supabase
-          const { data: dbPlayers } = await supabase
-            .from('server_players')
-            .select('*')
-            .eq('server_id', server.id);
-
-          if (dbPlayers && dbPlayers.length > 0 && isMounted) {
-            setPlayers(
-              dbPlayers.map((p) => {
-                const inv = p.inventory || {};
-                const parsed = parseMinecraftStats(p.statistics);
-
-                return {
-                  uuid: p.uuid,
-                  username: p.username,
-                  isOnline: Boolean(p.is_online),
-                  pingMs: p.ping_ms || 0,
-                  health: Number(p.health ?? 20),
-                  maxHealth: Number(p.max_health ?? 20),
-                  foodLevel: Number(p.food_level ?? 20),
-                  saturation: Number(p.saturation ?? 5),
-                  xpLevel: Number(p.xp_level ?? 0),
-                  xpProgress: Number(p.xp_progress ?? 0),
-                  gamemode: p.gamemode || 'survival',
-                  isOp: Boolean(p.is_op),
-                  isWhitelisted: Boolean(p.is_whitelisted),
-                  isBanned: Boolean(p.is_banned),
-                  coordinates: p.coordinates || {
-                    x: 0,
-                    y: 64,
-                    z: 0,
-                    world: 'world',
-                    dimension: 'minecraft:overworld',
-                  },
-                  respawnCoordinates: p.coordinates?.respawn || null,
-                  deathCoordinates: p.coordinates?.death || null,
-                  inventory: {
-                    armor: inv.armor || { helmet: null, chestplate: null, leggings: null, boots: null },
-                    offhand: inv.offhand || null,
-                    main: Array.isArray(inv.main) ? inv.main : new Array(27).fill(null),
-                    hotbar: Array.isArray(inv.hotbar) ? inv.hotbar : new Array(9).fill(null),
-                  },
-                  statistics: {
-                    playtimeHours: Math.round((parsed.playtimeTicks / (20 * 3600)) * 10) / 10,
-                    playerKills: parsed.playerKills,
-                    deaths: parsed.deaths,
-                    kdr: Number(parsed.kdr) || 0,
-                    distanceTraveledKm: Math.round((parsed.distanceTotal / 1000) * 10) / 10,
-                    blocksBroken: parsed.blocksBrokenTotal,
-                    itemsUsed: parsed.itemsUsedTotal,
-                    entitiesKilled: parsed.entitiesKilledTotal,
-                    rawStats: p.statistics || {},
-                  },
-                  ipAddress: p.ip_address || '',
-                  lastSeen: p.last_seen || (p.is_online ? 'Online now' : 'Offline'),
-                };
-              })
-            );
-          }
+              return {
+                uuid: p.uuid,
+                username: p.username,
+                isOnline: Boolean(p.is_online),
+                pingMs: p.ping_ms || 0,
+                health: Number(p.health ?? 20),
+                maxHealth: Number(p.max_health ?? 20),
+                foodLevel: Number(p.food_level ?? 20),
+                saturation: Number(p.saturation ?? 5),
+                xpLevel: Number(p.xp_level ?? 0),
+                xpProgress: Number(p.xp_progress ?? 0),
+                gamemode: p.gamemode || 'survival',
+                isOp: Boolean(p.is_op),
+                isWhitelisted: Boolean(p.is_whitelisted),
+                isBanned: Boolean(p.is_banned),
+                coordinates: p.coordinates || {
+                  x: 0,
+                  y: 64,
+                  z: 0,
+                  world: 'world',
+                  dimension: 'minecraft:overworld',
+                },
+                respawnCoordinates: p.coordinates?.respawn || null,
+                deathCoordinates: p.coordinates?.death || null,
+                inventory: {
+                  armor: inv.armor || { helmet: null, chestplate: null, leggings: null, boots: null },
+                  offhand: inv.offhand || null,
+                  main: Array.isArray(inv.main) ? inv.main : new Array(27).fill(null),
+                  hotbar: Array.isArray(inv.hotbar) ? inv.hotbar : new Array(9).fill(null),
+                },
+                statistics: {
+                  playtimeHours: Math.round((parsed.playtimeTicks / (20 * 3600)) * 10) / 10,
+                  playerKills: parsed.playerKills,
+                  deaths: parsed.deaths,
+                  kdr: Number(parsed.kdr) || 0,
+                  distanceTraveledKm: Math.round((parsed.distanceTotal / 1000) * 10) / 10,
+                  blocksBroken: parsed.blocksBrokenTotal,
+                  itemsUsed: parsed.itemsUsedTotal,
+                  entitiesKilled: parsed.entitiesKilledTotal,
+                  rawStats: p.statistics || {},
+                },
+                ipAddress: p.ip_address || '',
+                lastSeen: p.last_seen || (p.is_online ? 'Online now' : 'Offline'),
+              };
+            })
+          );
         }
       } catch (err) {
-        console.warn('Live Supabase sync check:', err);
+        console.warn('Live server sync warning:', err);
       }
     }
 
-    initSupabaseData();
+    syncLiveServerData();
+    const interval = setInterval(syncLiveServerData, 3500);
 
     return () => {
       isMounted = false;
+      clearInterval(interval);
     };
   }, []);
 
