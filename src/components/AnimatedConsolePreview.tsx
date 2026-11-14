@@ -43,7 +43,7 @@ const LIVE_EVENTS: [string, LogLine['color']][] = [
   ['[Server] There are 12/100 players online', 'blue'],
   ['[Server] Saving player data...', 'white'],
   ['[Server] All chunks are saved', 'green'],
-  ['[Network] Ping response: 24ms', 'blue'],
+  ['[Network] Ping response: 18ms (Mumbai)', 'blue'],
   ['[Server] <Builder> Building something cool!', 'purple'],
   ['[World] Chunk generation completed', 'green'],
   ['[Server] Steve earned the advancement [Getting an Upgrade]', 'yellow'],
@@ -120,82 +120,82 @@ export default function AnimatedConsolePreview() {
 
       // 1. SERVER STARTUP
       await typeLine('[Server] Initializing Minecraft server...', 'purple', 22);
-      await sleep(400);
-
-      addLine('[Server] Java 21 detected', 'green');
       await sleep(350);
 
-      addLine('[Server] Loading server.properties', 'white');
-      await sleep(350);
+      addLine('[Server] Java 21 LTS detected (Temurin)', 'green');
+      await sleep(300);
+
+      addLine('[Server] Loading server.properties (Mumbai Node)', 'white');
+      await sleep(300);
 
       addLine('[Server] Loading libraries and dependencies...', 'white');
-      await sleep(500);
+      await sleep(400);
 
       addLine('[Server] Starting Paper server version 1.21.4', 'blue');
-      await sleep(500);
+      await sleep(400);
 
       addLine('[Server] Preparing level "world"', 'white');
-      await sleep(350);
+      await sleep(300);
 
       // 2. WORLD
       if (!isMountedRef.current) return;
       setActiveTab(1);
 
       await typeLine('[World] Loading world data...', 'yellow', 18);
-      await sleep(400);
+      await sleep(350);
 
       addLine('[World] Loading spawn chunks: 25%', 'white');
-      await sleep(350);
+      await sleep(300);
 
       addLine('[World] Loading spawn chunks: 64%', 'white');
-      await sleep(350);
+      await sleep(300);
 
       addLine('[World] Loading spawn chunks: 100%', 'green');
-      await sleep(350);
+      await sleep(300);
 
       addLine('[World] Preparing spawn area: 100%', 'green');
-      await sleep(400);
+      await sleep(350);
 
-      addLine('[World] Loaded 1248 chunks', 'white');
-      await sleep(400);
+      addLine('[World] Loaded 1248 chunks onto NVMe', 'white');
+      await sleep(350);
 
       // 3. PLUGINS
       if (!isMountedRef.current) return;
       setActiveTab(4);
 
       await typeLine('[Plugins] Loading server plugins...', 'purple', 18);
-      await sleep(350);
+      await sleep(300);
 
       addLine('[Plugins] EssentialsX enabled', 'green');
-      await sleep(250);
+      await sleep(200);
 
       addLine('[Plugins] LuckPerms enabled', 'green');
-      await sleep(250);
+      await sleep(200);
 
       addLine('[Plugins] WorldEdit enabled', 'green');
+      await sleep(200);
+
+      addLine('[Plugins] GeyserBridge enabled (Bedrock crossplay)', 'green');
       await sleep(250);
 
-      addLine('[Plugins] PlaceholderAPI enabled', 'green');
-      await sleep(350);
-
       addLine('[Plugins] Successfully loaded 14 plugins', 'green');
-      await sleep(400);
+      await sleep(350);
 
       // 4. NETWORK
       if (!isMountedRef.current) return;
       setActiveTab(3);
 
       await typeLine('[Network] Binding server to 0.0.0.0:25565', 'blue', 18);
-      await sleep(350);
+      await sleep(300);
 
-      addLine('[Network] Server socket opened', 'green');
-      await sleep(350);
+      addLine('[Network] Server socket opened on port 25565', 'green');
+      await sleep(300);
 
-      addLine('[Network] Query listener started', 'white');
-      await sleep(350);
+      addLine('[Network] Bedrock listener active on 0.0.0.0:19132', 'white');
+      await sleep(300);
 
       addLine('[Server] Done! For help, type "help"', 'green');
-      await sleep(600);
+      await sleep(500);
 
       // 5. PLAYER ACTIVITY
       if (!isMountedRef.current) return;
@@ -203,22 +203,22 @@ export default function AnimatedConsolePreview() {
 
       addLine('', 'white');
       await typeLine('[Players] Monitoring player connections...', 'purple', 18);
-      await sleep(500);
+      await sleep(400);
 
       addLine('[Server] Steve joined the game', 'green');
-      await sleep(350);
+      await sleep(300);
 
       addLine('[Server] Alex joined the game', 'green');
-      await sleep(350);
+      await sleep(300);
 
       addLine('[Server] Notch joined the game', 'green');
-      await sleep(350);
+      await sleep(300);
 
       addLine('[Server] Builder joined the game', 'green');
-      await sleep(350);
+      await sleep(300);
 
       addLine('[Server] There are 12/100 players online', 'blue');
-      await sleep(700);
+      await sleep(600);
 
       // 6. LIVE SERVER ACTIVITY LOOP
       if (!isMountedRef.current) return;
@@ -299,18 +299,18 @@ export default function AnimatedConsolePreview() {
   };
 
   return (
-    <div className="warp-live-console-wrapper w-full flex justify-center py-4">
+    <div className="warp-live-console-wrapper w-full flex justify-center py-2">
       <style>{`
         .warp-mc-terminal {
           width: 100%;
-          max-width: 1250px;
-          aspect-ratio: 1.62 / 1;
-          min-height: 480px;
-          max-height: 780px;
+          max-width: 940px;
+          min-height: 360px;
+          max-height: 470px;
+          height: 450px;
           background: #1e2122;
-          border-radius: 13px;
+          border-radius: 10px;
           overflow: hidden;
-          box-shadow: 0 15px 35px rgba(0,0,0,.22);
+          box-shadow: 0 12px 30px rgba(0,0,0,0.18);
           display: flex;
           flex-direction: column;
           color: #d8d9de;
@@ -318,16 +318,16 @@ export default function AnimatedConsolePreview() {
         }
 
         .warp-mc-topbar {
-          height: 42px;
-          min-height: 42px;
+          height: 36px;
+          min-height: 36px;
           background: #443c52;
           display: flex;
           align-items: center;
-          padding: 0 25px;
-          gap: 30px;
+          padding: 0 20px;
+          gap: 24px;
           white-space: nowrap;
           overflow: hidden;
-          font-size: clamp(11px, 1.5vw, 17px);
+          font-size: 13px;
         }
 
         .warp-mc-topbar strong {
@@ -336,7 +336,7 @@ export default function AnimatedConsolePreview() {
 
         .warp-mc-server-tabs {
           display: flex;
-          gap: clamp(15px, 3vw, 45px);
+          gap: 20px;
           overflow: hidden;
         }
 
@@ -348,7 +348,7 @@ export default function AnimatedConsolePreview() {
           border: none;
           cursor: pointer;
           font-family: inherit;
-          font-size: inherit;
+          font-size: 12px;
           padding: 0;
           display: flex;
           align-items: center;
@@ -361,12 +361,12 @@ export default function AnimatedConsolePreview() {
 
         .warp-mc-dot {
           display: inline-block;
-          width: 10px;
-          height: 10px;
-          margin-right: 7px;
+          width: 8px;
+          height: 8px;
+          margin-right: 6px;
           border-radius: 50%;
           background: #bce784;
-          box-shadow: 0 0 10px #bce78488;
+          box-shadow: 0 0 8px #bce78488;
         }
 
         .warp-mc-server-tab:not(.active) .warp-mc-dot {
@@ -379,7 +379,7 @@ export default function AnimatedConsolePreview() {
           min-height: 0;
           display: flex;
           flex-direction: column;
-          padding: 30px;
+          padding: 18px 22px;
         }
 
         .warp-mc-output {
@@ -388,8 +388,8 @@ export default function AnimatedConsolePreview() {
           overflow-y: auto;
           overflow-wrap: anywhere;
           scrollbar-width: none;
-          font-size: clamp(11px, 1.45vw, 18px);
-          line-height: 1.5;
+          font-size: 12.5px;
+          line-height: 1.45;
         }
 
         .warp-mc-output::-webkit-scrollbar {
@@ -397,33 +397,33 @@ export default function AnimatedConsolePreview() {
         }
 
         .warp-mc-line {
-          min-height: 1.5em;
+          min-height: 1.4em;
           white-space: pre-wrap;
         }
 
         .warp-mc-dock {
           flex-shrink: 0;
-          padding-top: 15px;
+          padding-top: 10px;
         }
 
         .warp-mc-activity {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 10px;
-          margin-bottom: 18px;
-          font-size: clamp(10px, 1.3vw, 16px);
+          gap: 8px;
+          margin-bottom: 10px;
+          font-size: 12px;
         }
 
         .warp-mc-spinner {
           display: inline-block;
-          width: 15px;
-          height: 15px;
-          border: 3px solid #574762;
+          width: 13px;
+          height: 13px;
+          border: 2.5px solid #574762;
           border-top-color: #c59fff;
           border-radius: 50%;
           vertical-align: middle;
-          margin-right: 8px;
+          margin-right: 6px;
           animation: warpMcSpin .8s linear infinite;
         }
 
@@ -436,13 +436,13 @@ export default function AnimatedConsolePreview() {
         }
 
         .warp-mc-composer {
-          height: 58px;
+          height: 42px;
           border: 1px solid #9395aa;
           display: flex;
           align-items: center;
-          padding: 0 18px;
-          font-size: clamp(10px, 1.3vw, 16px);
-          gap: 10px;
+          padding: 0 14px;
+          font-size: 12.5px;
+          gap: 8px;
           background: transparent;
         }
 
@@ -451,8 +451,8 @@ export default function AnimatedConsolePreview() {
         }
 
         .warp-mc-cursor {
-          width: 11px;
-          height: 23px;
+          width: 8px;
+          height: 18px;
           background: #f5f5f5;
           display: inline-block;
           animation: warpMcBlink 1s steps(2) infinite;
@@ -462,20 +462,13 @@ export default function AnimatedConsolePreview() {
           50% { opacity: 0; }
         }
 
-        .warp-mc-input-hint {
-          color: #a5a7ad;
-          overflow: hidden;
-          white-space: nowrap;
-          text-overflow: ellipsis;
-        }
-
         .warp-mc-status {
           display: flex;
           align-items: center;
           justify-content: space-between;
           gap: 8px;
-          margin-top: 14px;
-          font-size: clamp(9px, 1.2vw, 15px);
+          margin-top: 10px;
+          font-size: 11px;
           color: #a5a7ad;
         }
 
@@ -489,24 +482,23 @@ export default function AnimatedConsolePreview() {
 
         @media(max-width: 650px) {
           .warp-mc-terminal {
-            aspect-ratio: auto;
-            min-height: 550px;
+            height: 420px;
           }
           .warp-mc-topbar {
             padding: 0 12px;
-            gap: 12px;
+            gap: 10px;
           }
           .warp-mc-server-tabs {
-            gap: 15px;
+            gap: 12px;
           }
           .warp-mc-terminal-body {
-            padding: 16px;
+            padding: 12px 14px;
           }
           .warp-mc-activity {
             flex-wrap: wrap;
           }
           .warp-mc-composer {
-            padding: 0 10px;
+            padding: 0 8px;
           }
         }
       `}</style>
@@ -514,8 +506,10 @@ export default function AnimatedConsolePreview() {
       <div className="warp-mc-terminal">
         {/* SERVER TOP BAR */}
         <div className="warp-mc-topbar">
-          <strong>Server:</strong>
-          <strong>Minecraft</strong>
+          <div className="flex items-center gap-1.5">
+            <strong>Server:</strong>
+            <strong>Minecraft</strong>
+          </div>
 
           <div className="warp-mc-server-tabs">
             {TABS.map((tab, idx) => (
@@ -566,7 +560,7 @@ export default function AnimatedConsolePreview() {
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 placeholder="Enter a server command • /help for commands • Tab to autocomplete"
-                className="flex-1 bg-transparent border-0 outline-none font-mono text-[clamp(10px,1.3vw,16px)]"
+                className="flex-1 bg-transparent border-0 outline-none font-mono text-[12px]"
                 style={{ color: '#d8d9de' }}
               />
               {!inputValue && <span className="warp-mc-cursor" />}

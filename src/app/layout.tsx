@@ -3,7 +3,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'KryinHost — High-Performance Minecraft Server Hosting',
-  description: 'Enterprise game server infrastructure. Instant Java and Bedrock cross-play, 2.5+ Tbps Anti-DDoS, and modern web management.',
+  description: 'Enterprise Indian game server infrastructure. High-frequency compute, instant Java and Bedrock cross-play, and modern browser console management.',
 };
 
 export default function RootLayout({

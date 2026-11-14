@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import AnimatedConsolePreview from '@/components/AnimatedConsolePreview';
 import {
@@ -15,8 +15,6 @@ import {
   Users,
   Check,
   Radio,
-  ChevronDown,
-  ChevronRight,
   Clock,
   Sparkles,
   Copy,
@@ -31,16 +29,45 @@ import {
   Activity,
   Layers,
   BarChart3,
-  Flame,
-  Code2,
   RefreshCw,
-  Gauge,
-  Sliders,
-  Settings,
+  FileText,
+  Gamepad2,
+  Key,
+  Wrench,
+  ShieldCheck,
 } from 'lucide-react';
 
 /* ------------------------------------------------------------------ */
-/* File Structure Data for "Your software factory, defined in code"    */
+/* Sleek Minimal Monochrome Isometric Logo Component                   */
+/* ------------------------------------------------------------------ */
+
+function KryinLogo({ className = 'w-5 h-5' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M16 3L4 9.8V22.2L16 29L28 22.2V9.8L16 3Z" stroke="currentColor" strokeWidth="2.4" strokeLinejoin="round" />
+      <path d="M16 3V16M16 16L4 9.8M16 16L28 9.8M16 16V29" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      <circle cx="16" cy="16" r="3" fill="currentColor" />
+    </svg>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Software Engine / Partner Logos Data for Moving Carousel           */
+/* ------------------------------------------------------------------ */
+
+const ENGINE_LOGOS = [
+  { name: 'PAPER 26.3', icon: FileText },
+  { name: 'PURPUR ENGINE', icon: Sparkles },
+  { name: 'VELOCITY PROXY', icon: Zap },
+  { name: 'GEYSER-MC', icon: Gamepad2 },
+  { name: 'FLOODGATE', icon: Key },
+  { name: 'VIAVERSION', icon: RefreshCw },
+  { name: 'SPIGOT ENGINE', icon: Wrench },
+  { name: 'TATA / JIO FIBER DIRECT', icon: Globe },
+];
+
+/* ------------------------------------------------------------------ */
+/* File Structure Data for "Your game server, configured in code"      */
 /* ------------------------------------------------------------------ */
 
 interface CodeFileItem {
@@ -85,8 +112,8 @@ const TREE_DATA: {
           'auto-sleep.idle-timeout-minutes=5',
         ],
         annotations: {
-          5: 'motd: High-contrast Indian node identifier and status message shown in Minecraft server list.',
-          14: 'auto-sleep.enabled: Puts the server into low-power hibernation 5 minutes after the last player disconnects.',
+          5: 'motd: Indian node status and high-contrast styling rendered in the server list.',
+          14: 'auto-sleep.enabled: Puts the server into low-power hibernation 5 minutes after the last player leaves.',
         },
       },
       {
@@ -117,8 +144,8 @@ const TREE_DATA: {
           '  use-colored-console: true',
         ],
         annotations: {
-          6: 'chunk-loading: Asynchronous multi-threaded chunk pipeline prevents lag spikes during elytra flight.',
-          15: 'async-chunks.threads: Auto-allocates optimal thread pool matching host CPU core topology.',
+          6: 'chunk-loading: Asynchronous multi-threaded chunk pipeline prevents lag spikes during fast traversal.',
+          15: 'async-chunks.threads: Dynamically sets thread pool matching host CPU core topology.',
         },
       },
       {
@@ -146,7 +173,7 @@ const TREE_DATA: {
           '      exp: 6.0',
         ],
         annotations: {
-          9: 'entity-activation-range: Keeps AI processing restricted to near players, preserving 20.0 TPS in heavy mob farms.',
+          9: 'entity-activation-range: Restricts background mob calculations to preserve 20.0 TPS.',
         },
       },
     ],
@@ -178,8 +205,8 @@ const TREE_DATA: {
           '  enabled: true',
         ],
         annotations: {
-          3: 'bedrock.port: Default UDP port 19132 allows Bedrock edition console and mobile players to join seamlessly.',
-          10: 'floodgate.key-file: Enables passwordless Bedrock login with official Microsoft Xbox Live gamertags.',
+          3: 'bedrock.port: Port 19132 allows console and mobile players to join Java servers seamlessly.',
+          10: 'floodgate.key-file: Passwordless authentication with official Xbox Live gamertags.',
         },
       },
       {
@@ -197,9 +224,6 @@ const TREE_DATA: {
           '  enabled: true',
           'send-floodgate-data: true',
         ],
-        annotations: {
-          2: 'username-prefix: Prefixes Bedrock gamertags with "." to avoid colliding with Java username namespaces.',
-        },
       },
       {
         id: 'luckperms-yml',
@@ -226,7 +250,7 @@ const TREE_DATA: {
         folder: 'plugins',
         language: 'yaml',
         lines: [
-          '# ViaVersion Multi-Protocol Protocol Gateway',
+          '# ViaVersion Multi-Protocol Gateway',
           'checkversion: false',
           'suppress-1_20-features: false',
           'block-versions: []',
@@ -264,8 +288,8 @@ const TREE_DATA: {
           '  onUdpRaknet: true',
         ],
         annotations: {
-          9: 'enter-low-power-hibernate: Keeps RAM state hot while putting compute cores into idle sleep.',
-          11: 'targetWakeTimeSeconds: Automatically boots the server back to active state in under 90 seconds upon join attempt.',
+          9: 'enter-low-power-hibernate: Puts CPU cores to idle while preserving world RAM snapshots.',
+          11: 'targetWakeTimeSeconds: Wakes the server back to active state in under 90 seconds on join.',
         },
       },
       {
@@ -322,31 +346,29 @@ const TREE_DATA: {
           '  cpu: "AMD EPYC / Intel Xeon 4.8GHz Boost"',
           '  storage: "PCIe 4.0 NVMe Enterprise SSD"',
           '  network: "10 Gbps Symmetric Uplink"',
-          '  ddosMitigation: "2.5+ Tbps Indian Core Edge"',
           'latencyAverages:',
           '  mumbai: "2-5 ms"',
           '  delhi: "18-22 ms"',
           '  bangalore: "14-17 ms"',
         ],
         annotations: {
-          6: 'cpu: Single-core boost speeds ensure tick loop runs under 15ms even during TNT explosions.',
-          9: 'ddosMitigation: High-capacity scrubber network absorbs volumetric UDP floods without packet loss.',
+          6: 'cpu: Single-core boost speeds ensure tick loop runs under 15ms even in intense redstone farms.',
         },
       },
       {
-        id: 'ddos-shield-yaml',
-        name: 'ddos-shield.yaml',
-        path: 'runners/ddos-shield.yaml',
+        id: 'firewall-rules-yaml',
+        name: 'firewall-rules.yaml',
+        path: 'runners/firewall-rules.yaml',
         folder: 'runners',
         language: 'yaml',
         lines: [
-          '# L3/L4/L7 Game-Specific Anti-DDoS Mitigation',
-          'shieldConfig:',
+          '# Stateful Packet Filter & Firewall Gateway',
+          'firewallConfig:',
           '  filterMode: "stateful-minecraft-deep-packet"',
           '  mitigateSynFloods: true',
           '  mitigateUdpAmp: true',
-          '  bpfRules: "drop-non-raknet-and-handshakes"',
-          '  protectionCapacity: "2.5 Tbps"',
+          '  bpfRules: "drop-non-raknet-and-invalid-handshakes"',
+          '  ports: [25565, 19132]',
         ],
       },
     ],
@@ -398,14 +420,14 @@ const TREE_DATA: {
 /* Root master file */
 const ROOT_FILE: CodeFileItem = {
   id: 'factory-yaml',
-  name: 'factory.yaml',
-  path: 'factory.yaml',
+  name: 'server-cluster.yaml',
+  path: 'server-cluster.yaml',
   folder: '',
   language: 'yaml',
   lines: [
     'schemaVersion: v1alpha1',
-    'name: kryin-minecraft-factory',
-    'description: High-frequency bare-metal Minecraft server factory (Indian Region).',
+    'name: kryin-minecraft-node',
+    'description: High-frequency bare-metal Minecraft server instance (Mumbai Region).',
     'region: ap-south-mumbai',
     'runtime:',
     '  engine: paper-26.3',
@@ -420,7 +442,7 @@ const ROOT_FILE: CodeFileItem = {
     'network:',
     '  port: 25565',
     '  bedrockPort: 19132',
-    '  antiDDoS: 2.5Tbps-inline-shield',
+    '  firewall: stateful-packet-filter',
     'hibernation:',
     '  enabled: true',
     '  idleTimeoutSeconds: 300',
@@ -428,7 +450,7 @@ const ROOT_FILE: CodeFileItem = {
   ],
   annotations: {
     3: 'region: Direct hosting out of Mumbai Tier-IV datacenter for lowest Indian ping.',
-    14: 'antiDDoS: Dedicated game packet inspection mitigates DDoS attacks without disconnecting players.',
+    14: 'firewall: Dedicated stateful packet inspection prevents protocol drops.',
   },
 };
 
@@ -436,8 +458,8 @@ const ROOT_FILE: CodeFileItem = {
 const MEDIA_NAV_ITEMS = [
   {
     ordinal: '01',
-    label: 'Factory definition',
-    desc: 'The Factory definition connects datacenter nodes, memory ceilings, GC tuning, and network routing into a single repeatable file.',
+    label: 'Server definition',
+    desc: 'The master definition connects datacenter nodes, memory limits, GC tuning, and network routing in one declarative file.',
     fileId: 'factory-yaml',
   },
   {
@@ -478,14 +500,14 @@ const MEDIA_NAV_ITEMS = [
   },
   {
     ordinal: '08',
-    label: 'DDoS Shield Capacity',
-    desc: 'Inline stateful packet filters instantly drop non-Minecraft protocol anomalies and UDP amplification floods up to 2.5 Tbps.',
-    fileId: 'ddos-shield-yaml',
+    label: 'Low-Latency Network Gateway',
+    desc: 'Stateful packet filter gateway drops protocol anomalies and guarantees clean socket handshakes for all players.',
+    fileId: 'firewall-rules-yaml',
   },
 ];
 
 /* ------------------------------------------------------------------ */
-/* RAM Plans Data (Exact 4 Plans, No Free Plan)                        */
+/* RAM Plans Data (Exact 4 Plans, No Free Plan, Zero DDoS references)  */
 /* ------------------------------------------------------------------ */
 
 const RAM_PLANS = [
@@ -505,7 +527,7 @@ const RAM_PLANS = [
       'Auto-wake in <2 minutes on player join',
       'Java & Bedrock Crossplay Ready',
       'Console Web Access & File Manager',
-      '2.5+ Tbps Anti-DDoS Protection',
+      'High-Frequency Dedicated Slice',
     ],
   },
   {
@@ -525,7 +547,7 @@ const RAM_PLANS = [
       'Geyser Crossplay (Mobile + Console)',
       '1-Click Plugin Installer (200+ Plugins)',
       'Automated Hourly NVMe Backups',
-      '2.5+ Tbps Anti-DDoS Protection',
+      'Crash Guard & Recovery Automation',
     ],
   },
   {
@@ -572,7 +594,7 @@ const RAM_PLANS = [
 ];
 
 /* ------------------------------------------------------------------ */
-/* FAQ Accordion Data                                                 */
+/* FAQ Accordion Data (Zero DDoS references)                          */
 /* ------------------------------------------------------------------ */
 
 const FAQ_ITEMS = [
@@ -596,23 +618,44 @@ const FAQ_ITEMS = [
     q: 'Can I install custom plugins, mods, or datapacks?',
     a: 'Absolutely. You have full SFTP and web file manager access. You can upload custom server jars (Paper, Purpur, Fabric, Forge, NeoForge), install mods, configure datapacks, and tweak all configuration files directly.',
   },
-  {
-    q: 'What kind of DDoS protection is included?',
-    a: 'Every node is backed by 2.5+ Tbps automated edge mitigation. Our filter specifically validates Minecraft protocol handshakes, dropping volumetric UDP amplification and SYN attacks without kicking legitimate players.',
-  },
 ];
 
 /* ------------------------------------------------------------------ */
-/* Cluster Matrix Cell generator (Fig. 1)                             */
+/* Cluster Matrix Dimension (Fig. 1)                                  */
 /* ------------------------------------------------------------------ */
 
 const CLUSTER_COLUMNS = 28;
 const CLUSTER_ROWS = 8;
+const TOTAL_CELLS = CLUSTER_COLUMNS * CLUSTER_ROWS;
 
 export default function HomePage() {
-  /* Navigation dropdown state */
+  /* Navigation dropdown / mobile state */
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [activeNavDropdown, setActiveNavDropdown] = useState<string | null>(null);
+
+  /* Dynamic Animated Cluster Matrix Cell Tones */
+  const [cellTones, setCellTones] = useState<string[]>(() =>
+    Array.from({ length: TOTAL_CELLS }, (_, i) =>
+      i % 7 === 0 || i % 11 === 0 ? 'running' : i % 5 === 0 ? 'active' : 'queued'
+    )
+  );
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCellTones((prev) => {
+        const next = [...prev];
+        // Randomly pulse 6 to 12 cells every interval
+        const changeCount = 6 + Math.floor(Math.random() * 8);
+        for (let k = 0; k < changeCount; k++) {
+          const idx = Math.floor(Math.random() * next.length);
+          const rand = Math.random();
+          next[idx] = rand > 0.65 ? 'running' : rand > 0.35 ? 'active' : 'queued';
+        }
+        return next;
+      });
+    }, 280);
+
+    return () => clearInterval(interval);
+  }, []);
 
   /* File Tree State */
   const [expandedFolders, setExpandedFolders] = useState<{ [key: string]: boolean }>({
@@ -632,7 +675,7 @@ export default function HomePage() {
   /* FAQ Accordion state */
   const [openFaq, setOpenFaq] = useState<number | null>(0);
 
-  /* Billing Toggle (Monthly / Quarterly) */
+  /* Billing Cycle Selector */
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'quarterly'>('monthly');
 
   /* Handle folder expand/collapse */
@@ -646,7 +689,6 @@ export default function HomePage() {
   /* Select a file */
   const selectFile = (file: CodeFileItem) => {
     setActiveFile(file);
-    // Select first annotation if exists
     if (file.annotations) {
       const keys = Object.keys(file.annotations).map(Number);
       setActiveAnnotation(keys.length > 0 ? keys[0] : null);
@@ -673,11 +715,9 @@ export default function HomePage() {
       }
       return;
     }
-    // Search file across folders
     for (const group of TREE_DATA) {
       const found = group.files.find((f) => f.id === fileId);
       if (found) {
-        // Expand that folder
         setExpandedFolders((prev) => ({ ...prev, [group.folder]: true }));
         selectFile(found);
         return;
@@ -714,131 +754,45 @@ export default function HomePage() {
         {/* Content Wrapper */}
         <div className="w-visual-grid-content">
           {/* ======================================================== */}
-          {/* TOP NAVBAR (EXACT WARP STRUCTURE FROM INDEX.HTML)        */}
+          {/* TOP NAVBAR                                               */}
           {/* ======================================================== */}
           <nav className="w-topnav" aria-label="Primary">
             <div className="w-topnav-bar">
-              <div className="w-wrap w-topnav-wrap">
-                {/* Warp SVG Geometric Mark + Brand Logo */}
-                <Link className="w-topnav-logo" aria-label="KryinHost home" href="/">
-                  <svg viewBox="0 0 509 179" fill="currentColor" className="h-7 w-auto mr-2.5" aria-label="KryinHost">
-                    <path d="M75.5914 42.9736C75.8366 41.9547 76.7457 41.2368 77.7906 41.2368H132.069C141.143 41.2368 148.5 48.8619 148.5 58.2679L148.303 125.423C148.303 134.829 140.946 142.454 131.872 142.454H54.5231C53.0589 142.454 51.9804 141.081 52.324 139.652L75.5914 42.9736Z"></path>
-                    <path d="M60.7975 60.372C61.1308 58.9478 60.0535 57.584 58.595 57.584H16.2911C7.29375 57.584 0 65.2091 0 74.615V141.968C0 151.373 7.33141 159.566 16.3287 159.566H70.1259C71.1721 159.566 72.0818 158.846 72.3258 157.826L73.4693 153.044C73.8105 151.617 72.7323 150.246 71.2694 150.246H42.6144C41.1559 150.246 40.0786 148.881 40.412 147.457L60.7975 60.372Z"></path>
-                  </svg>
+              <div className="w-wrap w-topnav-wrap flex items-center justify-between">
+                {/* Left: Minimal Isometric Logo + KryinHost (Tight Spacing) */}
+                <Link
+                  className="w-topnav-logo flex items-center gap-2 group select-none"
+                  aria-label="KryinHost home"
+                  href="/"
+                >
+                  <KryinLogo className="w-5 h-5 text-[#1a1522]" />
                   <span className="font-mono font-bold tracking-tight text-[17px] text-[#1a1522]">
                     KryinHost
                   </span>
                 </Link>
 
-                {/* Primary Nav Links */}
-                <div className="w-topnav-links">
-                  {/* Products Dropdown */}
-                  <div className="relative group">
-                    <button
-                      type="button"
-                      className="w-topnav-top"
-                      onClick={() =>
-                        setActiveNavDropdown(activeNavDropdown === 'products' ? null : 'products')
-                      }
-                    >
-                      Products
-                      <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" fill="currentColor" viewBox="0 0 256 256">
-                        <path d="M216.49,104.49l-80,80a12,12,0,0,1-17,0l-80-80a12,12,0,0,1,17-17L128,159l71.51-71.52a12,12,0,0,1,17,17Z"></path>
-                      </svg>
-                    </button>
-                    {activeNavDropdown === 'products' && (
-                      <div className="absolute top-full left-0 mt-2 w-64 bg-white border border-[#1a1522]/15 shadow-xl rounded-md p-3 z-50 text-[13px] font-mono">
-                        <Link
-                          href="#plans"
-                          className="block p-2 hover:bg-[#1a1522]/5 rounded text-[#1a1522]"
-                          onClick={() => setActiveNavDropdown(null)}
-                        >
-                          <div className="font-bold">Minecraft Game Servers</div>
-                          <div className="text-[11px] text-[#1a1522]/60">Paper, Purpur, Fabric, Forge</div>
-                        </Link>
-                        <Link
-                          href="#configuration"
-                          className="block p-2 hover:bg-[#1a1522]/5 rounded text-[#1a1522]"
-                          onClick={() => setActiveNavDropdown(null)}
-                        >
-                          <div className="font-bold">Bedrock & Console Crossplay</div>
-                          <div className="text-[11px] text-[#1a1522]/60">GeyserBridge & Floodgate sync</div>
-                        </Link>
-                        <Link
-                          href="#quality"
-                          className="block p-2 hover:bg-[#1a1522]/5 rounded text-[#1a1522]"
-                          onClick={() => setActiveNavDropdown(null)}
-                        >
-                          <div className="font-bold">2.5 Tbps DDoS Shield</div>
-                          <div className="text-[11px] text-[#1a1522]/60">Automatic L3/L4/L7 scrubber</div>
-                        </Link>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Infrastructure Dropdown */}
-                  <div className="relative group">
-                    <button
-                      type="button"
-                      className="w-topnav-top"
-                      onClick={() =>
-                        setActiveNavDropdown(activeNavDropdown === 'infra' ? null : 'infra')
-                      }
-                    >
-                      Infrastructure
-                      <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" fill="currentColor" viewBox="0 0 256 256">
-                        <path d="M216.49,104.49l-80,80a12,12,0,0,1-17,0l-80-80a12,12,0,0,1,17-17L128,159l71.51-71.52a12,12,0,0,1,17,17Z"></path>
-                      </svg>
-                    </button>
-                    {activeNavDropdown === 'infra' && (
-                      <div className="absolute top-full left-0 mt-2 w-72 bg-white border border-[#1a1522]/15 shadow-xl rounded-md p-3 z-50 text-[13px] font-mono">
-                        <div className="p-2 border-b border-[#1a1522]/10 mb-1">
-                          <div className="font-bold text-[#1a1522]">Mumbai Tier-IV Datacenter</div>
-                          <div className="text-[11px] text-[#1a1522]/60">Direct fiber peering with Jio & Airtel</div>
-                        </div>
-                        <div className="p-2 border-b border-[#1a1522]/10 mb-1">
-                          <div className="font-bold text-[#1a1522]">High-Frequency Bare-Metal</div>
-                          <div className="text-[11px] text-[#1a1522]/60">Up to 4.8 GHz single-core burst</div>
-                        </div>
-                        <div className="p-2">
-                          <div className="font-bold text-[#1a1522]">Automated Sleep Architecture</div>
-                          <div className="text-[11px] text-[#1a1522]/60">Auto-wakes in &lt;2 minutes</div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Pricing */}
-                  <a className="w-topnav-top" href="#plans">
-                    Pricing
+                {/* Middle: Features, Plans, FAQ */}
+                <div className="w-topnav-links flex items-center gap-7">
+                  <a className="w-topnav-top hover:text-[#1a1522] transition-colors" href="#configuration">
+                    Features
                   </a>
-
-                  {/* Docs / Console */}
-                  <a className="w-topnav-top" href="#configuration">
-                    Docs
+                  <a className="w-topnav-top hover:text-[#1a1522] transition-colors" href="#plans">
+                    Plans
+                  </a>
+                  <a className="w-topnav-top hover:text-[#1a1522] transition-colors" href="#faq">
+                    FAQ
                   </a>
                 </div>
 
-                {/* Right Topnav Actions */}
-                <div className="w-topnav-actions">
-                  <div className="w-topnav-item w-topnav-signin">
-                    <Link className="w-topnav-top" href="/login">
-                      Sign in
-                    </Link>
-                  </div>
-
-                  <Link className="w-btn w-btn-demo w-topnav-demo" href="/panel">
+                {/* Right: Console Panel & Sign In */}
+                <div className="w-topnav-actions flex items-center gap-3">
+                  <Link className="w-btn w-btn-outline" href="/panel">
                     Console Panel
                   </Link>
 
-                  <div className="w-topnav-item">
-                    <a href="#plans" className="w-btn w-btn-solid">
-                      Deploy Server
-                      <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" fill="currentColor" viewBox="0 0 256 256" aria-hidden="true">
-                        <path d="M216.49,104.49l-80,80a12,12,0,0,1-17,0l-80-80a12,12,0,0,1,17-17L128,159l71.51-71.52a12,12,0,0,1,17,17Z"></path>
-                      </svg>
-                    </a>
-                  </div>
+                  <Link href="/login" className="w-btn w-btn-solid">
+                    Sign In
+                  </Link>
 
                   {/* Mobile Burger Toggle */}
                   <button
@@ -850,9 +804,7 @@ export default function HomePage() {
                     {mobileMenuOpen ? (
                       <X className="w-5 h-5 text-[#1a1522]" />
                     ) : (
-                      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="currentColor" viewBox="0 0 256 256" aria-hidden="true">
-                        <path d="M224,128a8,8,0,0,1-8,8H40a8,8,0,0,1,0-16H216A8,8,0,0,1,224,128ZM40,72H216a8,8,0,0,0,0-16H40a8,8,0,0,0,0,16ZM216,184H40a8,8,0,0,0,0,16H216a8,8,0,0,0,0-16Z"></path>
-                      </svg>
+                      <Menu className="w-5 h-5 text-[#1a1522]" />
                     )}
                   </button>
                 </div>
@@ -863,48 +815,41 @@ export default function HomePage() {
             {mobileMenuOpen && (
               <div className="md:hidden bg-white border-b border-[#1a1522]/15 px-6 py-4 space-y-3 font-mono text-[14px]">
                 <Link
-                  href="#plans"
-                  className="block py-2 text-[#1a1522] border-b border-[#1a1522]/10"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  RAM Plans (from ₹600/mo)
-                </Link>
-                <Link
                   href="#configuration"
                   className="block py-2 text-[#1a1522] border-b border-[#1a1522]/10"
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  Configuration &amp; Code
+                  Features
                 </Link>
                 <Link
-                  href="#quality"
+                  href="#plans"
                   className="block py-2 text-[#1a1522] border-b border-[#1a1522]/10"
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  20.0 TPS Telemetry
+                  Plans
                 </Link>
                 <Link
                   href="#faq"
                   className="block py-2 text-[#1a1522] border-b border-[#1a1522]/10"
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  Frequently Asked Questions
+                  FAQ
                 </Link>
                 <div className="pt-2 flex flex-col gap-2">
                   <Link
-                    href="/login"
+                    href="/panel"
                     className="w-btn w-btn-outline text-center py-2"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    Console Panel
+                  </Link>
+                  <Link
+                    href="/login"
+                    className="w-btn w-btn-solid text-center py-2"
                     onClick={() => setMobileMenuOpen(false)}
                   >
                     Sign In
                   </Link>
-                  <a
-                    href="#plans"
-                    className="w-btn w-btn-solid text-center py-2"
-                    onClick={() => setMobileMenuOpen(false)}
-                  >
-                    Deploy Server
-                  </a>
                 </div>
               </div>
             )}
@@ -912,7 +857,7 @@ export default function HomePage() {
 
           <main className="isolate overflow-clip">
             {/* ====================================================== */}
-            {/* HERO SECTION (EXACT WARP HERO WITH FIG. 1 MATRIX)       */}
+            {/* HERO SECTION                                           */}
             {/* ====================================================== */}
             <section
               className="w-hero"
@@ -939,6 +884,7 @@ export default function HomePage() {
                   </div>
                 </div>
 
+                {/* Hero Media: Fig. 1 Live Animated Cluster Matrix */}
                 <div className="w-hero-media">
                   <figure className="w-fig">
                     <figcaption className="w-fig-bar">
@@ -948,9 +894,9 @@ export default function HomePage() {
                         <button
                           type="button"
                           className="w-fig-control"
-                          aria-label="Refresh node cluster"
+                          aria-label="Cluster status pulse"
                         >
-                          <Activity className="w-3.5 h-3.5 text-[#1a1522]/60" />
+                          <Activity className="w-3.5 h-3.5 text-emerald-600 animate-pulse" />
                         </button>
                       </span>
                     </figcaption>
@@ -963,27 +909,22 @@ export default function HomePage() {
                             <span className="text-emerald-700 font-bold">8 × 28 · 20.0 TPS live</span>
                           </div>
 
-                          {/* 28 Column Interactive Cluster Matrix */}
+                          {/* 28-Column Live Animated Cluster Matrix */}
                           <div
                             className="w-fig-plane"
                             style={{ gridTemplateColumns: `repeat(${CLUSTER_COLUMNS}, minmax(0, 1fr))` }}
                           >
-                            {Array.from({ length: CLUSTER_ROWS * CLUSTER_COLUMNS }).map((_, i) => {
-                              const isGreen = i % 7 === 0 || i % 11 === 0 || i % 19 === 0;
-                              const isBlue = i % 5 === 0;
-                              const tone = isGreen ? 'running' : isBlue ? 'active' : 'queued';
-                              return (
-                                <button
-                                  key={i}
-                                  type="button"
-                                  className="w-fig-cell hover:scale-125 transition-transform"
-                                  data-tone={tone}
-                                  title={`Core Thread #${i + 1} - 20.0 TPS - 0% loss`}
-                                >
-                                  ▩
-                                </button>
-                              );
-                            })}
+                            {cellTones.map((tone, i) => (
+                              <button
+                                key={i}
+                                type="button"
+                                className="w-fig-cell hover:scale-125 cursor-pointer"
+                                data-tone={tone}
+                                title={`Node Core #${i + 1} - 20.0 TPS (State: ${tone})`}
+                              >
+                                ▩
+                              </button>
+                            ))}
                           </div>
                         </div>
 
@@ -992,7 +933,7 @@ export default function HomePage() {
                           <div className="w-fig-key">
                             <span className="inline-flex items-center gap-1.5 font-mono text-[11px] text-[#1a1522]/70">
                               <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block"></span>
-                              Active World Thread
+                              Active Core Thread
                             </span>
                             <span className="inline-flex items-center gap-1.5 font-mono text-[11px] text-[#1a1522]/70">
                               <span className="w-2.5 h-2.5 rounded-sm bg-indigo-500 inline-block"></span>
@@ -1000,7 +941,7 @@ export default function HomePage() {
                             </span>
                             <span className="inline-flex items-center gap-1.5 font-mono text-[11px] text-[#1a1522]/70">
                               <span className="w-2.5 h-2.5 rounded-sm bg-[#1a1522]/20 inline-block"></span>
-                              Idle / Standby
+                              Standby Buffer
                             </span>
                           </div>
                         </div>
@@ -1012,25 +953,42 @@ export default function HomePage() {
             </section>
 
             {/* ====================================================== */}
-            {/* LOGOS MARQUEE                                          */}
+            {/* CONTINUOUS MOVING LOGO CAROUSEL WITH ICONS             */}
             {/* ====================================================== */}
-            <section className="w-logos border-y border-[#1a1522]/10 py-6 bg-white">
-              <div className="w-wrap">
-                <div className="flex flex-wrap items-center justify-between gap-6 opacity-70 grayscale hover:grayscale-0 transition-all font-mono text-[13px] font-semibold text-[#1a1522]">
-                  <span>PAPER 26.3</span>
-                  <span>PURPUR ENGINE</span>
-                  <span>VELOCITY PROXY</span>
-                  <span>GEYSER-MC</span>
-                  <span>FLOODGATE</span>
-                  <span>VIAVERSION</span>
-                  <span>LUCKPERMS</span>
-                  <span>TATA / JIO FIBER DIRECT</span>
-                </div>
+            <section className="w-logos border-y border-[#1a1522]/10 py-5 bg-white overflow-hidden select-none">
+              <div className="kryin-marquee-track flex items-center">
+                {/* First Loop */}
+                {ENGINE_LOGOS.map((item, idx) => {
+                  const Icon = item.icon;
+                  return (
+                    <div
+                      key={`engine-1-${idx}`}
+                      className="flex items-center gap-2.5 px-8 font-mono text-[13px] font-bold text-[#1a1522] tracking-wider shrink-0 opacity-80 hover:opacity-100 transition-opacity"
+                    >
+                      <Icon className="w-4 h-4 text-[#1a1522] shrink-0" />
+                      <span>{item.name}</span>
+                    </div>
+                  );
+                })}
+
+                {/* Duplicated Loop for Seamless Continuous Scroll */}
+                {ENGINE_LOGOS.map((item, idx) => {
+                  const Icon = item.icon;
+                  return (
+                    <div
+                      key={`engine-2-${idx}`}
+                      className="flex items-center gap-2.5 px-8 font-mono text-[13px] font-bold text-[#1a1522] tracking-wider shrink-0 opacity-80 hover:opacity-100 transition-opacity"
+                    >
+                      <Icon className="w-4 h-4 text-[#1a1522] shrink-0" />
+                      <span>{item.name}</span>
+                    </div>
+                  );
+                })}
               </div>
             </section>
 
             {/* ====================================================== */}
-            {/* SECTION: YOUR SOFTWARE FACTORY, DEFINED IN CODE        */}
+            {/* SECTION: YOUR GAME SERVER, CONFIGURED IN CODE          */}
             {/* (ID: configuration - INTERACTIVE EXPANDABLE TREE)     */}
             {/* ====================================================== */}
             <section className="w-section" id="configuration">
@@ -1039,23 +997,14 @@ export default function HomePage() {
                   className="w-section-heading"
                   style={{ '--w-head-size': 'var(--w-headline)' } as React.CSSProperties}
                 >
-                  <h2 className="w-headline">Your software factory, defined in code.</h2>
+                  <h2 className="w-headline">Your game server, configured in code.</h2>
                   <p className="w-lead">
-                    Factories-as-code allows for a versioned and measured approach to optimizing costs and performance of your factories.
+                    Declarative configuration and browser-based file management allows for versioned, reliable control of your Minecraft server environment.
                   </p>
                   <div className="w-head-action">
                     <a className="w-btn w-btn-text" href="#plans">
                       view server plans
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="13"
-                        height="13"
-                        fill="currentColor"
-                        viewBox="0 0 256 256"
-                        aria-hidden="true"
-                      >
-                        <path d="M221.66,133.66l-72,72a8,8,0,0,1-11.32-11.32L196.69,136H40a8,8,0,0,1,0-16H196.69L138.34,61.66a8,8,0,0,1,11.32-11.32l72,72A8,8,0,0,1,221.66,133.66Z"></path>
-                      </svg>
+                      <ArrowRight className="w-3.5 h-3.5 inline ml-1" />
                     </a>
                   </div>
                 </div>
@@ -1066,7 +1015,7 @@ export default function HomePage() {
                     {/* Left Pane: Interactive Expandable File Tree */}
                     <nav className="w-code-tree" aria-label="Files">
                       <ul>
-                        {/* 1. Root factory.yaml */}
+                        {/* 1. Root Master Config File */}
                         <li>
                           <button
                             type="button"
@@ -1076,7 +1025,7 @@ export default function HomePage() {
                             onClick={() => selectFile(ROOT_FILE)}
                           >
                             <FileCode className="w-3.5 h-3.5" />
-                            <span>factory.yaml</span>
+                            <span>server-cluster.yaml</span>
                           </button>
                         </li>
 
@@ -1170,7 +1119,6 @@ export default function HomePage() {
                               const isAnnotated = Boolean(activeFile.annotations?.[lineNum]);
                               const isAnnotationActive = activeAnnotation === lineNum;
 
-                              // Parse key: value or property=value
                               let keyPart = '';
                               let valPart = line;
                               if (!isComment) {
@@ -1241,8 +1189,8 @@ export default function HomePage() {
                     </div>
                   </div>
 
-                  {/* 8 Numbered Media Navigation Cards at the Bottom */}
-                  <nav className="w-media-navigation mt-8" data-presentation="code" aria-label="Factory configuration">
+                  {/* 8 Numbered Media Navigation Cards */}
+                  <nav className="w-media-navigation mt-8" data-presentation="code" aria-label="Configuration index">
                     <ul className="w-nav" data-numbered="true">
                       {MEDIA_NAV_ITEMS.map((item, idx) => {
                         const isCurrent = activeNavIndex === idx;
@@ -1274,7 +1222,7 @@ export default function HomePage() {
             </section>
 
             {/* ====================================================== */}
-            {/* SECTION: BAKED-IN MEASUREMENT AND SELF-IMPROVEMENT     */}
+            {/* SECTION: REAL-TIME TELEMETRY AND ENGINE HEALTH         */}
             {/* (ID: quality)                                          */}
             {/* ====================================================== */}
             <section className="w-section" id="quality">
@@ -1283,19 +1231,19 @@ export default function HomePage() {
                   className="w-section-heading"
                   style={{ '--w-head-size': 'var(--w-headline)' } as React.CSSProperties}
                 >
-                  <h2 className="w-headline">Baked-in measurement and self-improvement</h2>
+                  <h2 className="w-headline">Real-time telemetry and engine health</h2>
                   <p className="w-lead">
-                    evals, benchmarks, and self-improvement loops drive measurable gains across your game server fleet.
+                    Continuous 20.0 TPS health verification, tick-budget optimization, and low-latency Indian network routes.
                   </p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
-                  {/* Card 1: 20.0 TPS Guarantee */}
+                  {/* Card 1: Stable TPS */}
                   <div className="p-6 bg-white border border-[#1a1522]/15 rounded-md flex flex-col justify-between">
                     <div>
                       <div className="flex items-center justify-between text-[11px] font-mono text-[#1a1522]/60 uppercase tracking-widest mb-3">
                         <span>[ Metric · Engine Health ]</span>
-                        <span className="text-emerald-700 font-bold">Stable</span>
+                        <span className="text-emerald-700 font-bold">[ Stable TPS ]</span>
                       </div>
                       <div className="text-4xl font-mono font-bold text-[#1a1522] mb-1">
                         20.0 <span className="text-xl font-normal text-[#1a1522]/50">TPS</span>
@@ -1310,18 +1258,18 @@ export default function HomePage() {
                     </div>
                   </div>
 
-                  {/* Card 2: Low-Latency Peering */}
+                  {/* Card 2: India Network · Low Ping */}
                   <div className="p-6 bg-white border border-[#1a1522]/15 rounded-md flex flex-col justify-between">
                     <div>
                       <div className="flex items-center justify-between text-[11px] font-mono text-[#1a1522]/60 uppercase tracking-widest mb-3">
-                        <span>[ Network · Indian Ping ]</span>
+                        <span>[ India Network · Low Ping ]</span>
                         <span className="text-emerald-700 font-bold">Direct Fiber</span>
                       </div>
                       <div className="text-4xl font-mono font-bold text-[#1a1522] mb-1">
                         &lt;18 <span className="text-xl font-normal text-[#1a1522]/50">ms</span>
                       </div>
                       <p className="text-[13px] text-[#1a1522]/70 leading-relaxed">
-                        Indian Hosted Server in Mumbai with direct interconnects to Jio Fiber, Airtel Xstream, and ACT.
+                        Direct fiber routes in Mumbai with ultra-low latency peering across Jio Fiber, Airtel Xstream, and ACT.
                       </p>
                     </div>
                     <div className="mt-6 pt-4 border-t border-[#1a1522]/10 font-mono text-[11px] text-[#1a1522]/60 flex items-center justify-between">
@@ -1330,7 +1278,7 @@ export default function HomePage() {
                     </div>
                   </div>
 
-                  {/* Card 3: Auto-Sleep & Wake */}
+                  {/* Card 3: Smart Power Hibernation */}
                   <div className="p-6 bg-white border border-[#1a1522]/15 rounded-md flex flex-col justify-between">
                     <div>
                       <div className="flex items-center justify-between text-[11px] font-mono text-[#1a1522]/60 uppercase tracking-widest mb-3">
@@ -1354,7 +1302,7 @@ export default function HomePage() {
             </section>
 
             {/* ====================================================== */}
-            {/* SECTION: CONTROL YOUR CODING AGENT CHAOS               */}
+            {/* SECTION: UNIFIED CONSOLE & LIVE SERVER CONTROL         */}
             {/* (ID: governance)                                       */}
             {/* ====================================================== */}
             <section className="w-section" id="governance">
@@ -1363,13 +1311,13 @@ export default function HomePage() {
                   className="w-section-heading"
                   style={{ '--w-head-size': 'var(--w-headline)' } as React.CSSProperties}
                 >
-                  <h2 className="w-headline">Control your coding agent chaos</h2>
+                  <h2 className="w-headline">Unified console &amp; live server control</h2>
                   <p className="w-lead">
-                    Unified web terminal, live player stream, automated crash recovery, and full OP command control.
+                    Real-time terminal stream, live player session tracking, automated crash recovery, and instant command execution.
                   </p>
                 </div>
 
-                {/* Animated Real-Time Minecraft Console Preview */}
+                {/* Animated Real-Time Minecraft Console Preview (Compact Size) */}
                 <div className="mt-8">
                   <AnimatedConsolePreview />
                 </div>
@@ -1377,8 +1325,8 @@ export default function HomePage() {
             </section>
 
             {/* ====================================================== */}
-            {/* SECTION: USE WARP EVERYWHERE (PLANS INSTEAD OF THIS)   */}
-            {/* (ID: plans - EXACT 4 RAM PLANS, NO FREE PLAN)          */}
+            {/* SECTION: DEDICATED INDIAN SERVER PLANS                 */}
+            {/* (ID: plans - EXACT 4 RAM PLANS, ZERO DDOS MENTIONS)    */}
             {/* ====================================================== */}
             <section className="w-section" id="plans">
               <div className="w-wrap">
@@ -1386,7 +1334,7 @@ export default function HomePage() {
                   className="w-section-heading"
                   style={{ '--w-head-size': 'var(--w-headline)' } as React.CSSProperties}
                 >
-                  <h2 className="w-headline">Use Warp everywhere (plans instead of this)</h2>
+                  <h2 className="w-headline">Dedicated Indian Server Plans</h2>
                   <p className="w-lead">
                     Fast · No Lag · Indian hosted servers on dedicated high-frequency compute. Hibernates safely when idle, auto-wakes on join.
                   </p>
@@ -1397,7 +1345,7 @@ export default function HomePage() {
                   <button
                     type="button"
                     onClick={() => setBillingCycle('monthly')}
-                    className={`px-4 py-1.5 rounded transition-all ${
+                    className={`px-4 py-1.5 rounded transition-all cursor-pointer ${
                       billingCycle === 'monthly'
                         ? 'bg-[#1a1522] text-white font-bold'
                         : 'bg-[#1a1522]/5 text-[#1a1522] hover:bg-[#1a1522]/10'
@@ -1408,7 +1356,7 @@ export default function HomePage() {
                   <button
                     type="button"
                     onClick={() => setBillingCycle('quarterly')}
-                    className={`px-4 py-1.5 rounded transition-all flex items-center gap-1.5 ${
+                    className={`px-4 py-1.5 rounded transition-all flex items-center gap-1.5 cursor-pointer ${
                       billingCycle === 'quarterly'
                         ? 'bg-[#1a1522] text-white font-bold'
                         : 'bg-[#1a1522]/5 text-[#1a1522] hover:bg-[#1a1522]/10'
@@ -1534,7 +1482,7 @@ export default function HomePage() {
                       <div key={idx} className="py-4">
                         <button
                           type="button"
-                          className="w-full text-left flex items-center justify-between font-mono text-[15px] font-bold text-[#1a1522] hover:text-indigo-600 transition-colors"
+                          className="w-full text-left flex items-center justify-between font-mono text-[15px] font-bold text-[#1a1522] hover:text-indigo-600 transition-colors cursor-pointer"
                           onClick={() => setOpenFaq(isOpen ? null : idx)}
                         >
                           <span>{item.q}</span>
@@ -1556,18 +1504,19 @@ export default function HomePage() {
           </main>
 
           {/* ======================================================== */}
-          {/* FOOTER (WARP FOOTER STRUCTURE)                           */}
+          {/* FOOTER                                                   */}
           {/* ======================================================== */}
           <footer className="w-footer border-t border-[#1a1522]/10 py-12 bg-white">
             <div className="w-wrap">
               <div className="grid grid-cols-2 md:grid-cols-5 gap-8 font-mono text-[12px]">
-                {/* Brand */}
+                {/* Brand with Minimal Logo */}
                 <div className="col-span-2">
                   <div className="flex items-center gap-2 mb-3">
+                    <KryinLogo className="w-5 h-5 text-[#1a1522]" />
                     <span className="font-bold text-[16px] text-[#1a1522]">KryinHost</span>
                   </div>
                   <p className="font-sans text-[13px] text-[#1a1522]/60 max-w-sm leading-relaxed mb-4">
-                    High-frequency game server infrastructure. Indian bare-metal compute, instant Java &amp; Bedrock cross-play, and 2.5+ Tbps DDoS mitigation.
+                    High-frequency game server infrastructure. Indian bare-metal compute, instant Java &amp; Bedrock cross-play, enterprise uptime and low latency.
                   </p>
                   <div className="flex items-center gap-2 font-mono text-[11px] text-emerald-700">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -1627,13 +1576,13 @@ export default function HomePage() {
                     </li>
                     <li>
                       <a href="#quality" className="hover:text-[#1a1522]">
-                        Anti-DDoS Scrubbing
+                        Auto-Restart Recovery
                       </a>
                     </li>
                   </ul>
                 </div>
 
-                {/* Management */}
+                {/* Console */}
                 <div>
                   <h4 className="font-bold text-[#1a1522] uppercase tracking-wider text-[11px] mb-3">
                     Console
