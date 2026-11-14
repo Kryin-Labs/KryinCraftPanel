@@ -32,7 +32,7 @@ export const Sidebar: React.FC = () => {
   const [copied, setCopied] = useState(false);
 
   const onlineCount = players.filter((p) => p.isOnline).length;
-  const serverIp = 'in.kryin.host:25565';
+  const serverIp = serverInfo.publicTunnelJava || (serverInfo.localIp ? `${serverInfo.localIp}:25565` : '192.168.0.164:25565');
 
   const copyIp = () => {
     navigator.clipboard.writeText(serverIp);

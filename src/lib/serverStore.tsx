@@ -106,6 +106,9 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
             onlinePlayers: data.server.online_players,
             maxPlayers: data.server.max_players,
             tps: data.server.tps,
+            localIp: data.server.local_ip,
+            publicTunnelJava: data.server.public_tunnel_java,
+            publicTunnelBedrock: data.server.public_tunnel_bedrock,
           }));
         }
 

@@ -177,4 +177,7 @@ export interface ServerInfo {
   onlinePlayers: number;
   maxPlayers: number;
   tps: number;
+  publicTunnelJava?: string | null;
+  publicTunnelBedrock?: string | null;
+  localIp?: string;
 }

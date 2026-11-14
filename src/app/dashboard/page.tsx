@@ -48,8 +48,9 @@ export default function DashboardOverviewPage() {
   const [actionNotice, setActionNotice] = useState<string | null>(null);
 
   const onlinePlayers = players.filter((p) => p.isOnline);
-  const javaAddress = 'in.kryin.host:25565';
-  const bedrockAddress = 'in.kryin.host:19132';
+  const hasTunnel = Boolean(serverInfo.publicTunnelJava);
+  const javaAddress = serverInfo.publicTunnelJava || (serverInfo.localIp ? `${serverInfo.localIp}:25565` : '192.168.0.164:25565');
+  const bedrockAddress = serverInfo.publicTunnelBedrock || (serverInfo.localIp ? `${serverInfo.localIp}:19132` : '192.168.0.164:19132');
 
   const copyAddress = (type: 'java' | 'bedrock', text: string) => {
     navigator.clipboard.writeText(text);
@@ -174,17 +175,17 @@ export default function DashboardOverviewPage() {
               <Wifi className="w-3.5 h-3.5 text-blue-600" />
               Server Address
             </span>
-            <span className="text-[10px] px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 font-bold border border-blue-200">
-              PORT 25565
+            <span className={`text-[10px] px-1.5 py-0.2 rounded font-bold border ${hasTunnel ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
+              {hasTunnel ? 'PLAYIT.GG LIVE' : 'LOCAL LAN'}
             </span>
           </div>
 
           <div>
-            <div className="text-sm sm:text-base font-bold text-[#1a1522] truncate">
+            <div className="text-sm sm:text-base font-bold text-[#1a1522] truncate font-mono">
               {javaAddress}
             </div>
             <p className="text-[11px] text-[#1a1522]/50 mt-0.5">
-              Java Edition · Direct Mumbai Peering
+              {hasTunnel ? 'Public Playit Tunnel · Direct Join' : 'Local LAN · Link Playit.gg for Public Join'}
             </p>
           </div>
 

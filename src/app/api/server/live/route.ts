@@ -84,6 +84,8 @@ export async function GET() {
         online_players: isOnline ? (server.online_players || 0) : 0,
         max_players: server.max_players || 20,
         local_ip: server.local_ip || '192.168.0.164',
+        public_tunnel_java: server.public_tunnel_java || null,
+        public_tunnel_bedrock: server.public_tunnel_bedrock || null,
         last_heartbeat: server.last_heartbeat,
       },
       metrics: latestMetrics ? {
