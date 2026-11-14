@@ -41,7 +41,7 @@ export const Sidebar: React.FC = () => {
   };
 
   return (
-    <aside className="hidden lg:flex flex-col w-64 bg-white border-r border-[#1a1522]/10 p-4 justify-between h-screen sticky top-0 select-none font-mono text-[#1a1522] shadow-[1px_0_0_rgba(0,0,0,0.02)]">
+    <aside className="hidden lg:flex flex-col w-64 bg-white border-r border-[#1a1522]/10 p-4 justify-between fixed top-0 left-0 bottom-0 z-30 select-none font-mono text-[#1a1522] shadow-[1px_0_0_rgba(0,0,0,0.02)] overflow-y-auto">
       <div className="space-y-5">
         {/* Brand / Logo */}
         <Link href="/" className="flex items-center gap-2.5 px-2 py-2 group">
@@ -73,11 +73,15 @@ export const Sidebar: React.FC = () => {
           <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[#1a1522]/10 text-[11px]">
             <div>
               <span className="text-[10px] text-[#1a1522]/50 block">TPS</span>
-              <span className="text-emerald-700 font-bold">{serverInfo.tps.toFixed(1)}</span>
+              <span className={`font-bold ${serverInfo.status === 'online' ? 'text-emerald-700' : 'text-[#1a1522]/40'}`}>
+                {serverInfo.status === 'online' ? serverInfo.tps.toFixed(1) : '--'}
+              </span>
             </div>
             <div>
               <span className="text-[10px] text-[#1a1522]/50 block">Players</span>
-              <span className="text-blue-700 font-bold">{onlineCount} / {serverInfo.maxPlayers}</span>
+              <span className={`font-bold ${onlineCount > 0 ? 'text-blue-700' : 'text-[#1a1522]/40'}`}>
+                {onlineCount} / {serverInfo.maxPlayers}
+              </span>
             </div>
           </div>
         </div>

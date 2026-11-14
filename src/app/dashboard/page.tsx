@@ -115,9 +115,9 @@ export default function DashboardOverviewPage() {
           <p className="text-xs text-[#1a1522]/60 flex flex-wrap items-center gap-2">
             <span>Node: <strong className="text-[#1a1522]">Mumbai DC-1 (India)</strong></span>
             <span>•</span>
-            <span>Uptime: <strong className="text-[#1a1522]">{Math.floor(serverInfo.uptimeSeconds / 3600)}h {Math.floor((serverInfo.uptimeSeconds % 3600) / 60)}m</strong></span>
+            <span>Uptime: <strong className="text-[#1a1522]">{serverInfo.status === 'online' ? `${Math.floor(serverInfo.uptimeSeconds / 3600)}h ${Math.floor((serverInfo.uptimeSeconds % 3600) / 60)}m` : 'Offline'}</strong></span>
             <span>•</span>
-            <span>Geyser Crossplay: <strong className="text-emerald-700">Online</strong></span>
+            <span>Geyser Crossplay: <strong className={serverInfo.status === 'online' ? 'text-emerald-700' : 'text-[#1a1522]/50'}>{serverInfo.status === 'online' ? 'Online' : 'Offline'}</strong></span>
           </p>
         </div>
 
@@ -210,28 +210,35 @@ export default function DashboardOverviewPage() {
         <div className="p-4 sm:p-5 rounded-2xl bg-white border border-[#1a1522]/10 shadow-xs flex flex-col justify-between space-y-3">
           <div className="flex items-center justify-between text-xs text-[#1a1522]/60">
             <span className="flex items-center gap-1.5 font-bold uppercase tracking-wider">
-              <Activity className="w-3.5 h-3.5 text-emerald-600" />
+              <Activity className={`w-3.5 h-3.5 ${serverInfo.status === 'online' ? 'text-emerald-600' : 'text-slate-400'}`} />
               Engine Health
             </span>
-            <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 font-bold border border-emerald-200">
-              STABLE
+            <span className={`text-[10px] px-1.5 py-0.2 rounded font-bold border ${serverInfo.status === 'online' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+              {serverInfo.status === 'online' ? 'STABLE' : 'OFFLINE'}
             </span>
           </div>
 
           <div className="flex items-baseline justify-between">
-            <span className="text-3xl font-extrabold text-[#1a1522] tracking-tight">
-              {serverInfo.tps.toFixed(1)}
+            <span className={`text-3xl font-extrabold tracking-tight ${serverInfo.status === 'online' ? 'text-[#1a1522]' : 'text-[#1a1522]/40'}`}>
+              {serverInfo.status === 'online' ? serverInfo.tps.toFixed(1) : '--'}
             </span>
-            <span className="text-xs text-[#1a1522]/60 font-medium">TPS (11.2ms MSPT)</span>
+            <span className="text-xs text-[#1a1522]/60 font-medium">
+              {serverInfo.status === 'online' ? 'TPS (11.2ms MSPT)' : 'Node Standby'}
+            </span>
           </div>
 
           <div className="space-y-1">
             <div className="w-full bg-[#f0f2f8] h-2 rounded-full overflow-hidden">
-              <div className="bg-emerald-500 h-full rounded-full" style={{ width: '100%' }} />
+              <div
+                className={`h-full rounded-full transition-all ${serverInfo.status === 'online' ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                style={{ width: serverInfo.status === 'online' ? '100%' : '0%' }}
+              />
             </div>
             <div className="flex items-center justify-between text-[10px] text-[#1a1522]/50">
               <span>Tick Stability</span>
-              <span className="font-bold text-emerald-700">100% Zero Lag</span>
+              <span className={`font-bold ${serverInfo.status === 'online' ? 'text-emerald-700' : 'text-[#1a1522]/40'}`}>
+                {serverInfo.status === 'online' ? '100% Zero Lag' : 'Offline'}
+              </span>
             </div>
           </div>
         </div>
@@ -243,29 +250,33 @@ export default function DashboardOverviewPage() {
               <Users className="w-3.5 h-3.5 text-blue-600" />
               Connected Players
             </span>
-            <span className="text-[10px] px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 font-bold border border-blue-200">
-              PAN-INDIA
+            <span className={`text-[10px] px-1.5 py-0.2 rounded font-bold border ${serverInfo.status === 'online' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+              {serverInfo.status === 'online' ? 'PAN-INDIA' : 'STANDBY'}
             </span>
           </div>
 
           <div className="flex items-baseline justify-between">
-            <span className="text-3xl font-extrabold text-[#1a1522] tracking-tight">
+            <span className={`text-3xl font-extrabold tracking-tight ${serverInfo.status === 'online' ? 'text-[#1a1522]' : 'text-[#1a1522]/40'}`}>
               {onlinePlayers.length}
               <span className="text-lg font-normal text-[#1a1522]/50"> / {serverInfo.maxPlayers}</span>
             </span>
-            <span className="text-xs text-[#1a1522]/60 font-medium">Online</span>
+            <span className="text-xs text-[#1a1522]/60 font-medium">
+              {serverInfo.status === 'online' ? 'Online' : 'Offline'}
+            </span>
           </div>
 
           <div className="space-y-1">
             <div className="w-full bg-[#f0f2f8] h-2 rounded-full overflow-hidden">
               <div
                 className="bg-blue-600 h-full rounded-full transition-all"
-                style={{ width: `${capacityPercent}%` }}
+                style={{ width: `${serverInfo.status === 'online' ? capacityPercent : 0}%` }}
               />
             </div>
             <div className="flex items-center justify-between text-[10px] text-[#1a1522]/50">
               <span>Server Capacity</span>
-              <span className="font-bold text-blue-700">{capacityPercent}% Utilized</span>
+              <span className={`font-bold ${onlinePlayers.length > 0 ? 'text-blue-700' : 'text-[#1a1522]/40'}`}>
+                {serverInfo.status === 'online' ? `${capacityPercent}% Utilized` : 'Node Standby'}
+              </span>
             </div>
           </div>
         </div>
@@ -277,29 +288,33 @@ export default function DashboardOverviewPage() {
               <HardDrive className="w-3.5 h-3.5 text-indigo-600" />
               Memory Allocation
             </span>
-            <span className="text-[10px] px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 font-bold border border-indigo-200">
-              DDR5 HIGH-SPEED
+            <span className={`text-[10px] px-1.5 py-0.2 rounded font-bold border ${serverInfo.status === 'online' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+              {serverInfo.status === 'online' ? 'DDR5 HIGH-SPEED' : 'STANDBY'}
             </span>
           </div>
 
           <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-bold text-[#1a1522] tracking-tight">
-              {(metrics.usedRamMb / 1024).toFixed(2)}
+            <span className={`text-2xl font-bold tracking-tight ${serverInfo.status === 'online' ? 'text-[#1a1522]' : 'text-[#1a1522]/40'}`}>
+              {(serverInfo.status === 'online' ? metrics.usedRamMb / 1024 : 0).toFixed(2)}
               <span className="text-sm font-normal text-[#1a1522]/50"> / {(metrics.totalRamMb / 1024).toFixed(1)} GB</span>
             </span>
-            <span className="text-xs text-[#1a1522]/60 font-medium">{ramPercent}%</span>
+            <span className="text-xs text-[#1a1522]/60 font-medium">
+              {serverInfo.status === 'online' ? `${ramPercent}%` : '0%'}
+            </span>
           </div>
 
           <div className="space-y-1">
             <div className="w-full bg-[#f0f2f8] h-2 rounded-full overflow-hidden">
               <div
                 className="bg-indigo-600 h-full rounded-full transition-all"
-                style={{ width: `${ramPercent}%` }}
+                style={{ width: `${serverInfo.status === 'online' ? ramPercent : 0}%` }}
               />
             </div>
             <div className="flex items-center justify-between text-[10px] text-[#1a1522]/50">
               <span>JVM Heap</span>
-              <span className="font-bold text-indigo-700">Low-Latency G1GC</span>
+              <span className={`font-bold ${serverInfo.status === 'online' ? 'text-indigo-700' : 'text-[#1a1522]/40'}`}>
+                {serverInfo.status === 'online' ? 'Low-Latency G1GC' : 'Unallocated'}
+              </span>
             </div>
           </div>
         </div>
@@ -372,7 +387,7 @@ export default function DashboardOverviewPage() {
           <div className="p-4 space-y-2 flex-1">
             {onlinePlayers.length === 0 ? (
               <div className="p-8 text-center text-[#1a1522]/50 text-xs">
-                No players currently connected. The server is idling safely with auto-hibernation armed.
+                Server is currently offline. No players connected. Start the server or link your Termux node to stream live player telemetry.
               </div>
             ) : (
               onlinePlayers.map((player) => (

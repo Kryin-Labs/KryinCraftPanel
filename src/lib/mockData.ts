@@ -13,35 +13,35 @@ import {
 export const initialServerInfo: ServerInfo = {
   id: 'in-mumbai-01',
   name: 'Kryin Paper Server',
-  status: 'online',
-  pid: 18492,
+  status: 'offline',
+  pid: null,
   minecraftVersion: '1.21.4',
   paperBuild: 249,
   geyserVersion: '2.12.1-b1302',
-  device: 'Dedicated Bare-Metal Node (Mumbai DC-1)',
-  androidVersion: 'Linux 6.8.0-generic (x86_64)',
-  uptimeSeconds: 84320, // ~23.4 hours
-  lastStartup: '2026-11-13T08:00:00Z',
+  device: 'Termux / Linux ARM64 Node',
+  androidVersion: 'Termux Android ARM64',
+  uptimeSeconds: 0,
+  lastStartup: null,
   lastShutdown: null,
-  agentConnected: true,
-  lastHeartbeat: 'Just now (2s ago)',
-  onlinePlayers: 3,
+  agentConnected: false,
+  lastHeartbeat: 'Offline (Node Standby)',
+  onlinePlayers: 0,
   maxPlayers: 20,
-  tps: 20.0,
+  tps: 0.0,
 };
 
 export const initialMetrics: HardwareMetrics = {
   totalRamMb: 6144, // 6 GB Plan
-  usedRamMb: 2450,  // 2.45 GB allocated
-  availableRamMb: 3694,
-  javaHeapUsedMb: 2150,
-  javaHeapMaxMb: 4096,
-  cpuUsagePercent: 12.4,
-  cpuTempC: 41.2,
+  usedRamMb: 0,     // 0 MB when offline
+  availableRamMb: 6144,
+  javaHeapUsedMb: 0,
+  javaHeapMaxMb: 0,
+  cpuUsagePercent: 0,
+  cpuTempC: null,
   batteryPercent: 100,
   batteryTempC: null,
-  isCharging: true,
-  powerSource: 'Redundant High-Efficiency PSU (Grid/UPS)',
+  isCharging: false,
+  powerSource: 'Standby',
   timestamp: new Date().toISOString(),
 };
 
@@ -59,8 +59,8 @@ export const initialPlayers: MinecraftPlayer[] = [
   {
     uuid: '7c19cd5f-5e95-3cb4-a898-81c67755680e',
     username: 'NarcoGam3X',
-    isOnline: true,
-    pingMs: 18,
+    isOnline: false,
+    pingMs: 0,
     health: 20,
     maxHealth: 20,
     foodLevel: 20,
@@ -101,8 +101,8 @@ export const initialPlayers: MinecraftPlayer[] = [
   {
     uuid: '8667ba71-b85a-4004-af54-457a9734eed7',
     username: 'Steve',
-    isOnline: true,
-    pingMs: 24,
+    isOnline: false,
+    pingMs: 0,
     health: 18,
     maxHealth: 20,
     foodLevel: 16,
@@ -137,8 +137,8 @@ export const initialPlayers: MinecraftPlayer[] = [
   {
     uuid: 'ec561538-f3fd-461d-aff5-086e22154bce',
     username: 'Alex',
-    isOnline: true,
-    pingMs: 31,
+    isOnline: false,
+    pingMs: 0,
     health: 20,
     maxHealth: 20,
     foodLevel: 20,

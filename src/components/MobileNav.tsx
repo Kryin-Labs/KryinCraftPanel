@@ -42,9 +42,9 @@ export const MobileNav: React.FC = () => {
         </Link>
 
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 border border-emerald-200 text-emerald-700">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            20.0 TPS
+          <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${serverInfo.status === 'online' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-slate-100 border-slate-200 text-slate-600'}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${serverInfo.status === 'online' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+            {serverInfo.status === 'online' ? `${serverInfo.tps.toFixed(1)} TPS` : 'Offline'}
           </span>
 
           <Link

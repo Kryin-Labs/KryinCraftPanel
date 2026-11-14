@@ -94,8 +94,8 @@ export default function PlayersManagementPage() {
                 {onlinePlayers.length} / {serverInfo.maxPlayers}
               </span>
             </div>
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center font-bold text-xs">
-              <Radio className="w-4 h-4 animate-pulse" />
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs ${serverInfo.status === 'online' ? 'bg-emerald-50 border border-emerald-200 text-emerald-600' : 'bg-slate-100 border border-slate-200 text-slate-500'}`}>
+              <Radio className={`w-4 h-4 ${serverInfo.status === 'online' ? 'animate-pulse' : ''}`} />
             </div>
           </div>
         </div>
