@@ -14,6 +14,7 @@ import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.regex.*;
+import java.util.zip.GZIPInputStream;
 
 public class KryinAgent {
 
@@ -442,77 +443,162 @@ public class KryinAgent {
 
     private static record RconPacket(int id, int type, String payload) {}
 
+    // Cache for file contents based on lastModified to prevent re-reading unchanged files
+    private static final Map<String, Long> fileModifiedCache = new ConcurrentHashMap<>();
+    private static final Map<String, String> fileContentCache = new ConcurrentHashMap<>();
+
     // =========================================================================
-    // PLAYER REGISTRY & REAL STATS SYNCHRONIZATION
+    // DYNAMIC PLAYER DISCOVERY & REAL STATS SYNCHRONIZATION
     // =========================================================================
     private static void syncPlayers() {
         try {
             Path serverPath = Paths.get(serverDir);
             if (!Files.exists(serverPath)) return;
 
-            // 1. Read usercache.json
+            // 1. Resolve level-name from server.properties
+            String levelName = "world";
+            Path propFile = serverPath.resolve("server.properties");
+            if (Files.exists(propFile)) {
+                try {
+                    List<String> lines = Files.readAllLines(propFile);
+                    for (String line : lines) {
+                        if (line.startsWith("level-name=")) {
+                            String val = line.substring("level-name=".length()).trim();
+                            if (!val.isEmpty()) levelName = val;
+                        }
+                    }
+                } catch (Exception ignored) {}
+            }
+
+            // 2. Discover stats directories and playerdata directories
+            List<Path> statsDirs = new ArrayList<>();
+            for (String sub : Arrays.asList(levelName + "/stats", "world/stats", "stats")) {
+                Path p = serverPath.resolve(sub);
+                if (Files.exists(p) && Files.isDirectory(p) && !statsDirs.contains(p)) statsDirs.add(p);
+            }
+
+            List<Path> playerdataDirs = new ArrayList<>();
+            for (String sub : Arrays.asList(levelName + "/playerdata", "world/playerdata", "playerdata")) {
+                Path p = serverPath.resolve(sub);
+                if (Files.exists(p) && Files.isDirectory(p) && !playerdataDirs.contains(p)) playerdataDirs.add(p);
+            }
+
+            // 3. Map UUID -> Name and metadata
             Map<String, String> uuidToName = new HashMap<>();
+            Set<String> ops = new HashSet<>();
+            Set<String> whitelist = new HashSet<>();
+            Set<String> banned = new HashSet<>();
+
+            // 3a. Parse usercache.json
             Path usercachePath = serverPath.resolve("usercache.json");
             if (Files.exists(usercachePath)) {
                 try {
                     String content = Files.readString(usercachePath);
-                    Pattern p = Pattern.compile("\\{\"name\"\\s*:\\s*\"([^\"]+)\"\\s*,\\s*\"uuid\"\\s*:\\s*\"([^\"]+)\"");
+                    Pattern p = Pattern.compile("\\{[^}]*\\}");
                     Matcher m = p.matcher(content);
                     while (m.find()) {
-                        String name = m.group(1);
-                        String u = m.group(2).toLowerCase();
-                        uuidToName.put(u, name);
+                        String block = m.group();
+                        String name = extractJsonString(block, "name");
+                        String u = extractJsonString(block, "uuid");
+                        if (name != null && u != null) {
+                            uuidToName.put(u.toLowerCase(), name);
+                        }
                     }
                 } catch (Exception ignored) {}
             }
 
-            // Always ensure default player NarcoGam3X exists
-            uuidToName.putIfAbsent("7c19cd5f-5e95-3cb4-a898-b1c67755680e", "NarcoGam3X");
-
-            // 2. Read ops.json
-            Set<String> ops = new HashSet<>();
+            // 3b. Parse ops.json
             Path opsPath = serverPath.resolve("ops.json");
             if (Files.exists(opsPath)) {
                 try {
                     String content = Files.readString(opsPath);
-                    Pattern p = Pattern.compile("\"uuid\"\\s*:\\s*\"([^\"]+)\"");
+                    Pattern p = Pattern.compile("\\{[^}]*\\}");
                     Matcher m = p.matcher(content);
                     while (m.find()) {
-                        ops.add(m.group(1).toLowerCase());
+                        String block = m.group();
+                        String u = extractJsonString(block, "uuid");
+                        String name = extractJsonString(block, "name");
+                        if (u != null) {
+                            String clean = u.toLowerCase();
+                            ops.add(clean);
+                            if (name != null && !uuidToName.containsKey(clean)) uuidToName.put(clean, name);
+                        }
                     }
                 } catch (Exception ignored) {}
             }
-            ops.add("7c19cd5f-5e95-3cb4-a898-b1c67755680e");
 
-            // 3. Read whitelist.json
-            Set<String> whitelist = new HashSet<>();
+            // 3c. Parse whitelist.json
             Path wlPath = serverPath.resolve("whitelist.json");
             if (Files.exists(wlPath)) {
                 try {
                     String content = Files.readString(wlPath);
-                    Pattern p = Pattern.compile("\"uuid\"\\s*:\\s*\"([^\"]+)\"");
+                    Pattern p = Pattern.compile("\\{[^}]*\\}");
                     Matcher m = p.matcher(content);
                     while (m.find()) {
-                        whitelist.add(m.group(1).toLowerCase());
+                        String block = m.group();
+                        String u = extractJsonString(block, "uuid");
+                        String name = extractJsonString(block, "name");
+                        if (u != null) {
+                            String clean = u.toLowerCase();
+                            whitelist.add(clean);
+                            if (name != null && !uuidToName.containsKey(clean)) uuidToName.put(clean, name);
+                        }
                     }
                 } catch (Exception ignored) {}
             }
 
-            // 4. Read banned-players.json
-            Set<String> banned = new HashSet<>();
+            // 3d. Parse banned-players.json
             Path banPath = serverPath.resolve("banned-players.json");
             if (Files.exists(banPath)) {
                 try {
                     String content = Files.readString(banPath);
-                    Pattern p = Pattern.compile("\"uuid\"\\s*:\\s*\"([^\"]+)\"");
+                    Pattern p = Pattern.compile("\\{[^}]*\\}");
                     Matcher m = p.matcher(content);
                     while (m.find()) {
-                        banned.add(m.group(1).toLowerCase());
+                        String block = m.group();
+                        String u = extractJsonString(block, "uuid");
+                        String name = extractJsonString(block, "name");
+                        if (u != null) {
+                            String clean = u.toLowerCase();
+                            banned.add(clean);
+                            if (name != null && !uuidToName.containsKey(clean)) uuidToName.put(clean, name);
+                        }
                     }
                 } catch (Exception ignored) {}
             }
 
-            // 5. Query online player names via RCON
+            // 4. Collect ALL player UUIDs dynamically across usercache, stats files, and playerdata files
+            Set<String> allUuids = new LinkedHashSet<>(uuidToName.keySet());
+
+            // Scan stats directories for any additional player files
+            for (Path dir : statsDirs) {
+                try (var stream = Files.list(dir)) {
+                    stream.forEach(f -> {
+                        String fname = f.getFileName().toString();
+                        if (fname.endsWith(".json")) {
+                            String u = fname.substring(0, fname.length() - 5).toLowerCase();
+                            allUuids.add(u);
+                        }
+                    });
+                } catch (Exception ignored) {}
+            }
+
+            // Scan playerdata directories for any additional player files
+            for (Path dir : playerdataDirs) {
+                try (var stream = Files.list(dir)) {
+                    stream.forEach(f -> {
+                        String fname = f.getFileName().toString();
+                        if (fname.endsWith(".dat")) {
+                            String u = fname.substring(0, fname.length() - 4).toLowerCase();
+                            allUuids.add(u);
+                        }
+                    });
+                } catch (Exception ignored) {}
+            }
+
+            if (allUuids.isEmpty()) return;
+
+            // 5. Query online player names via local RCON
             Set<String> onlineNames = new HashSet<>();
             try {
                 String rconList = executeRcon("list");
@@ -525,30 +611,97 @@ public class KryinAgent {
                 }
             } catch (Exception ignored) {}
 
-            // 6. Look for real stats in world/stats/
-            Path statsDir = serverPath.resolve("world").resolve("stats");
-            if (!Files.exists(statsDir)) {
-                statsDir = serverPath.resolve("stats");
-            }
-
+            // 6. Build the dynamic player objects array
             StringBuilder playersJson = new StringBuilder("{\"players\":[");
             boolean first = true;
 
-            for (Map.Entry<String, String> entry : uuidToName.entrySet()) {
-                String u = entry.getKey();
-                String name = entry.getValue();
+            for (String u : allUuids) {
+                String name = uuidToName.get(u);
+                if (name == null || name.trim().isEmpty()) {
+                    name = "Player_" + (u.length() >= 8 ? u.substring(0, 8) : u);
+                }
+
+                boolean isOnline = onlineNames.contains(name.toLowerCase());
                 boolean isOp = ops.contains(u);
                 boolean isWhitelisted = whitelist.contains(u);
                 boolean isBanned = banned.contains(u);
-                boolean isOnline = onlineNames.contains(name.toLowerCase());
 
-                // Read real JSON stats file if it exists
+                // Read real JSON stats file (with lastModified cache for 0% CPU strain)
                 String statsJson = "{}";
-                if (Files.exists(statsDir)) {
-                    Path playerStats = statsDir.resolve(u + ".json");
-                    if (Files.exists(playerStats)) {
+                for (Path sDir : statsDirs) {
+                    Path sFile = sDir.resolve(u + ".json");
+                    if (Files.exists(sFile)) {
                         try {
-                            statsJson = Files.readString(playerStats).trim();
+                            long lastMod = Files.getLastModifiedTime(sFile).toMillis();
+                            String cacheKey = "stats_" + u;
+                            if (fileModifiedCache.getOrDefault(cacheKey, 0L) == lastMod && fileContentCache.containsKey(cacheKey)) {
+                                statsJson = fileContentCache.get(cacheKey);
+                            } else {
+                                statsJson = Files.readString(sFile).trim();
+                                fileModifiedCache.put(cacheKey, lastMod);
+                                fileContentCache.put(cacheKey, statsJson);
+                            }
+                            break;
+                        } catch (Exception ignored) {}
+                    }
+                }
+
+                // Read real playerdata NBT file if it exists
+                double health = 20.0;
+                int foodLevel = 20;
+                int xpLevel = 0;
+                double xpProgress = 0.0;
+                String gamemode = "survival";
+                double posX = 0.0, posY = 64.0, posZ = 0.0;
+                String dimension = "minecraft:overworld";
+                String inventoryJson = "{}";
+
+                for (Path pDir : playerdataDirs) {
+                    Path pFile = pDir.resolve(u + ".dat");
+                    if (Files.exists(pFile)) {
+                        try {
+                            Map<String, Object> nbt = parseNbtFile(pFile);
+                            if (nbt != null && !nbt.isEmpty()) {
+                                if (nbt.containsKey("Health")) {
+                                    Object h = nbt.get("Health");
+                                    if (h instanceof Number) health = ((Number) h).doubleValue();
+                                }
+                                if (nbt.containsKey("foodLevel")) {
+                                    Object f = nbt.get("foodLevel");
+                                    if (f instanceof Number) foodLevel = ((Number) f).intValue();
+                                }
+                                if (nbt.containsKey("XpLevel")) {
+                                    Object xl = nbt.get("XpLevel");
+                                    if (xl instanceof Number) xpLevel = ((Number) xl).intValue();
+                                }
+                                if (nbt.containsKey("XpP")) {
+                                    Object xp = nbt.get("XpP");
+                                    if (xp instanceof Number) xpProgress = ((Number) xp).doubleValue();
+                                }
+                                if (nbt.containsKey("playerGameType")) {
+                                    Object gm = nbt.get("playerGameType");
+                                    if (gm instanceof Number) {
+                                        int g = ((Number) gm).intValue();
+                                        if (g == 1) gamemode = "creative";
+                                        else if (g == 2) gamemode = "adventure";
+                                        else if (g == 3) gamemode = "spectator";
+                                        else gamemode = "survival";
+                                    }
+                                }
+                                if (nbt.containsKey("Pos") && nbt.get("Pos") instanceof List) {
+                                    List<?> pos = (List<?>) nbt.get("Pos");
+                                    if (pos.size() >= 3) {
+                                        if (pos.get(0) instanceof Number) posX = ((Number) pos.get(0)).doubleValue();
+                                        if (pos.get(1) instanceof Number) posY = ((Number) pos.get(1)).doubleValue();
+                                        if (pos.get(2) instanceof Number) posZ = ((Number) pos.get(2)).doubleValue();
+                                    }
+                                }
+                                if (nbt.containsKey("Dimension")) {
+                                    dimension = String.valueOf(nbt.get("Dimension"));
+                                }
+                                inventoryJson = formatInventoryJson(nbt);
+                            }
+                            break;
                         } catch (Exception ignored) {}
                     }
                 }
@@ -563,10 +716,16 @@ public class KryinAgent {
                 playersJson.append("\"is_op\":").append(isOp).append(",");
                 playersJson.append("\"is_whitelisted\":").append(isWhitelisted).append(",");
                 playersJson.append("\"is_banned\":").append(isBanned).append(",");
-                playersJson.append("\"health\":20.0,");
-                playersJson.append("\"food_level\":19,");
-                playersJson.append("\"xp_level\":31,");
-                playersJson.append("\"gamemode\":\"survival\",");
+                playersJson.append("\"health\":").append(String.format(Locale.US, "%.1f", health)).append(",");
+                playersJson.append("\"food_level\":").append(foodLevel).append(",");
+                playersJson.append("\"xp_level\":").append(xpLevel).append(",");
+                playersJson.append("\"xp_progress\":").append(String.format(Locale.US, "%.2f", xpProgress)).append(",");
+                playersJson.append("\"gamemode\":\"").append(gamemode).append("\",");
+                playersJson.append("\"coordinates\":{\"x\":").append(String.format(Locale.US, "%.2f", posX))
+                        .append(",\"y\":").append(String.format(Locale.US, "%.2f", posY))
+                        .append(",\"z\":").append(String.format(Locale.US, "%.2f", posZ))
+                        .append(",\"dimension\":\"").append(escapeJson(dimension)).append("\"},");
+                playersJson.append("\"inventory\":").append(inventoryJson).append(",");
                 playersJson.append("\"statistics\":").append(statsJson.isEmpty() ? "{}" : statsJson);
                 playersJson.append("}");
             }
@@ -577,6 +736,157 @@ public class KryinAgent {
         } catch (Exception e) {
             System.err.println("[Agent] Player sync error: " + e.getMessage());
         }
+    }
+
+    // =========================================================================
+    // LIGHTWEIGHT PURE-JAVA NBT PARSER (ZERO EXTERNAL LIBRARIES)
+    // =========================================================================
+    private static Map<String, Object> parseNbtFile(Path datFile) {
+        if (!Files.exists(datFile)) return Collections.emptyMap();
+        try (InputStream is = Files.newInputStream(datFile);
+             GZIPInputStream gzis = new GZIPInputStream(is);
+             DataInputStream dis = new DataInputStream(gzis)) {
+
+            byte rootType = dis.readByte();
+            if (rootType != 10) return Collections.emptyMap(); // TAG_Compound
+            dis.readUTF(); // Skip root tag name
+            return readNbtCompound(dis);
+        } catch (Exception e) {
+            return Collections.emptyMap();
+        }
+    }
+
+    private static Map<String, Object> readNbtCompound(DataInputStream dis) throws IOException {
+        Map<String, Object> map = new HashMap<>();
+        while (true) {
+            byte tagType = dis.readByte();
+            if (tagType == 0) break; // TAG_End
+            String name = dis.readUTF();
+            Object val = readNbtPayload(dis, tagType);
+            map.put(name, val);
+        }
+        return map;
+    }
+
+    private static Object readNbtPayload(DataInputStream dis, byte type) throws IOException {
+        switch (type) {
+            case 1: return dis.readByte();
+            case 2: return dis.readShort();
+            case 3: return dis.readInt();
+            case 4: return dis.readLong();
+            case 5: return dis.readFloat();
+            case 6: return dis.readDouble();
+            case 7: {
+                int len = dis.readInt();
+                byte[] b = new byte[len];
+                dis.readFully(b);
+                return b;
+            }
+            case 8: return dis.readUTF();
+            case 9: {
+                byte elemType = dis.readByte();
+                int count = dis.readInt();
+                List<Object> list = new ArrayList<>(count);
+                for (int i = 0; i < count; i++) {
+                    list.add(readNbtPayload(dis, elemType));
+                }
+                return list;
+            }
+            case 10: return readNbtCompound(dis);
+            case 11: {
+                int len = dis.readInt();
+                int[] arr = new int[len];
+                for (int i = 0; i < len; i++) arr[i] = dis.readInt();
+                return arr;
+            }
+            case 12: {
+                int len = dis.readInt();
+                long[] arr = new long[len];
+                for (int i = 0; i < len; i++) arr[i] = dis.readLong();
+                return arr;
+            }
+            default: return null;
+        }
+    }
+
+    private static String formatInventoryJson(Map<String, Object> nbt) {
+        try {
+            Map<Integer, Map<String, Object>> slotMap = new HashMap<>();
+            if (nbt.containsKey("Inventory") && nbt.get("Inventory") instanceof List) {
+                List<?> items = (List<?>) nbt.get("Inventory");
+                for (Object itemObj : items) {
+                    if (itemObj instanceof Map) {
+                        Map<?, ?> itemMap = (Map<?, ?>) itemObj;
+                        Object slotVal = itemMap.get("Slot");
+                        if (slotVal instanceof Number) {
+                            int slot = ((Number) slotVal).intValue();
+                            if (slot < 0) slot = slot & 0xFF; // Unsigned (e.g. -106 => 150 offhand)
+                            Map<String, Object> it = new HashMap<>();
+                            it.put("id", itemMap.get("id"));
+                            it.put("count", itemMap.get("Count") != null ? itemMap.get("Count") : 1);
+                            it.put("slot", slot);
+                            slotMap.put(slot, it);
+                        }
+                    }
+                }
+            }
+
+            StringBuilder inv = new StringBuilder("{");
+            // Armor: 103=helmet, 102=chestplate, 101=leggings, 100=boots
+            inv.append("\"armor\":{");
+            inv.append("\"helmet\":").append(formatItemObj(slotMap.get(103))).append(",");
+            inv.append("\"chestplate\":").append(formatItemObj(slotMap.get(102))).append(",");
+            inv.append("\"leggings\":").append(formatItemObj(slotMap.get(101))).append(",");
+            inv.append("\"boots\":").append(formatItemObj(slotMap.get(100)));
+            inv.append("},");
+
+            // Offhand: 150 (signed -106)
+            inv.append("\"offhand\":").append(formatItemObj(slotMap.get(150))).append(",");
+
+            // Main inventory: slots 9-35
+            inv.append("\"main\":[");
+            for (int s = 9; s <= 35; s++) {
+                if (s > 9) inv.append(",");
+                inv.append(formatItemObj(slotMap.get(s)));
+            }
+            inv.append("],");
+
+            // Hotbar: slots 0-8
+            inv.append("\"hotbar\":[");
+            for (int s = 0; s <= 8; s++) {
+                if (s > 0) inv.append(",");
+                inv.append(formatItemObj(slotMap.get(s)));
+            }
+            inv.append("]");
+            inv.append("}");
+
+            return inv.toString();
+        } catch (Exception e) {
+            return "{}";
+        }
+    }
+
+    private static String formatItemObj(Map<String, Object> it) {
+        if (it == null || !it.containsKey("id")) return "null";
+        String idStr = String.valueOf(it.get("id"));
+        int count = 1;
+        if (it.get("count") instanceof Number) count = ((Number) it.get("count")).intValue();
+        String cleanId = idStr.replace("minecraft:", "");
+        String displayName = formatDisplayName(cleanId);
+
+        return "{\"id\":\"" + escapeJson(cleanId) + "\",\"name\":\"" + escapeJson(idStr) + "\",\"displayName\":\"" + escapeJson(displayName) + "\",\"count\":" + count + "}";
+    }
+
+    private static String formatDisplayName(String raw) {
+        String[] parts = raw.split("_");
+        StringBuilder sb = new StringBuilder();
+        for (String p : parts) {
+            if (!p.isEmpty()) {
+                if (sb.length() > 0) sb.append(" ");
+                sb.append(Character.toUpperCase(p.charAt(0))).append(p.substring(1));
+            }
+        }
+        return sb.toString();
     }
 
     // =========================================================================

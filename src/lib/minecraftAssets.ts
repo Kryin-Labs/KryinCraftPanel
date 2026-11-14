@@ -152,20 +152,22 @@ export function parseMinecraftStats(statsObj: any): ParsedPlayerStats {
   const killed = stats['minecraft:killed'] || {};
 
   const playtimeTicks =
-    custom['minecraft:play_time'] ??
-    custom['minecraft:play_one_minute'] ??
-    custom['play_time'] ??
-    2152800;
+    Number(
+      custom['minecraft:play_time'] ??
+      custom['minecraft:play_one_minute'] ??
+      custom['play_time'] ??
+      0
+    ) || 0;
 
-  const playerKills = custom['minecraft:player_kills'] ?? custom['player_kills'] ?? 3;
-  const deaths = custom['minecraft:deaths'] ?? custom['deaths'] ?? 12;
+  const playerKills = Number(custom['minecraft:player_kills'] ?? custom['player_kills'] ?? 0) || 0;
+  const deaths = Number(custom['minecraft:deaths'] ?? custom['deaths'] ?? 0) || 0;
   const kdr = deaths > 0 ? (playerKills / deaths).toFixed(2) : playerKills.toString();
 
-  const walkCm = custom['minecraft:walk_one_cm'] ?? 3077800;
-  const sprintCm = custom['minecraft:sprint_one_cm'] ?? 2491600;
-  const swimCm = custom['minecraft:swim_one_cm'] ?? 1243000;
-  const fallCm = custom['minecraft:fall_one_cm'] ?? 482100;
-  const aviateCm = custom['minecraft:aviate_one_cm'] ?? 1593000;
+  const walkCm = Number(custom['minecraft:walk_one_cm'] ?? 0) || 0;
+  const sprintCm = Number(custom['minecraft:sprint_one_cm'] ?? 0) || 0;
+  const swimCm = Number(custom['minecraft:swim_one_cm'] ?? 0) || 0;
+  const fallCm = Number(custom['minecraft:fall_one_cm'] ?? 0) || 0;
+  const aviateCm = Number(custom['minecraft:aviate_one_cm'] ?? 0) || 0;
 
   const distanceWalked = cmToBlocks(walkCm);
   const distanceSprinted = cmToBlocks(sprintCm);
@@ -175,84 +177,53 @@ export function parseMinecraftStats(statsObj: any): ParsedPlayerStats {
   const distanceTotal =
     distanceWalked + distanceSprinted + distanceSwum + distanceFallen + distanceElytra;
 
-  // Blocks broken
+  // Blocks broken (real mined statistics)
   const blocksBrokenList: { name: string; count: number; rawKey: string }[] = [];
   let blocksBrokenTotal = 0;
   for (const [key, val] of Object.entries(mined)) {
     const num = Number(val) || 0;
-    blocksBrokenTotal += num;
-    blocksBrokenList.push({
-      name: formatMinecraftName(key),
-      count: num,
-      rawKey: key,
-    });
+    if (num > 0) {
+      blocksBrokenTotal += num;
+      blocksBrokenList.push({
+        name: formatMinecraftName(key),
+        count: num,
+        rawKey: key,
+      });
+    }
   }
   blocksBrokenList.sort((a, b) => b.count - a.count);
 
-  // If mined is empty, provide default snapshot from screenshot
-  if (blocksBrokenList.length === 0) {
-    blocksBrokenList.push(
-      { name: 'Dirt', count: 1994, rawKey: 'minecraft:dirt' },
-      { name: 'Stone', count: 1715, rawKey: 'minecraft:stone' },
-      { name: 'Deepslate', count: 1240, rawKey: 'minecraft:deepslate' },
-      { name: 'Netherrack', count: 980, rawKey: 'minecraft:netherrack' },
-      { name: 'Iron Ore', count: 450, rawKey: 'minecraft:iron_ore' },
-      { name: 'Coal Ore', count: 380, rawKey: 'minecraft:coal_ore' }
-    );
-    blocksBrokenTotal = 11182;
-  }
-
-  // Items used
+  // Items used (real used statistics)
   const itemsUsedList: { name: string; count: number; rawKey: string }[] = [];
   let itemsUsedTotal = 0;
   for (const [key, val] of Object.entries(used)) {
     const num = Number(val) || 0;
-    itemsUsedTotal += num;
-    itemsUsedList.push({
-      name: formatMinecraftName(key),
-      count: num,
-      rawKey: key,
-    });
+    if (num > 0) {
+      itemsUsedTotal += num;
+      itemsUsedList.push({
+        name: formatMinecraftName(key),
+        count: num,
+        rawKey: key,
+      });
+    }
   }
   itemsUsedList.sort((a, b) => b.count - a.count);
 
-  if (itemsUsedList.length === 0) {
-    itemsUsedList.push(
-      { name: 'Dirt', count: 5177, rawKey: 'minecraft:dirt' },
-      { name: 'Diamond Shovel', count: 4242, rawKey: 'minecraft:diamond_shovel' },
-      { name: 'Diamond Pickaxe', count: 3890, rawKey: 'minecraft:diamond_pickaxe' },
-      { name: 'Torch', count: 1650, rawKey: 'minecraft:torch' },
-      { name: 'Cobblestone', count: 1420, rawKey: 'minecraft:cobblestone' },
-      { name: 'Cooked Beef', count: 240, rawKey: 'minecraft:cooked_beef' }
-    );
-    itemsUsedTotal = 31778;
-  }
-
-  // Entities killed
+  // Entities killed (real killed statistics)
   const entitiesKilledList: { name: string; count: number; rawKey: string }[] = [];
   let entitiesKilledTotal = 0;
   for (const [key, val] of Object.entries(killed)) {
     const num = Number(val) || 0;
-    entitiesKilledTotal += num;
-    entitiesKilledList.push({
-      name: formatMinecraftName(key),
-      count: num,
-      rawKey: key,
-    });
+    if (num > 0) {
+      entitiesKilledTotal += num;
+      entitiesKilledList.push({
+        name: formatMinecraftName(key),
+        count: num,
+        rawKey: key,
+      });
+    }
   }
   entitiesKilledList.sort((a, b) => b.count - a.count);
-
-  if (entitiesKilledList.length === 0) {
-    entitiesKilledList.push(
-      { name: 'Zombie', count: 90, rawKey: 'minecraft:zombie' },
-      { name: 'Skeleton', count: 47, rawKey: 'minecraft:skeleton' },
-      { name: 'Creeper', count: 35, rawKey: 'minecraft:creeper' },
-      { name: 'Spider', count: 28, rawKey: 'minecraft:spider' },
-      { name: 'Enderman', count: 14, rawKey: 'minecraft:enderman' },
-      { name: 'Blaze', count: 8, rawKey: 'minecraft:blaze' }
-    );
-    entitiesKilledTotal = 233;
-  }
 
   return {
     playtimeText: formatPlaytime(playtimeTicks),

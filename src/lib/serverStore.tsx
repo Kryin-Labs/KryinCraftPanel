@@ -25,6 +25,7 @@ import {
   tunnelInfo,
 } from './mockData';
 import { createClient } from '@/lib/supabase/client';
+import { parseMinecraftStats } from './minecraftAssets';
 
 interface ServerStoreContextType {
   serverInfo: ServerInfo;
@@ -175,6 +176,8 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
             setPlayers(
               dbPlayers.map((p) => {
                 const inv = p.inventory || {};
+                const parsed = parseMinecraftStats(p.statistics);
+
                 return {
                   uuid: p.uuid,
                   username: p.username,
@@ -191,24 +194,14 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
                   isWhitelisted: Boolean(p.is_whitelisted),
                   isBanned: Boolean(p.is_banned),
                   coordinates: p.coordinates || {
-                    x: -1908.53,
-                    y: 63.0,
-                    z: 1179.39,
+                    x: 0,
+                    y: 64,
+                    z: 0,
                     world: 'world',
                     dimension: 'minecraft:overworld',
                   },
-                  respawnCoordinates: p.coordinates?.respawn || {
-                    x: -1850.0,
-                    y: 64.0,
-                    z: 1200.0,
-                    dimension: 'minecraft:overworld',
-                  },
-                  deathCoordinates: p.coordinates?.death || {
-                    x: -1920.1,
-                    y: 45.0,
-                    z: 1150.8,
-                    dimension: 'minecraft:overworld',
-                  },
+                  respawnCoordinates: p.coordinates?.respawn || null,
+                  deathCoordinates: p.coordinates?.death || null,
                   inventory: {
                     armor: inv.armor || { helmet: null, chestplate: null, leggings: null, boots: null },
                     offhand: inv.offhand || null,
@@ -216,18 +209,18 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
                     hotbar: Array.isArray(inv.hotbar) ? inv.hotbar : new Array(9).fill(null),
                   },
                   statistics: {
-                    playtimeHours: 29.9,
-                    playerKills: 3,
-                    deaths: 12,
-                    kdr: 0.25,
-                    distanceTraveledKm: 88.8,
-                    blocksBroken: 11182,
-                    itemsUsed: 31778,
-                    entitiesKilled: 233,
+                    playtimeHours: Math.round((parsed.playtimeTicks / (20 * 3600)) * 10) / 10,
+                    playerKills: parsed.playerKills,
+                    deaths: parsed.deaths,
+                    kdr: Number(parsed.kdr) || 0,
+                    distanceTraveledKm: Math.round((parsed.distanceTotal / 1000) * 10) / 10,
+                    blocksBroken: parsed.blocksBrokenTotal,
+                    itemsUsed: parsed.itemsUsedTotal,
+                    entitiesKilled: parsed.entitiesKilledTotal,
                     rawStats: p.statistics || {},
                   },
-                  ipAddress: p.ip_address || '192.168.0.164',
-                  lastSeen: p.last_seen || 'Recently',
+                  ipAddress: p.ip_address || '',
+                  lastSeen: p.last_seen || (p.is_online ? 'Online now' : 'Offline'),
                 };
               })
             );

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -26,7 +26,8 @@ import {
 } from 'lucide-react';
 import { useServerStore } from '@/lib/serverStore';
 import { ConfirmModal } from '@/components/ConfirmModal';
-import { InventoryItem } from '@/types';
+import { InventoryItem, MinecraftPlayer } from '@/types';
+import { createClient } from '@/lib/supabase/client';
 import {
   getItemIconUrl,
   getMobIconUrl,
@@ -54,14 +55,90 @@ export default function PlayerDetailPage() {
     teleportPlayer,
   } = useServerStore();
 
-  // Find player matching UUID (case-insensitive) or username
-  const player =
-    players.find(
-      (p) =>
-        p.uuid.toLowerCase() === uuid ||
-        p.uuid.replace(/-/g, '').toLowerCase() === uuid.replace(/-/g, '') ||
-        p.username.toLowerCase() === uuid
-    ) || players[0]; // fallback to first player (NarcoGam3X) if loading
+  const [dbPlayer, setDbPlayer] = useState<MinecraftPlayer | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Find player matching UUID (case-insensitive) or username from store
+  const storePlayer = players.find(
+    (p) =>
+      p.uuid.toLowerCase() === uuid ||
+      p.uuid.replace(/-/g, '').toLowerCase() === uuid.replace(/-/g, '') ||
+      p.username.toLowerCase() === uuid
+  );
+
+  useEffect(() => {
+    if (storePlayer) {
+      setDbPlayer(storePlayer);
+      setLoading(false);
+      return;
+    }
+
+    async function fetchPlayerFromDb() {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from('server_players')
+          .select('*')
+          .or(`uuid.ilike.${uuid},username.ilike.${uuid}`)
+          .limit(1)
+          .single();
+
+        if (data && !error) {
+          const inv = data.inventory || {};
+          setDbPlayer({
+            uuid: data.uuid,
+            username: data.username,
+            isOnline: Boolean(data.is_online),
+            pingMs: data.ping_ms || 0,
+            health: Number(data.health ?? 20),
+            maxHealth: Number(data.max_health ?? 20),
+            foodLevel: Number(data.food_level ?? 20),
+            saturation: Number(data.saturation ?? 5),
+            xpLevel: Number(data.xp_level ?? 0),
+            xpProgress: Number(data.xp_progress ?? 0),
+            gamemode: data.gamemode || 'survival',
+            isOp: Boolean(data.is_op),
+            isWhitelisted: Boolean(data.is_whitelisted),
+            isBanned: Boolean(data.is_banned),
+            coordinates: data.coordinates || {
+              x: 0,
+              y: 64,
+              z: 0,
+              world: 'world',
+              dimension: 'minecraft:overworld',
+            },
+            inventory: {
+              armor: inv.armor || { helmet: null, chestplate: null, leggings: null, boots: null },
+              offhand: inv.offhand || null,
+              main: Array.isArray(inv.main) ? inv.main : new Array(27).fill(null),
+              hotbar: Array.isArray(inv.hotbar) ? inv.hotbar : new Array(9).fill(null),
+            },
+            statistics: {
+              playtimeHours: 0,
+              playerKills: 0,
+              deaths: 0,
+              kdr: 0,
+              distanceTraveledKm: 0,
+              blocksBroken: 0,
+              itemsUsed: 0,
+              entitiesKilled: 0,
+              rawStats: data.statistics || {},
+            },
+            ipAddress: data.ip_address || '',
+            lastSeen: data.last_seen || 'Recently',
+          });
+        }
+      } catch (err) {
+        console.warn('DB player query error:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchPlayerFromDb();
+  }, [uuid, storePlayer]);
+
+  const player = storePlayer || dbPlayer;
 
   const [gamemodeDropdownOpen, setGamemodeDropdownOpen] = useState(false);
   const [hoveredItem, setHoveredItem] = useState<{
@@ -101,14 +178,25 @@ export default function PlayerDetailPage() {
     return parseMinecraftStats(player?.statistics?.rawStats || player?.statistics);
   }, [player]);
 
+  if (loading) {
+    return (
+      <div className="p-16 text-center space-y-3">
+        <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
+        <p className="text-xs text-slate-400">Loading player statistics...</p>
+      </div>
+    );
+  }
+
   if (!player) {
     return (
-      <div className="p-12 text-center space-y-4">
+      <div className="p-16 text-center space-y-4 bg-[#111722] border border-slate-800 rounded-2xl max-w-lg mx-auto">
         <h2 className="text-lg font-bold text-white">Player Not Found</h2>
-        <p className="text-xs text-slate-400">UUID {rawUuid} is not registered.</p>
+        <p className="text-xs text-slate-400">
+          Player with identifier <span className="font-mono text-slate-200">"{rawUuid}"</span> was not found in the server statistics.
+        </p>
         <Link
           href="/dashboard/players"
-          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-semibold"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold"
         >
           <ArrowLeft className="w-4 h-4" /> Back to Players
         </Link>
@@ -743,22 +831,26 @@ export default function PlayerDetailPage() {
                 </span>
               </div>
 
-              {parsedStats.blocksBrokenList.slice(0, 6).map((item, idx) => (
-                <div key={idx} className="flex items-center justify-between text-slate-300">
-                  <div className="flex items-center gap-1.5 truncate pr-2">
-                    <img
-                      src={getItemIconUrl(item.rawKey)}
-                      alt={item.name}
-                      className="w-4 h-4 object-contain shrink-0"
-                      style={{ imageRendering: 'pixelated' }}
-                    />
-                    <span className="truncate">{item.name}</span>
+              {parsedStats.blocksBrokenList.length === 0 ? (
+                <div className="text-[11px] text-slate-500 italic py-1">No blocks broken yet</div>
+              ) : (
+                parsedStats.blocksBrokenList.slice(0, 8).map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between text-slate-300">
+                    <div className="flex items-center gap-1.5 truncate pr-2">
+                      <img
+                        src={getItemIconUrl(item.rawKey)}
+                        alt={item.name}
+                        className="w-4 h-4 object-contain shrink-0"
+                        style={{ imageRendering: 'pixelated' }}
+                      />
+                      <span className="truncate">{item.name}</span>
+                    </div>
+                    <span className="font-mono text-slate-200 shrink-0">
+                      {item.count.toLocaleString()}
+                    </span>
                   </div>
-                  <span className="font-mono text-slate-200 shrink-0">
-                    {item.count.toLocaleString()}
-                  </span>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
 
@@ -773,22 +865,26 @@ export default function PlayerDetailPage() {
                 </span>
               </div>
 
-              {parsedStats.itemsUsedList.slice(0, 6).map((item, idx) => (
-                <div key={idx} className="flex items-center justify-between text-slate-300">
-                  <div className="flex items-center gap-1.5 truncate pr-2">
-                    <img
-                      src={getItemIconUrl(item.rawKey)}
-                      alt={item.name}
-                      className="w-4 h-4 object-contain shrink-0"
-                      style={{ imageRendering: 'pixelated' }}
-                    />
-                    <span className="truncate">{item.name}</span>
+              {parsedStats.itemsUsedList.length === 0 ? (
+                <div className="text-[11px] text-slate-500 italic py-1">No items used yet</div>
+              ) : (
+                parsedStats.itemsUsedList.slice(0, 8).map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between text-slate-300">
+                    <div className="flex items-center gap-1.5 truncate pr-2">
+                      <img
+                        src={getItemIconUrl(item.rawKey)}
+                        alt={item.name}
+                        className="w-4 h-4 object-contain shrink-0"
+                        style={{ imageRendering: 'pixelated' }}
+                      />
+                      <span className="truncate">{item.name}</span>
+                    </div>
+                    <span className="font-mono text-slate-200 shrink-0">
+                      {item.count.toLocaleString()}
+                    </span>
                   </div>
-                  <span className="font-mono text-slate-200 shrink-0">
-                    {item.count.toLocaleString()}
-                  </span>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
 
@@ -803,22 +899,26 @@ export default function PlayerDetailPage() {
                 </span>
               </div>
 
-              {parsedStats.entitiesKilledList.slice(0, 6).map((mob, idx) => (
-                <div key={idx} className="flex items-center justify-between text-slate-300">
-                  <div className="flex items-center gap-1.5 truncate pr-2">
-                    <img
-                      src={getMobIconUrl(mob.rawKey)}
-                      alt={mob.name}
-                      className="w-4 h-4 object-contain rounded-sm shrink-0"
-                      style={{ imageRendering: 'pixelated' }}
-                    />
-                    <span className="truncate">{mob.name}</span>
+              {parsedStats.entitiesKilledList.length === 0 ? (
+                <div className="text-[11px] text-slate-500 italic py-1">No entities killed yet</div>
+              ) : (
+                parsedStats.entitiesKilledList.slice(0, 8).map((mob, idx) => (
+                  <div key={idx} className="flex items-center justify-between text-slate-300">
+                    <div className="flex items-center gap-1.5 truncate pr-2">
+                      <img
+                        src={getMobIconUrl(mob.rawKey)}
+                        alt={mob.name}
+                        className="w-4 h-4 object-contain rounded-sm shrink-0"
+                        style={{ imageRendering: 'pixelated' }}
+                      />
+                      <span className="truncate">{mob.name}</span>
+                    </div>
+                    <span className="font-mono text-slate-200 shrink-0">
+                      {mob.count.toLocaleString()}
+                    </span>
                   </div>
-                  <span className="font-mono text-slate-200 shrink-0">
-                    {mob.count.toLocaleString()}
-                  </span>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         </div>
