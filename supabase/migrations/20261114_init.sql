@@ -241,7 +241,10 @@ create policy "Members can view audit logs" on public.audit_logs
 -- Auto-create profile trigger on auth signup
 create or replace function public.handle_new_user()
 returns trigger as $$
+declare
+  new_server_id uuid;
 begin
+  -- 1. Create Profile
   insert into public.profiles (id, email, display_name, avatar_url)
   values (
     new.id,
@@ -249,6 +252,56 @@ begin
     coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)),
     new.raw_user_meta_data->>'avatar_url'
   );
+
+  -- 2. If this is the first user and no servers exist, automatically provision the ROG Phone 5s server
+  if not exists (select 1 from public.servers limit 1) then
+    insert into public.servers (
+      owner_id,
+      name,
+      device_name,
+      android_version,
+      minecraft_version,
+      paper_build,
+      geyser_version,
+      status,
+      max_players,
+      local_ip,
+      java_port,
+      bedrock_port,
+      agent_token_hash
+    ) values (
+      new.id,
+      'Kryin Paper Server',
+      'ASUS ROG Phone 5s',
+      'Android 13 (Termux)',
+      '26.3',
+      249,
+      '2.12.1-b1302',
+      'offline',
+      20,
+      '192.168.0.164',
+      25565,
+      19132,
+      encode(digest('kryin_agent_rog5s_token', 'sha256'), 'hex')
+    )
+    returning id into new_server_id;
+
+    -- 3. Assign Owner role in server_members
+    insert into public.server_members (
+      server_id,
+      user_id,
+      role,
+      custom_permissions,
+      joined_at
+    ) values (
+      new_server_id,
+      new.id,
+      'owner',
+      array['*'],
+      timezone('utc'::text, now())
+    );
+  end if;
+
   return new;
 end;
 $$ language plpgsql security definer;
