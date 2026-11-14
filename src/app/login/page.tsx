@@ -3,212 +3,371 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Server, Lock, Mail, ArrowRight, ShieldCheck, AlertCircle, Sparkles, CheckCircle2 } from 'lucide-react';
+import {
+  Lock,
+  Mail,
+  User,
+  ArrowRight,
+  ShieldCheck,
+  AlertCircle,
+  CheckCircle2,
+  Server,
+  Layers,
+  Check,
+} from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
 export default function LoginPage() {
   const router = useRouter();
   const supabase = createClient();
-  const [isSignUp, setIsSignUp] = useState(false);
+
+  const [activeTab, setActiveTab] = useState<'signin' | 'signup'>('signin');
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [infoMsg, setInfoMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     setErrorMsg(null);
-    setInfoMsg(null);
+    setSuccessMsg(null);
+
+    const cleanEmail = email.trim().toLowerCase();
 
     try {
-      if (isSignUp) {
+      if (activeTab === 'signup') {
+        if (password.length < 6) {
+          setErrorMsg('Password must be at least 6 characters long.');
+          setIsSubmitting(false);
+          return;
+        }
+
+        if (password !== confirmPassword) {
+          setErrorMsg('Passwords do not match. Please verify both fields.');
+          setIsSubmitting(false);
+          return;
+        }
+
         const { data, error } = await supabase.auth.signUp({
-          email,
+          email: cleanEmail,
           password,
+          options: {
+            data: {
+              full_name: fullName.trim() || cleanEmail.split('@')[0],
+            },
+          },
         });
-        if (error) throw error;
+
+        if (error) {
+          const lower = error.message.toLowerCase();
+          if (
+            lower.includes('already registered') ||
+            lower.includes('user already exists') ||
+            lower.includes('database error saving new user')
+          ) {
+            setErrorMsg('An account with this email already exists. Please sign in below.');
+            setActiveTab('signin');
+            return;
+          }
+          throw error;
+        }
+
         if (data.session) {
           router.push('/dashboard');
         } else {
-          setInfoMsg('Account created! Please check your email to confirm your account, or sign in.');
+          setSuccessMsg('Account created successfully! You can now sign in with your credentials.');
+          setActiveTab('signin');
         }
       } else {
+        // Sign In
         const { data, error } = await supabase.auth.signInWithPassword({
-          email,
+          email: cleanEmail,
           password,
         });
-        if (error) throw error;
-        router.push('/dashboard');
+
+        if (error) {
+          const lower = error.message.toLowerCase();
+          if (lower.includes('invalid login credentials')) {
+            setErrorMsg('Invalid email or password. Please verify your credentials and try again.');
+          } else {
+            setErrorMsg(error.message);
+          }
+          return;
+        }
+
+        if (data.session) {
+          router.push('/dashboard');
+        } else {
+          router.push('/dashboard');
+        }
       }
     } catch (err: any) {
-      setErrorMsg(err.message || 'Authentication failed. Please check your credentials.');
+      setErrorMsg(err.message || 'Authentication error. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleResetPassword = async () => {
-    if (!email) {
-      setErrorMsg('Please enter your email address to receive password reset instructions.');
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) {
+      setErrorMsg('Please enter your email address above to receive reset instructions.');
       return;
     }
     setErrorMsg(null);
+    setSuccessMsg(null);
+
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email);
+      const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail);
       if (error) throw error;
-      setInfoMsg('Password reset instructions sent to ' + email);
+      setSuccessMsg(`Password reset instructions have been sent to ${cleanEmail}.`);
     } catch (err: any) {
-      setErrorMsg(err.message || 'Could not send reset email.');
+      setErrorMsg(err.message || 'Unable to send password reset email.');
     }
   };
 
-  const handleDemoBypass = () => {
-    router.push('/dashboard');
-  };
-
   return (
-    <div className="min-h-screen bg-[#0a0d14] flex flex-col justify-between p-4 sm:p-8">
+    <div className="min-h-screen bg-[#0e1117] flex flex-col justify-between p-4 sm:p-8 text-zinc-100">
       {/* Top Bar */}
-      <div className="flex items-center justify-between max-w-5xl mx-auto w-full">
-        <Link href="/" className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-600/30">
+      <header className="flex items-center justify-between max-w-5xl mx-auto w-full py-2">
+        <Link href="/" className="flex items-center gap-2.5 group">
+          <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center text-white shadow-sm group-hover:bg-emerald-500 transition-colors">
             <Server className="w-4 h-4" />
           </div>
-          <span className="font-bold text-white text-base tracking-wide">KryinCraftPanel</span>
+          <div>
+            <span className="font-bold text-zinc-100 text-base tracking-tight">KryinHost</span>
+            <span className="text-[11px] text-zinc-500 block leading-none">Client Control Portal</span>
+          </div>
         </Link>
-        <span className="text-[11px] text-slate-500 font-mono">ASUS ROG Phone 5s Node</span>
-      </div>
+        <Link
+          href="/"
+          className="text-xs text-zinc-400 hover:text-white transition-colors"
+        >
+          ← Back to Website
+        </Link>
+      </header>
 
-      {/* Main Login Card */}
-      <div className="w-full max-w-md mx-auto my-auto p-6 sm:p-8 bg-[#111722] border border-slate-800 rounded-3xl shadow-2xl space-y-6">
+      {/* Main Authentication Container */}
+      <div className="w-full max-w-md mx-auto my-auto p-6 sm:p-8 bg-[#151821] border border-zinc-800 rounded-2xl shadow-xl space-y-6">
+        {/* Header Branding */}
         <div className="text-center space-y-1.5">
-          <div className="w-12 h-12 rounded-2xl bg-blue-600/10 border border-blue-500/20 text-blue-400 mx-auto flex items-center justify-center mb-3">
+          <div className="w-12 h-12 rounded-xl bg-zinc-800/80 border border-zinc-700/60 text-emerald-400 mx-auto flex items-center justify-center mb-3">
             <ShieldCheck className="w-6 h-6" />
           </div>
-          <h2 className="text-xl font-bold text-white">
-            {isSignUp ? 'Create KryinCraft Account' : 'Welcome to KryinCraftPanel'}
+          <h2 className="text-xl font-bold text-zinc-100">
+            {activeTab === 'signin' ? 'Sign In to Control Panel' : 'Create Server Account'}
           </h2>
-          <p className="text-xs text-slate-400">
-            {isSignUp
-              ? 'Register with your authorized email to request server access'
-              : 'Sign in to access Paper 26.3 control dashboard'}
+          <p className="text-xs text-zinc-400">
+            {activeTab === 'signin'
+              ? 'Access your server console, live player manager, and files.'
+              : 'Register to manage servers, deploy instances, and invite operators.'}
           </p>
         </div>
 
+        {/* Tab Switcher */}
+        <div className="flex bg-[#0e1117] p-1 rounded-xl border border-zinc-800 text-xs font-semibold">
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('signin');
+              setErrorMsg(null);
+              setSuccessMsg(null);
+            }}
+            className={`flex-1 py-2 rounded-lg transition-all ${
+              activeTab === 'signin'
+                ? 'bg-zinc-800 text-white shadow-sm font-bold'
+                : 'text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            Sign In
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('signup');
+              setErrorMsg(null);
+              setSuccessMsg(null);
+            }}
+            className={`flex-1 py-2 rounded-lg transition-all ${
+              activeTab === 'signup'
+                ? 'bg-zinc-800 text-white shadow-sm font-bold'
+                : 'text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            Create Account
+          </button>
+        </div>
+
+        {/* Feedback alerts */}
         {errorMsg && (
-          <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl flex items-center gap-2 text-xs text-rose-400">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>{errorMsg}</span>
+          <div className="p-3 bg-red-950/40 border border-red-800/60 rounded-xl flex items-start gap-2.5 text-xs text-red-300">
+            <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <span>{errorMsg}</span>
+              {errorMsg.includes('already exists') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('signin');
+                    setErrorMsg(null);
+                  }}
+                  className="block mt-1 font-semibold text-emerald-400 hover:underline"
+                >
+                  Click here to switch to Sign In →
+                </button>
+              )}
+            </div>
           </div>
         )}
 
-        {infoMsg && (
-          <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-center gap-2 text-xs text-blue-400">
-            <Sparkles className="w-4 h-4 shrink-0" />
-            <span>{infoMsg}</span>
+        {successMsg && (
+          <div className="p-3 bg-emerald-950/40 border border-emerald-800/60 rounded-xl flex items-start gap-2.5 text-xs text-emerald-300">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+            <span>{successMsg}</span>
           </div>
         )}
 
+        {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
+          {activeTab === 'signup' && (
+            <div>
+              <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+                Full Name / Username
+              </label>
+              <div className="relative">
+                <User className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Steve"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className="w-full bg-[#0e1117] border border-zinc-800 rounded-xl py-2.5 pl-10 pr-3 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-emerald-500 transition-colors"
+                />
+              </div>
+            </div>
+          )}
+
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+            <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
               Email Address
             </label>
             <div className="relative">
-              <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <Mail className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type="email"
                 required
-                placeholder="purohitarthbkn@gmail.com"
+                placeholder="your.email@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-[#0a0d14] border border-slate-800 rounded-xl py-2.5 pl-10 pr-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors"
+                className="w-full bg-[#0e1117] border border-zinc-800 rounded-xl py-2.5 pl-10 pr-3 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-emerald-500 transition-colors"
               />
             </div>
           </div>
 
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="text-xs font-semibold text-slate-300">Password</label>
-              {!isSignUp && (
+              <label className="text-xs font-semibold text-zinc-300">Password</label>
+              {activeTab === 'signin' && (
                 <button
                   type="button"
                   onClick={handleResetPassword}
-                  className="text-[11px] text-blue-400 hover:underline"
+                  className="text-[11px] text-zinc-400 hover:text-emerald-400 transition-colors"
                 >
                   Forgot password?
                 </button>
               )}
             </div>
             <div className="relative">
-              <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <Lock className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type="password"
                 required
                 placeholder="••••••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-[#0a0d14] border border-slate-800 rounded-xl py-2.5 pl-10 pr-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors"
+                className="w-full bg-[#0e1117] border border-zinc-800 rounded-xl py-2.5 pl-10 pr-3 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-emerald-500 transition-colors"
               />
             </div>
           </div>
 
+          {activeTab === 'signup' && (
+            <div>
+              <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+                Confirm Password
+              </label>
+              <div className="relative">
+                <Lock className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="password"
+                  required
+                  placeholder="••••••••••••"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="w-full bg-[#0e1117] border border-zinc-800 rounded-xl py-2.5 pl-10 pr-3 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-emerald-500 transition-colors"
+                />
+              </div>
+            </div>
+          )}
+
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-600/25 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+            className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-2 disabled:opacity-50 mt-2 shadow-sm cursor-pointer"
           >
             {isSubmitting ? (
               <span>Authenticating...</span>
             ) : (
               <>
-                <span>{isSignUp ? 'Create Account' : 'Sign In to Server'}</span>
+                <span>{activeTab === 'signin' ? 'Sign In to Server' : 'Create My Account'}</span>
                 <ArrowRight className="w-4 h-4" />
               </>
             )}
           </button>
         </form>
 
-        <div className="relative my-4">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-slate-800" />
-          </div>
-          <div className="relative flex justify-center text-[10px] uppercase">
-            <span className="bg-[#111722] px-2 text-slate-500 font-semibold tracking-wider">
-              Phase 1 Preview
+        <div className="pt-2 border-t border-zinc-800/80 text-center text-xs text-zinc-400">
+          {activeTab === 'signin' ? (
+            <span>
+              Don&apos;t have an account yet?{' '}
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('signup');
+                  setErrorMsg(null);
+                  setSuccessMsg(null);
+                }}
+                className="text-emerald-400 hover:underline font-semibold"
+              >
+                Create one now
+              </button>
             </span>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={handleDemoBypass}
-          className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700/80 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-2"
-        >
-          <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-          Enter Panel as Owner (Interactive Preview)
-        </button>
-
-        <div className="text-center pt-2">
-          <button
-            type="button"
-            onClick={() => {
-              setIsSignUp(!isSignUp);
-              setErrorMsg(null);
-              setInfoMsg(null);
-            }}
-            className="text-xs text-slate-400 hover:text-white transition-colors"
-          >
-            {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
-          </button>
+          ) : (
+            <span>
+              Already registered?{' '}
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('signin');
+                  setErrorMsg(null);
+                  setSuccessMsg(null);
+                }}
+                className="text-emerald-400 hover:underline font-semibold"
+              >
+                Sign In here
+              </button>
+            </span>
+          )}
         </div>
       </div>
 
-      {/* Footer */}
-      <footer className="text-center text-[11px] text-slate-600 max-w-5xl mx-auto w-full pt-4">
-        Protected with Supabase Authentication & Row Level Security
+      {/* Security & Architecture Footnote */}
+      <footer className="text-center text-[11px] text-zinc-500 max-w-5xl mx-auto w-full pt-4 space-y-1">
+        <p>KryinHost Client Management • Powered by Paper 26.3 & Supabase Auth</p>
+        <p className="text-zinc-600">Enterprise 256-bit encryption with Row Level Security</p>
       </footer>
     </div>
   );

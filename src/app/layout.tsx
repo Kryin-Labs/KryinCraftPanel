@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'KryinCraftPanel — Minecraft Server Management',
-  description: 'Lightweight, secure, mobile-first Minecraft server management panel for ROG Phone 5s Termux server.',
+  title: 'KryinHost — High Performance Minecraft Server Hosting',
+  description: 'Enterprise-grade, low-latency Minecraft server hosting. Java 26 and Bedrock cross-play, 1-click modpacks, anti-DDoS protection, and custom management control panel.',
 };
 
 export default function RootLayout({
@@ -13,7 +13,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="dark">
-      <body className="bg-[#0a0d14] text-slate-100 min-h-screen antialiased selection:bg-blue-600 selection:text-white">
+      <body className="bg-[#0e1117] text-zinc-100 min-h-screen antialiased selection:bg-emerald-600 selection:text-white">
         {children}
       </body>
     </html>

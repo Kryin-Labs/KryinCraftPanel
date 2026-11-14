@@ -49,19 +49,19 @@ export const MobileNav: React.FC = () => {
   return (
     <>
       {/* Mobile Top Header */}
-      <header className="lg:hidden sticky top-0 z-40 bg-[#0e131d]/90 backdrop-blur-md border-b border-slate-800/80 px-4 py-3 flex items-center justify-between">
+      <header className="lg:hidden sticky top-0 z-40 bg-[#12151d]/95 backdrop-blur-md border-b border-zinc-800 px-4 py-3 flex items-center justify-between">
         <Link href="/dashboard" className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-600/30">
+          <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center text-white shadow-sm">
             <Server className="w-4 h-4" />
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <span className="font-bold text-white text-sm">KryinCraft</span>
-              <span className="text-[9px] px-1 py-0.2 rounded bg-blue-500/20 text-blue-400 font-semibold">
+              <span className="font-bold text-zinc-100 text-sm">KryinHost</span>
+              <span className="text-[9px] px-1 py-0.2 rounded bg-zinc-800 text-emerald-400 font-semibold border border-zinc-700/60">
                 ROG 5s
               </span>
             </div>
-            <p className="text-[10px] text-slate-400">Paper 26.3 • {serverInfo.tps} TPS</p>
+            <p className="text-[10px] text-zinc-400">Paper 26.3 • {serverInfo.tps} TPS</p>
           </div>
         </Link>
 
@@ -69,7 +69,7 @@ export const MobileNav: React.FC = () => {
           <StatusBadge status={serverInfo.status} size="sm" />
           <button
             onClick={() => setDrawerOpen(true)}
-            className="p-2 rounded-lg bg-slate-800/80 border border-slate-700/80 text-slate-300 hover:text-white"
+            className="p-2 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white"
             aria-label="Open Navigation Menu"
           >
             <Menu className="w-4 h-4" />
@@ -85,33 +85,33 @@ export const MobileNav: React.FC = () => {
             onClick={() => setDrawerOpen(false)}
           />
 
-          <div className="relative w-4/5 max-w-xs bg-[#0e131d] border-r border-slate-800 h-full flex flex-col justify-between p-4 z-10 animate-in slide-in-from-left duration-200">
+          <div className="relative w-4/5 max-w-xs bg-[#12151d] border-r border-zinc-800 h-full flex flex-col justify-between p-4 z-10 animate-in slide-in-from-left duration-200">
             <div className="space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-800/80">
+              <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center text-white">
+                  <div className="w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center text-white">
                     <Server className="w-3.5 h-3.5" />
                   </div>
-                  <span className="font-bold text-white text-sm">KryinCraftPanel</span>
+                  <span className="font-bold text-zinc-100 text-sm">KryinHost Panel</span>
                 </div>
                 <button
                   onClick={() => setDrawerOpen(false)}
-                  className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+                  className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
               {/* Hardware state in drawer */}
-              <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800/80 space-y-1">
-                <div className="flex items-center justify-between text-[11px] text-slate-300">
-                  <span className="flex items-center gap-1 text-slate-400">
-                    <Smartphone className="w-3 h-3 text-blue-400" />
-                    ROG 5s (Snapdragon 888)
+              <div className="p-2.5 rounded-xl bg-[#151821] border border-zinc-800 space-y-1">
+                <div className="flex items-center justify-between text-[11px] text-zinc-300">
+                  <span className="flex items-center gap-1 text-zinc-400">
+                    <Smartphone className="w-3 h-3 text-zinc-400" />
+                    ROG 5s Node
                   </span>
                   <span className="font-mono text-emerald-400">{metrics.batteryPercent}%</span>
                 </div>
-                <p className="text-[10px] text-slate-400">
+                <p className="text-[10px] text-zinc-400">
                   RAM: {Math.round((metrics.usedRamMb / 1024) * 10) / 10} / 12 GB • Heap: {Math.round((metrics.javaHeapUsedMb / 1024) * 10) / 10} / 4 GB
                 </p>
               </div>
@@ -132,11 +132,11 @@ export const MobileNav: React.FC = () => {
                       onClick={() => setDrawerOpen(false)}
                       className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
                         isActive
-                          ? 'bg-blue-600 text-white font-bold'
-                          : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                          ? 'bg-zinc-800 text-white font-bold border border-zinc-700/60'
+                          : 'text-zinc-400 hover:text-white hover:bg-zinc-800/40'
                       }`}
                     >
-                      <Icon className="w-4 h-4" />
+                      <Icon className={`w-4 h-4 ${isActive ? 'text-emerald-400' : 'text-zinc-400'}`} />
                       <span>{item.name}</span>
                     </Link>
                   );
@@ -144,10 +144,10 @@ export const MobileNav: React.FC = () => {
               </nav>
             </div>
 
-            <div className="pt-3 border-t border-slate-800/80">
+            <div className="pt-3 border-t border-zinc-800">
               <Link
                 href="/login"
-                className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-900 text-slate-300 text-xs font-semibold hover:text-rose-400"
+                className="flex items-center justify-between px-3 py-2 rounded-xl bg-zinc-800/80 text-zinc-300 text-xs font-semibold hover:text-red-400 border border-zinc-700/60"
               >
                 <span>Sign Out</span>
                 <LogOut className="w-4 h-4" />
@@ -158,7 +158,7 @@ export const MobileNav: React.FC = () => {
       )}
 
       {/* Mobile Bottom Navigation Bar */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#0e131d]/95 backdrop-blur-md border-t border-slate-800/80 px-2 py-1.5 flex items-center justify-around shadow-2xl">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#12151d]/95 backdrop-blur-md border-t border-zinc-800 px-2 py-1.5 flex items-center justify-around shadow-lg">
         {mainBottomTabs.map((tab) => {
           const isActive =
             tab.href === '/dashboard'
@@ -171,7 +171,7 @@ export const MobileNav: React.FC = () => {
               key={tab.href}
               href={tab.href}
               className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all ${
-                isActive ? 'text-blue-400' : 'text-slate-400 hover:text-slate-200'
+                isActive ? 'text-emerald-400 font-bold' : 'text-zinc-400 hover:text-zinc-200'
               }`}
             >
               <Icon className={`w-5 h-5 ${isActive ? 'stroke-[2.5]' : 'stroke-2'}`} />
@@ -182,7 +182,7 @@ export const MobileNav: React.FC = () => {
 
         <button
           onClick={() => setDrawerOpen(true)}
-          className="flex flex-col items-center gap-1 py-1 px-3 rounded-xl text-slate-400 hover:text-slate-200"
+          className="flex flex-col items-center gap-1 py-1 px-3 rounded-xl text-zinc-400 hover:text-zinc-200"
         >
           <Menu className="w-5 h-5" />
           <span className="text-[10px] font-medium">More</span>
