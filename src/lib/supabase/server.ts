@@ -3,11 +3,13 @@ import { cookies } from 'next/headers';
 
 export async function createClient() {
   const cookieStore = await cookies();
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://mock.supabase.co';
+  const url =
+    process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    'https://qekhtvzzllaufevvljxj.supabase.co';
   const anonKey =
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    'mock-anon-key';
+    'sb_publishable_cE7Y4PbKxeYfQ5sj_-vQuA_P-417JY1';
 
   return createServerClient(url, anonKey, {
     cookies: {
