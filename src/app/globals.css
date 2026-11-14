@@ -2,42 +2,104 @@
 
 @layer base {
   :root {
-    --bg-dark: #0e1117;
-    --card-bg: #151821;
-    --card-hover: #1c202b;
-    --border-color: #252a37;
-    --text-primary: #f4f4f5;
-    --text-secondary: #a1a1aa;
-    --text-muted: #71717a;
-    --status-online: #22c55e;
+    color-scheme: dark;
+    --background: #0f1115;
+    --foreground: #f4f4f5;
+    --card: #16181d;
+    --card-foreground: #f4f4f5;
+    --secondary: #22252b;
+    --secondary-foreground: #f4f4f5;
+    --muted: #22252b;
+    --muted-foreground: #a1a1aa;
+    --accent: #22252b;
+    --accent-foreground: #f4f4f5;
+    --border: rgba(255, 255, 255, 0.1);
+    --input: rgba(255, 255, 255, 0.12);
+    --ring: #f4f4f5;
+    --sidebar: #121417;
+
+    --sienna: #d97706;
+    --peach: rgba(217, 119, 6, 0.12);
+    --fog: #1a1d24;
+    --ash: #71717a;
+    --emerald-accent: #10b981;
+    --grid-dot: rgba(255, 255, 255, 0.08);
+
+    --status-online: #10b981;
     --status-offline: #ef4444;
-    --status-warning: #eab308;
+    --status-warning: #f59e0b;
   }
 
   body {
-    background-color: var(--bg-dark);
-    color: var(--text-primary);
+    background-color: var(--background);
+    color: var(--foreground);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     min-height: 100vh;
   }
 }
 
-/* Clean, subtle scrollbar for hosting portal */
+/* Tabular numbers for metrics */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Radial dotted grid used behind the hero */
+.kryin-grid {
+  background-image: radial-gradient(var(--grid-dot) 1px, transparent 1px);
+  background-size: 28px 28px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, #000 40%, transparent 75%);
+}
+
+/* Floating animation */
+@keyframes kryin-float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.kryin-float {
+  animation: kryin-float 6s ease-in-out infinite;
+}
+
+/* Gradient hairline divider */
+.kryin-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+}
+
+/* Infinite marquee */
+@keyframes kryin-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.kryin-marquee {
+  animation: kryin-marquee 30s linear infinite;
+}
+
+/* Thin executive scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #0e1117;
+  background: #0f1115;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #252a37;
-  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #333a4d;
+  background: rgba(255, 255, 255, 0.25);
 }

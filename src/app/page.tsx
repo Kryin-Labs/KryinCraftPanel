@@ -1,391 +1,569 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import {
   Server,
-  Zap,
-  Shield,
-  HardDrive,
-  Users,
-  Terminal,
-  Globe,
-  Check,
   ArrowRight,
+  Shield,
+  Zap,
+  Globe,
+  HardDrive,
   Cpu,
-  Clock,
-  HelpCircle,
-  FolderTree,
-  ChevronRight,
-  Radio,
-  Sparkles,
+  Terminal,
+  Users,
+  Check,
   RefreshCw,
-  ExternalLink,
+  Radio,
+  Sliders,
+  ChevronDown,
+  Plug,
+  Clock,
+  Layers,
+  Sparkles,
 } from 'lucide-react';
 
-export default function HomePage() {
-  const [activeFaq, setActiveFaq] = useState<number | null>(null);
+/* ------------------------------------------------------------------ */
+/* Primitives matching KryinOffice UI                                  */
+/* ------------------------------------------------------------------ */
 
-  const toggleFaq = (idx: number) => {
-    setActiveFaq(activeFaq === idx ? null : idx);
-  };
+function FilledPill({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="inline-flex items-center justify-center gap-2 rounded-full bg-[#f4f4f5] text-[#0f1115] px-6 py-2.5 text-xs sm:text-sm font-semibold transition-all hover:bg-white hover:scale-[1.02] shadow-sm"
+    >
+      {children}
+    </Link>
+  );
+}
+
+function GhostPill({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="inline-flex items-center justify-center gap-2 rounded-full border border-white/20 px-6 py-2.5 text-xs sm:text-sm text-[#f4f4f5] transition-all hover:bg-white/10 hover:border-white/30"
+    >
+      {children}
+    </Link>
+  );
+}
+
+function DraggableFloat({
+  className,
+  children,
+}: {
+  className?: string;
+  children: ReactNode;
+}) {
+  const [d, setD] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const drag = useRef<{ px: number; py: number } | null>(null);
+
+  const clamp = (v: number) => Math.max(-36, Math.min(36, v));
+
+  function onDown(e: React.PointerEvent) {
+    drag.current = { px: e.clientX - d.x, py: e.clientY - d.y };
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  }
+  function onMove(e: React.PointerEvent) {
+    if (!drag.current) return;
+    setD({ x: clamp(e.clientX - drag.current.px), y: clamp(e.clientY - drag.current.py) });
+  }
+  function onUp() {
+    drag.current = null;
+    setD({ x: 0, y: 0 });
+  }
 
   return (
-    <div className="min-h-screen bg-[#0e1117] text-zinc-100 selection:bg-emerald-600 selection:text-white">
-      {/* Top Announcement Bar */}
-      <div className="bg-[#12151d] border-b border-zinc-800 text-[11px] text-zinc-400 py-2 px-4 text-center">
-        <div className="max-w-6xl mx-auto flex items-center justify-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span>
-            <strong className="text-zinc-200">High-Performance Nodes Online:</strong> Snapdragon & Ryzen 9 high-frequency hardware • Java 26 & Bedrock Cross-Play Supported
-          </span>
-          <Link href="/plans" className="text-emerald-400 font-semibold hover:underline ml-2">
-            View Plans →
-          </Link>
-        </div>
+    <div className={className}>
+      <div
+        onPointerDown={onDown}
+        onPointerMove={onMove}
+        onPointerUp={onUp}
+        onPointerCancel={onUp}
+        className="pointer-events-auto cursor-grab touch-none select-none active:cursor-grabbing"
+        style={{
+          transform: `translate(${d.x}px, ${d.y}px)`,
+          transition: drag.current ? 'none' : 'transform 0.4s cubic-bezier(0.22, 1, 0.36, 1)',
+        }}
+      >
+        <div className="kryin-float">{children}</div>
       </div>
+    </div>
+  );
+}
 
-      {/* Main Navigation Header */}
-      <header className="border-b border-zinc-800/80 bg-[#12151d]/95 backdrop-blur-md sticky top-0 z-40">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          {/* Logo */}
+/* ------------------------------------------------------------------ */
+/* Floating Artifact Cards (KryinOffice style)                         */
+/* ------------------------------------------------------------------ */
+
+function TpsArt() {
+  return (
+    <div className="w-[240px] p-4 border border-white/10 bg-[#16181d]/95 backdrop-blur-md rounded-[18px] shadow-xl text-left">
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Tick Performance</span>
+        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-950/80 px-2 py-0.5 text-[10px] font-bold text-emerald-400 border border-emerald-800/80">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          Locked
+        </span>
+      </div>
+      <p className="mt-2 font-mono text-[28px] font-bold leading-none text-white">20.0 TPS</p>
+      <p className="mt-1 text-[11px] text-zinc-400">0.0% tick loss • 50.0ms target</p>
+      <svg viewBox="0 0 200 36" className="mt-2.5 w-full" aria-hidden>
+        <polyline
+          points="0,20 25,20 50,19 75,20 100,20 125,19 150,20 175,20 200,20"
+          fill="none"
+          stroke="#10b981"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </div>
+  );
+}
+
+function GeyserArt() {
+  return (
+    <div className="w-[230px] p-4 border border-white/10 bg-[#16181d]/95 backdrop-blur-md rounded-[18px] shadow-xl text-left">
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Bedrock Bridge</span>
+        <Globe className="w-3.5 h-3.5 text-emerald-400" />
+      </div>
+      <p className="mt-2 text-xs font-semibold text-zinc-100">Cross-Play Active</p>
+      <div className="mt-2 rounded-[8px] bg-[#1a1d24] p-2 font-mono text-[10px] text-zinc-400 border border-white/5 space-y-1">
+        <div className="flex justify-between"><span>Java:</span> <span className="text-zinc-200">25565</span></div>
+        <div className="flex justify-between"><span>Bedrock:</span> <span className="text-emerald-400">19132</span></div>
+      </div>
+      <p className="mt-2 text-[10px] text-zinc-500">Geyser + Floodgate preconfigured</p>
+    </div>
+  );
+}
+
+function TerminalArt() {
+  return (
+    <div className="w-full max-w-md p-4 border border-white/10 bg-[#16181d]/95 backdrop-blur-md rounded-[20px] shadow-2xl text-left font-mono text-xs">
+      <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/5">
+        <div className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-zinc-700" />
+          <span className="w-2.5 h-2.5 rounded-full bg-zinc-700" />
+          <span className="w-2.5 h-2.5 rounded-full bg-zinc-700" />
+          <span className="text-[11px] text-zinc-400 ml-1.5">Paper 26.3 • Live Console</span>
+        </div>
+        <span className="text-[10px] text-emerald-400 font-bold">ONLINE</span>
+      </div>
+      <div className="space-y-1 text-[11px] text-zinc-300">
+        <p className="text-zinc-500">[INFO]: Loading server.properties</p>
+        <p className="text-zinc-400">[INFO]: Using 8 worker threads for worldgen</p>
+        <p className="text-emerald-400">[INFO]: [Geyser-Spigot] Started Bedrock listener on port 19132</p>
+        <p className="text-zinc-200">[INFO]: Done (3.81s)! Listening on 0.0.0.0:25565</p>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Data constants                                                      */
+/* ------------------------------------------------------------------ */
+
+const MARQUEE_ITEMS = [
+  'Paper 26.3',
+  'Purpur',
+  'Fabric',
+  'Geyser Cross-Play',
+  '2.5+ Tbps Anti-DDoS',
+  'Gen4 NVMe Arrays',
+  'Sub-15ms Latency',
+  'Automated Backups',
+  'Web Terminal',
+  'Zero Tick Lag',
+  'Custom Subdomains',
+  '1-Click Modpacks',
+];
+
+const CAPABILITIES = [
+  { icon: Globe, label: 'Java & Bedrock Cross-Play', note: 'Preconfigured Geyser & Floodgate' },
+  { icon: Zap, label: 'Smart Hibernation & Wake', note: 'Auto-sleep when empty, instant wake' },
+  { icon: RefreshCw, label: '1-Click Modpack Switcher', note: 'Paper, Purpur, Fabric & Forge' },
+  { icon: Shield, label: 'Enterprise Anti-DDoS', note: '2.5+ Tbps multilayer traffic filtering' },
+  { icon: HardDrive, label: 'Gen4 NVMe Storage', note: '7,000 MB/s speed, zero chunk stutter' },
+  { icon: Terminal, label: 'Real-Time Web Console', note: 'Live command execution & log streaming' },
+  { icon: Users, label: 'Visual Player Inspector', note: 'Inspect inventory, health & coordinates' },
+  { icon: Clock, label: 'Automated Daily Backups', note: 'Hourly snapshots & 1-click restore' },
+];
+
+const PLANS_DATA = [
+  {
+    name: 'Free Starter',
+    badge: 'Popular for Friends',
+    price: '$0.00',
+    cycle: 'forever',
+    ram: '2 GB',
+    cpu: '1 vCPU',
+    storage: '10 GB SSD',
+    slots: '5 Slots',
+    features: ['Smart Auto-Hibernation', 'Instant Auto-Wake on Join', 'Java & Bedrock Cross-Play', 'Web Console & Player Manager'],
+    highlight: false,
+    cta: 'Deploy Free',
+  },
+  {
+    name: 'Grass Explorer',
+    badge: 'Entry Level',
+    price: '$3.99',
+    cycle: 'month',
+    ram: '4 GB DDR4',
+    cpu: '2 vCPU',
+    storage: '35 GB NVMe',
+    slots: '20 Slots',
+    features: ['24/7 Always-On (No Sleep)', 'High-Speed Gen4 NVMe', 'Daily Automated Backups', 'Full Web File Manager & SFTP'],
+    highlight: false,
+    cta: 'Select Explorer',
+  },
+  {
+    name: 'Iron Standard',
+    badge: 'Most Popular',
+    price: '$7.99',
+    cycle: 'month',
+    ram: '8 GB DDR4/DDR5',
+    cpu: '3 vCPU',
+    storage: '80 GB NVMe',
+    slots: '60 Slots',
+    features: ['Optimized Paper, Purpur & Fabric', 'Full Modpack & Plugin Support', 'Enterprise Anti-DDoS Scrubbing', 'Offsite Cloud Backups & Free MySQL'],
+    highlight: true,
+    cta: 'Select Iron',
+  },
+  {
+    name: 'Diamond Performance',
+    badge: 'Extreme Power',
+    price: '$14.99',
+    cycle: 'month',
+    ram: '12 GB High-Freq',
+    cpu: '4 vCPU',
+    storage: '150 GB NVMe',
+    slots: 'Unlimited',
+    features: ['Dedicated High-Clock CPU Priority', 'Zero Tick-Lag Guarantee', 'Heavy Modpacks (ATM 9, Better MC)', 'Hourly Snapshot Restores'],
+    highlight: false,
+    cta: 'Select Diamond',
+  },
+];
+
+export default function HomePage() {
+  const [scrolled, setScrolled] = useState(false);
+  const [activeFaq, setActiveFaq] = useState<number | null>(null);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  return (
+    <div className="min-h-screen bg-[#0f1115] text-[#f4f4f5] selection:bg-emerald-600 selection:text-white">
+      {/* Navigation matching KryinOffice executive style */}
+      <header
+        className={`fixed inset-x-0 top-0 z-50 transition-all duration-300 ${
+          scrolled
+            ? 'bg-[#0f1115]/90 backdrop-blur-md border-b border-white/10 py-3 shadow-lg'
+            : 'bg-transparent py-4'
+        }`}
+      >
+        <div className="max-w-[1200px] mx-auto px-5 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2.5 group">
             <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center text-white shadow-sm group-hover:bg-emerald-500 transition-colors">
               <Server className="w-4 h-4" />
             </div>
             <div>
-              <span className="font-bold text-zinc-100 text-base tracking-tight">KryinHost</span>
-              <span className="text-[10px] text-zinc-500 block leading-none">Minecraft Server Hosting</span>
+              <span className="font-bold text-white text-base tracking-tight">KryinHost</span>
+              <span className="text-[10px] text-zinc-500 block leading-none">Game Server Infrastructure</span>
             </div>
           </Link>
 
-          {/* Desktop Nav Links */}
           <nav className="hidden md:flex items-center gap-7 text-xs font-semibold text-zinc-400">
-            <Link href="#features" className="hover:text-zinc-100 transition-colors">
+            <Link href="#features" className="hover:text-white transition-colors">
               Features
             </Link>
-            <Link href="/plans" className="hover:text-zinc-100 transition-colors">
+            <Link href="/plans" className="hover:text-white transition-colors">
               Plans & Pricing
             </Link>
-            <Link href="#control-panel" className="hover:text-zinc-100 transition-colors">
-              Control Panel
-            </Link>
-            <Link href="#hardware" className="hover:text-zinc-100 transition-colors">
+            <Link href="#hardware" className="hover:text-white transition-colors">
               Hardware
             </Link>
-            <Link href="#faq" className="hover:text-zinc-100 transition-colors">
+            <Link href="#faq" className="hover:text-white transition-colors">
               FAQ
             </Link>
           </nav>
 
-          {/* Right Action Buttons */}
           <div className="flex items-center gap-3">
             <Link
               href="/login"
               className="text-xs font-semibold px-3 py-1.5 text-zinc-300 hover:text-white transition-colors"
             >
-              Client Area
+              Sign In
             </Link>
-            <Link
-              href="/login"
-              className="text-xs font-bold px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition-colors shadow-sm"
-            >
-              Deploy Server
-            </Link>
+            <FilledPill href="/login">Get Started</FilledPill>
           </div>
         </div>
       </header>
 
-      {/* Hero Section */}
-      <section className="pt-16 sm:pt-24 pb-16 px-4 max-w-5xl mx-auto text-center space-y-6">
-        {/* Status Pill */}
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-zinc-800/80 border border-zinc-700/60 text-zinc-300 text-xs font-medium">
-          <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-          99.99% Hardware Uptime • Over 1,200+ Active Worlds Hosted
-        </div>
+      {/* Hero Section with radial dotted background */}
+      <section className="relative pt-32 sm:pt-40 pb-20 px-5 overflow-hidden">
+        {/* Kryin-grid background */}
+        <div className="kryin-grid absolute inset-0 pointer-events-none" />
 
-        {/* Main Headline */}
-        <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold text-zinc-100 tracking-tight leading-[1.15]">
-          High-Performance Minecraft Hosting.
-          <span className="block text-emerald-400 mt-1">Built for Players & Creators.</span>
-        </h1>
-
-        {/* Subtitle */}
-        <p className="text-sm sm:text-base text-zinc-400 max-w-2xl mx-auto leading-relaxed">
-          Instant server provisioning, enterprise Anti-DDoS mitigation, ultra-fast NVMe storage, and zero-lag Java & Bedrock cross-play. Start on our free starter tier or scale up to dedicated high-frequency hardware.
-        </p>
-
-        {/* Action Buttons */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-          <Link
-            href="/login"
-            className="w-full sm:w-auto px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs sm:text-sm transition-colors shadow-sm flex items-center justify-center gap-2 cursor-pointer"
-          >
-            <span>Deploy Free Server</span>
-            <ArrowRight className="w-4 h-4" />
-          </Link>
-          <Link
-            href="/plans"
-            className="w-full sm:w-auto px-6 py-3 rounded-xl bg-[#151821] hover:bg-zinc-800 border border-zinc-700/80 text-zinc-200 font-semibold text-xs sm:text-sm transition-colors flex items-center justify-center gap-2"
-          >
-            <span>Explore Server Plans</span>
-          </Link>
-        </div>
-
-        {/* Trust & Spec Strip */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-6 max-w-3xl mx-auto text-left">
-          <div className="p-3 bg-[#151821] border border-zinc-800 rounded-xl">
-            <span className="text-[10px] text-zinc-500 uppercase block font-semibold">Average Ping</span>
-            <span className="text-sm font-bold text-zinc-100">&lt; 15 ms Global</span>
-          </div>
-          <div className="p-3 bg-[#151821] border border-zinc-800 rounded-xl">
-            <span className="text-[10px] text-zinc-500 uppercase block font-semibold">Tick Rate</span>
-            <span className="text-sm font-bold text-emerald-400">20.0 Stable TPS</span>
-          </div>
-          <div className="p-3 bg-[#151821] border border-zinc-800 rounded-xl">
-            <span className="text-[10px] text-zinc-500 uppercase block font-semibold">Solid State</span>
-            <span className="text-sm font-bold text-zinc-100">100% Gen4 NVMe</span>
-          </div>
-          <div className="p-3 bg-[#151821] border border-zinc-800 rounded-xl">
-            <span className="text-[10px] text-zinc-500 uppercase block font-semibold">Anti-DDoS Shield</span>
-            <span className="text-sm font-bold text-zinc-100">2.5+ Tbps Filtering</span>
-          </div>
-        </div>
-      </section>
-
-      {/* Realistic Control Panel Preview Showcase (Generic Human Clean Design - No Neon) */}
-      <section id="control-panel" className="max-w-5xl mx-auto px-4 pb-20">
-        <div className="bg-[#151821] border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl">
-          {/* Window Title Bar */}
-          <div className="bg-[#12151d] px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-zinc-700"></span>
-              <span className="w-3 h-3 rounded-full bg-zinc-700"></span>
-              <span className="w-3 h-3 rounded-full bg-zinc-700"></span>
-              <span className="text-xs font-mono text-zinc-400 ml-2">
-                kryinhost-node-01 • Paper 26.3 • Web Terminal & Inventory Inspector
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] bg-emerald-950/80 text-emerald-400 border border-emerald-800/80 font-semibold font-mono">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                ONLINE (20.0 TPS)
-              </span>
-            </div>
+        <div className="max-w-[1100px] mx-auto text-center relative z-10 space-y-6">
+          {/* Micro-badge */}
+          <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-[#16181d]/80 px-3.5 py-1 text-xs text-zinc-300 backdrop-blur-md">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span>High-frequency nodes online • Java 26 & Bedrock cross-play ready</span>
           </div>
 
-          {/* Quick Metrics Header inside Mockup */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-zinc-800 text-xs">
-            <div className="bg-[#151821] p-3">
-              <span className="text-[10px] text-zinc-500 uppercase block font-semibold">Memory Usage</span>
-              <span className="text-xs font-bold text-zinc-200 font-mono">4.18 GB / 8.00 GB (52%)</span>
-            </div>
-            <div className="bg-[#151821] p-3">
-              <span className="text-[10px] text-zinc-500 uppercase block font-semibold">CPU Utilization</span>
-              <span className="text-xs font-bold text-zinc-200 font-mono">14.2% (3.8 GHz Clock)</span>
-            </div>
-            <div className="bg-[#151821] p-3">
-              <span className="text-[10px] text-zinc-500 uppercase block font-semibold">Online Players</span>
-              <span className="text-xs font-bold text-emerald-400 font-mono">4 / 60 Players</span>
-            </div>
-            <div className="bg-[#151821] p-3">
-              <span className="text-[10px] text-zinc-500 uppercase block font-semibold">Bedrock Bridge</span>
-              <span className="text-xs font-bold text-zinc-200 font-mono">Geyser v2.12.1 Ready</span>
-            </div>
+          {/* Headline */}
+          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white leading-[1.12]">
+            High-performance Minecraft hosting.
+            <span className="block text-emerald-400 mt-1">Built with zero lag & instant cross-play.</span>
+          </h1>
+
+          {/* Subtitle */}
+          <p className="text-sm sm:text-base text-zinc-400 max-w-2xl mx-auto leading-relaxed">
+            Instant deployment, 2.5+ Tbps Anti-DDoS mitigation, ultra-fast NVMe storage, and built-in mobile/console cross-play. Start free or scale with high-frequency hardware.
+          </p>
+
+          {/* Action Pills */}
+          <div className="flex items-center justify-center gap-3.5 pt-2">
+            <FilledPill href="/login">
+              <span>Deploy Free Server</span>
+              <ArrowRight className="w-4 h-4" />
+            </FilledPill>
+            <GhostPill href="/plans">
+              <span>Explore Server Plans</span>
+            </GhostPill>
           </div>
 
-          {/* Console Output Mockup */}
-          <div className="p-4 sm:p-5 font-mono text-xs text-zinc-300 bg-[#0e1117] space-y-1.5 leading-relaxed overflow-x-auto border-t border-zinc-800">
-            <div className="text-zinc-500">[12:45:01 INFO]: Starting minecraft server version 26.3 (Paper build #249)</div>
-            <div className="text-zinc-400">[12:45:02 INFO]: Loading server.properties, difficulty: HARD, view-distance: 8</div>
-            <div className="text-zinc-400">[12:45:03 INFO]: [Paper] Using 8 worker threads for world generation & chunk I/O</div>
-            <div className="text-emerald-400">[12:45:04 INFO]: [Geyser-Spigot] Started Bedrock listener on 0.0.0.0:19132</div>
-            <div className="text-zinc-400">[12:45:04 INFO]: Preparing spawn area: 100% completed</div>
-            <div className="text-emerald-400">[12:45:05 INFO]: Done (3.812s)! For help, type &quot;help&quot;</div>
-            <div className="text-zinc-300">[12:45:10 INFO]: KryinAgent: Synchronizing player inventory & stats with web panel</div>
-            <div className="text-zinc-500 flex items-center gap-2 pt-2 border-t border-zinc-800/80">
-              <span className="text-emerald-500">&gt;</span>
-              <span className="text-zinc-400">Server listening for incoming Java (25565) & Bedrock (19132) connections...</span>
+          {/* Floating Product Artifacts Showcase (KryinOffice style) */}
+          <div className="pt-12 relative max-w-4xl mx-auto flex flex-col md:flex-row items-center justify-center gap-4">
+            <DraggableFloat className="w-full md:w-auto">
+              <TerminalArt />
+            </DraggableFloat>
+            <div className="flex flex-col sm:flex-row md:flex-col gap-4">
+              <DraggableFloat>
+                <TpsArt />
+              </DraggableFloat>
+              <DraggableFloat>
+                <GeyserArt />
+              </DraggableFloat>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Featured Server Plans Section */}
-      <section className="py-16 px-4 bg-[#12151d] border-y border-zinc-800">
-        <div className="max-w-6xl mx-auto space-y-8">
+      {/* Hairline Divider */}
+      <div className="kryin-divider max-w-6xl mx-auto my-4" />
+
+      {/* Infinite Keyword Marquee Strip */}
+      <section className="py-6 overflow-hidden">
+        <div className="flex whitespace-nowrap kryin-marquee gap-8 text-xs font-mono text-zinc-400">
+          {[...MARQUEE_ITEMS, ...MARQUEE_ITEMS].map((item, idx) => (
+            <span key={idx} className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              <span>{item}</span>
+            </span>
+          ))}
+        </div>
+      </section>
+
+      {/* Hairline Divider */}
+      <div className="kryin-divider max-w-6xl mx-auto my-4" />
+
+      {/* Core Advantages (KryinOffice 3-block feature presentation) */}
+      <section id="features" className="py-20 px-5 max-w-[1200px] mx-auto space-y-12">
+        <div className="text-center space-y-2">
+          <p className="text-[11px] font-mono text-emerald-400 uppercase tracking-wider font-semibold">
+            Engineered For Pure Performance
+          </p>
+          <h2 className="text-2xl sm:text-4xl font-extrabold text-white tracking-tight">
+            Everything your Minecraft community needs to thrive.
+          </h2>
+          <p className="text-xs sm:text-sm text-zinc-400 max-w-xl mx-auto">
+            No lag spikes, no convoluted configurations, and zero compromises on hardware quality.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          <div className="p-6 rounded-[20px] bg-[#16181d] border border-white/10 space-y-3 shadow-lg">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-mono uppercase text-zinc-400 font-semibold">Cross-Platform</span>
+              <Globe className="w-4 h-4 text-emerald-400" />
+            </div>
+            <h3 className="text-base font-bold text-white">Java & Bedrock Unified</h3>
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              Geyser and Floodgate are pre-installed. Players on mobile (iOS/Android), consoles (Xbox/PS5/Switch), and PC join the exact same world effortlessly.
+            </p>
+          </div>
+
+          <div className="p-6 rounded-[20px] bg-[#16181d] border border-white/10 space-y-3 shadow-lg">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-mono uppercase text-zinc-400 font-semibold">Zero Waste</span>
+              <Zap className="w-4 h-4 text-emerald-400" />
+            </div>
+            <h3 className="text-base font-bold text-white">Smart Hibernation & Wake</h3>
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              Similar to MineKeep, free-tier servers sleep when empty to conserve resources, waking in under 2 seconds the moment a player connects.
+            </p>
+          </div>
+
+          <div className="p-6 rounded-[20px] bg-[#16181d] border border-white/10 space-y-3 shadow-lg">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-mono uppercase text-zinc-400 font-semibold">Unmetered IO</span>
+              <HardDrive className="w-4 h-4 text-emerald-400" />
+            </div>
+            <h3 className="text-base font-bold text-white">Gen4 NVMe Solid State</h3>
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              Blazing 7,000 MB/s read speeds ensure rapid chunk loading, zero autosave hitches, and near-instant world initialization.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* 3 Numbered Steps (01, 02, 03) like KryinOffice */}
+      <section className="py-16 px-5 bg-[#121417] border-y border-white/10">
+        <div className="max-w-[1200px] mx-auto space-y-10">
+          <div className="text-center space-y-1">
+            <p className="text-[11px] font-mono text-emerald-400 uppercase tracking-wider font-semibold">
+              Instant Workflow
+            </p>
+            <h3 className="text-xl sm:text-3xl font-bold text-white">How it works in three steps</h3>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="p-6 rounded-[18px] bg-[#16181d] border border-white/10 space-y-2">
+              <span className="text-2xl font-mono font-bold text-emerald-400">01</span>
+              <h4 className="text-sm font-bold text-white">Deploy in 60 seconds</h4>
+              <p className="text-xs text-zinc-400 leading-relaxed">
+                Choose your Minecraft version (Paper 26.3, Purpur, or Fabric) and launch instantly with zero credit card required.
+              </p>
+            </div>
+
+            <div className="p-6 rounded-[18px] bg-[#16181d] border border-white/10 space-y-2">
+              <span className="text-2xl font-mono font-bold text-emerald-400">02</span>
+              <h4 className="text-sm font-bold text-white">Connect from any device</h4>
+              <p className="text-xs text-zinc-400 leading-relaxed">
+                Share your free subdomain (`yourname.kryin.gg`) with friends on PC or consoles using port 19132.
+              </p>
+            </div>
+
+            <div className="p-6 rounded-[18px] bg-[#16181d] border border-white/10 space-y-2">
+              <span className="text-2xl font-mono font-bold text-emerald-400">03</span>
+              <h4 className="text-sm font-bold text-white">Control from the web</h4>
+              <p className="text-xs text-zinc-400 leading-relaxed">
+                Stream live logs, inspect player inventories, manage plugins, and configure backups directly from your browser.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 8-Grid Capabilities Stack */}
+      <section className="py-20 px-5 max-w-[1200px] mx-auto space-y-10">
+        <div className="text-center space-y-2">
+          <p className="text-[11px] font-mono text-emerald-400 uppercase tracking-wider font-semibold">
+            Complete Infrastructure
+          </p>
+          <h2 className="text-2xl sm:text-3xl font-bold text-white">
+            Built-in tools for total server sovereignty
+          </h2>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {CAPABILITIES.map((cap, i) => {
+            const Icon = cap.icon;
+            return (
+              <div
+                key={i}
+                className="p-4 rounded-[16px] bg-[#16181d] border border-white/10 space-y-2 hover:border-white/20 transition-all"
+              >
+                <div className="w-8 h-8 rounded-lg bg-[#22252b] border border-white/10 flex items-center justify-center text-emerald-400">
+                  <Icon className="w-4 h-4" />
+                </div>
+                <h4 className="text-xs font-bold text-white">{cap.label}</h4>
+                <p className="text-[11px] text-zinc-400 leading-snug">{cap.note}</p>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Server Plans Section with KryinOffice Card Design */}
+      <section className="py-20 px-5 bg-[#121417] border-y border-white/10">
+        <div className="max-w-[1200px] mx-auto space-y-10">
           <div className="text-center space-y-2">
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[11px] bg-zinc-800 text-zinc-300 font-semibold border border-zinc-700/60 uppercase tracking-wider">
+            <p className="text-[11px] font-mono text-emerald-400 uppercase tracking-wider font-semibold">
               Transparent Pricing
-            </div>
-            <h2 className="text-2xl sm:text-4xl font-extrabold text-zinc-100">
-              Choose the Perfect Server Plan
+            </p>
+            <h2 className="text-2xl sm:text-4xl font-extrabold text-white">
+              Choose your server tier
             </h2>
-            <p className="text-xs sm:text-sm text-zinc-400 max-w-xl mx-auto">
-              Start free with automatic hibernation or scale up with 24/7 dedicated high-frequency resources.
+            <p className="text-xs sm:text-sm text-zinc-400 max-w-md mx-auto">
+              Start free with automatic hibernation or scale up with 24/7 dedicated resources.
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {/* Free Starter */}
-            <div className="bg-[#151821] border border-zinc-800 rounded-2xl p-5 flex flex-col justify-between hover:border-zinc-700 transition-all">
-              <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700/60">
-                  Free Forever
-                </span>
-                <h3 className="text-base font-bold text-zinc-100 mt-2">Free Starter</h3>
-                <p className="text-[11px] text-zinc-400 mt-1 min-h-[32px]">
-                  Ideal for small friend groups, testing worlds, and vanilla gameplay.
-                </p>
-
-                <div className="my-4 pb-4 border-b border-zinc-800">
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-2xl font-extrabold text-white">$0.00</span>
-                    <span className="text-[11px] text-zinc-500">/ forever</span>
-                  </div>
-                </div>
-
-                <div className="space-y-1.5 text-xs text-zinc-300 mb-4 pb-4 border-b border-zinc-800">
-                  <div className="flex justify-between"><span className="text-zinc-500">RAM:</span> <span className="font-semibold text-white">2 GB</span></div>
-                  <div className="flex justify-between"><span className="text-zinc-500">vCPU:</span> <span className="font-semibold text-white">1 Core</span></div>
-                  <div className="flex justify-between"><span className="text-zinc-500">Storage:</span> <span className="font-semibold text-white">10 GB SSD</span></div>
-                  <div className="flex justify-between"><span className="text-zinc-500">Players:</span> <span className="font-semibold text-white">Up to 5</span></div>
-                </div>
-
-                <ul className="space-y-2 text-[11px] text-zinc-400 mb-6">
-                  <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-400" /> Automatic Hibernation & Wake</li>
-                  <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-400" /> Java & Bedrock Cross-Play</li>
-                  <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-400" /> Web Console & Player Manager</li>
-                </ul>
-              </div>
-
-              <Link
-                href="/login"
-                className="w-full py-2.5 rounded-xl text-xs font-bold text-center bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700/60 transition-colors"
+            {PLANS_DATA.map((plan, idx) => (
+              <div
+                key={idx}
+                className={`p-6 rounded-[22px] flex flex-col justify-between transition-all ${
+                  plan.highlight
+                    ? 'bg-[#181d26] border-2 border-emerald-500/80 shadow-xl'
+                    : 'bg-[#16181d] border border-white/10 hover:border-white/20'
+                }`}
               >
-                Deploy Free
-              </Link>
-            </div>
+                <div>
+                  <span
+                    className={`text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
+                      plan.highlight
+                        ? 'bg-emerald-950 text-emerald-300 border border-emerald-700/60'
+                        : 'bg-[#22252b] text-zinc-400 border border-white/10'
+                    }`}
+                  >
+                    {plan.badge}
+                  </span>
+                  <h4 className="text-base font-bold text-white mt-2">{plan.name}</h4>
 
-            {/* Grass Explorer */}
-            <div className="bg-[#151821] border border-zinc-800 rounded-2xl p-5 flex flex-col justify-between hover:border-zinc-700 transition-all">
-              <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700/60">
-                  Entry Level
-                </span>
-                <h3 className="text-base font-bold text-zinc-100 mt-2">Grass Explorer</h3>
-                <p className="text-[11px] text-zinc-400 mt-1 min-h-[32px]">
-                  For active survival worlds, lightweight plugins, and vanilla+ SMPs.
-                </p>
-
-                <div className="my-4 pb-4 border-b border-zinc-800">
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-2xl font-extrabold text-white">$3.99</span>
-                    <span className="text-[11px] text-zinc-500">/ month</span>
+                  <div className="my-4 pb-4 border-b border-white/10">
+                    <span className="text-3xl font-extrabold text-white font-mono">{plan.price}</span>
+                    <span className="text-xs text-zinc-500 ml-1">/ {plan.cycle}</span>
                   </div>
-                </div>
 
-                <div className="space-y-1.5 text-xs text-zinc-300 mb-4 pb-4 border-b border-zinc-800">
-                  <div className="flex justify-between"><span className="text-zinc-500">RAM:</span> <span className="font-semibold text-white">4 GB DDR4</span></div>
-                  <div className="flex justify-between"><span className="text-zinc-500">vCPU:</span> <span className="font-semibold text-white">2 Cores</span></div>
-                  <div className="flex justify-between"><span className="text-zinc-500">Storage:</span> <span className="font-semibold text-white">35 GB NVMe</span></div>
-                  <div className="flex justify-between"><span className="text-zinc-500">Players:</span> <span className="font-semibold text-white">Up to 20</span></div>
-                </div>
-
-                <ul className="space-y-2 text-[11px] text-zinc-400 mb-6">
-                  <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-400" /> 24/7 Always-On (No Sleep)</li>
-                  <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-400" /> Gen4 NVMe Storage</li>
-                  <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-400" /> Daily Automated Backups</li>
-                </ul>
-              </div>
-
-              <Link
-                href="/login"
-                className="w-full py-2.5 rounded-xl text-xs font-bold text-center bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700/60 transition-colors"
-              >
-                Select Explorer
-              </Link>
-            </div>
-
-            {/* Iron Standard (Featured) */}
-            <div className="bg-[#181d29] border-2 border-emerald-600/80 rounded-2xl p-5 flex flex-col justify-between shadow-lg relative">
-              <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700/60">
-                  Most Popular
-                </span>
-                <h3 className="text-base font-bold text-zinc-100 mt-2">Iron Standard</h3>
-                <p className="text-[11px] text-zinc-400 mt-1 min-h-[32px]">
-                  Recommended for medium communities, Towny, Skyblock, and modded SMPs.
-                </p>
-
-                <div className="my-4 pb-4 border-b border-zinc-800">
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-2xl font-extrabold text-white">$7.99</span>
-                    <span className="text-[11px] text-zinc-500">/ month</span>
+                  <div className="space-y-1.5 text-xs text-zinc-300 mb-4 pb-4 border-b border-white/10 font-mono">
+                    <div className="flex justify-between"><span className="text-zinc-500 font-sans">RAM:</span> <span>{plan.ram}</span></div>
+                    <div className="flex justify-between"><span className="text-zinc-500 font-sans">vCPU:</span> <span>{plan.cpu}</span></div>
+                    <div className="flex justify-between"><span className="text-zinc-500 font-sans">Storage:</span> <span>{plan.storage}</span></div>
+                    <div className="flex justify-between"><span className="text-zinc-500 font-sans">Slots:</span> <span>{plan.slots}</span></div>
                   </div>
+
+                  <ul className="space-y-2 text-[11px] text-zinc-400 mb-6">
+                    {plan.features.map((f, fi) => (
+                      <li key={fi} className="flex items-center gap-2">
+                        <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                        <span>{f}</span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
 
-                <div className="space-y-1.5 text-xs text-zinc-300 mb-4 pb-4 border-b border-zinc-800">
-                  <div className="flex justify-between"><span className="text-zinc-500">RAM:</span> <span className="font-semibold text-white">8 GB DDR4/DDR5</span></div>
-                  <div className="flex justify-between"><span className="text-zinc-500">vCPU:</span> <span className="font-semibold text-white">3 Cores</span></div>
-                  <div className="flex justify-between"><span className="text-zinc-500">Storage:</span> <span className="font-semibold text-white">80 GB NVMe</span></div>
-                  <div className="flex justify-between"><span className="text-zinc-500">Players:</span> <span className="font-semibold text-white">Up to 60</span></div>
-                </div>
-
-                <ul className="space-y-2 text-[11px] text-zinc-400 mb-6">
-                  <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-400" /> Full Modpack & Plugin Support</li>
-                  <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-400" /> Enterprise Anti-DDoS Scrubbing</li>
-                  <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-400" /> Offsite Cloud Backups & Free MySQL</li>
-                </ul>
+                <Link
+                  href="/login"
+                  className={`w-full py-2.5 rounded-full text-xs font-bold text-center transition-all ${
+                    plan.highlight
+                      ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                      : 'bg-[#22252b] hover:bg-zinc-700 text-zinc-200 border border-white/10'
+                  }`}
+                >
+                  {plan.cta}
+                </Link>
               </div>
-
-              <Link
-                href="/login"
-                className="w-full py-2.5 rounded-xl text-xs font-bold text-center bg-emerald-600 hover:bg-emerald-500 text-white transition-colors shadow-sm"
-              >
-                Select Iron Standard
-              </Link>
-            </div>
-
-            {/* Diamond Performance */}
-            <div className="bg-[#151821] border border-zinc-800 rounded-2xl p-5 flex flex-col justify-between hover:border-zinc-700 transition-all">
-              <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700/60">
-                  High Performance
-                </span>
-                <h3 className="text-base font-bold text-zinc-100 mt-2">Diamond Performance</h3>
-                <p className="text-[11px] text-zinc-400 mt-1 min-h-[32px]">
-                  Heavy Forge & NeoForge packs (ATM 9, Prominence), high player counts.
-                </p>
-
-                <div className="my-4 pb-4 border-b border-zinc-800">
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-2xl font-extrabold text-white">$14.99</span>
-                    <span className="text-[11px] text-zinc-500">/ month</span>
-                  </div>
-                </div>
-
-                <div className="space-y-1.5 text-xs text-zinc-300 mb-4 pb-4 border-b border-zinc-800">
-                  <div className="flex justify-between"><span className="text-zinc-500">RAM:</span> <span className="font-semibold text-white">12 GB High-Freq</span></div>
-                  <div className="flex justify-between"><span className="text-zinc-500">vCPU:</span> <span className="font-semibold text-white">4 Cores</span></div>
-                  <div className="flex justify-between"><span className="text-zinc-500">Storage:</span> <span className="font-semibold text-white">150 GB NVMe</span></div>
-                  <div className="flex justify-between"><span className="text-zinc-500">Players:</span> <span className="font-semibold text-white">Unlimited</span></div>
-                </div>
-
-                <ul className="space-y-2 text-[11px] text-zinc-400 mb-6">
-                  <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-400" /> Dedicated High-Clock CPU Priority</li>
-                  <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-400" /> Zero Tick-Lag Guarantee</li>
-                  <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-400" /> Hourly Snapshot Restores</li>
-                </ul>
-              </div>
-
-              <Link
-                href="/login"
-                className="w-full py-2.5 rounded-xl text-xs font-bold text-center bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700/60 transition-colors"
-              >
-                Select Diamond
-              </Link>
-            </div>
+            ))}
           </div>
 
           <div className="text-center pt-2">
@@ -393,194 +571,59 @@ export default function HomePage() {
               href="/plans"
               className="inline-flex items-center gap-1.5 text-xs text-emerald-400 hover:underline font-semibold"
             >
-              <span>Compare all 5 server tiers and detailed feature matrix</span>
+              <span>Compare all 5 server plans & feature matrix</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </Link>
           </div>
         </div>
       </section>
 
-      {/* Core Advantages (Features Grid) */}
-      <section id="features" className="py-20 px-4 max-w-6xl mx-auto space-y-12">
-        <div className="text-center space-y-2">
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[11px] bg-zinc-800 text-zinc-300 font-semibold border border-zinc-700/60 uppercase tracking-wider">
-            Why KryinHost
-          </div>
-          <h2 className="text-2xl sm:text-4xl font-extrabold text-zinc-100">
-            Engineered for Flawless Gameplay
-          </h2>
-          <p className="text-xs sm:text-sm text-zinc-400 max-w-xl mx-auto">
-            Everything your community needs to thrive without lag, downtime, or complicated setups.
+      {/* FAQ Accordion */}
+      <section id="faq" className="max-w-3xl mx-auto px-5 py-20 space-y-8">
+        <div className="text-center space-y-1">
+          <p className="text-[11px] font-mono text-emerald-400 uppercase tracking-wider font-semibold">
+            Common Questions
           </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {/* 1. Cross-play */}
-          <div className="p-6 rounded-2xl bg-[#151821] border border-zinc-800 space-y-3">
-            <div className="w-10 h-10 rounded-xl bg-zinc-800 border border-zinc-700 text-emerald-400 flex items-center justify-center">
-              <Globe className="w-5 h-5" />
-            </div>
-            <h3 className="font-bold text-sm text-zinc-100">Java & Bedrock Cross-Play</h3>
-            <p className="text-xs text-zinc-400 leading-relaxed">
-              Native integration with Geyser and Floodgate. Friends on iPhone, Android, Xbox, PlayStation, Nintendo Switch, and PC play together on the exact same server.
-            </p>
-          </div>
-
-          {/* 2. Instant Hibernation */}
-          <div className="p-6 rounded-2xl bg-[#151821] border border-zinc-800 space-y-3">
-            <div className="w-10 h-10 rounded-xl bg-zinc-800 border border-zinc-700 text-emerald-400 flex items-center justify-center">
-              <Zap className="w-5 h-5" />
-            </div>
-            <h3 className="font-bold text-sm text-zinc-100">Smart Hibernation & Instant Wake</h3>
-            <p className="text-xs text-zinc-400 leading-relaxed">
-              Free-tier servers sleep when empty to conserve resources, waking in under 2 seconds the instant a player attempts to connect. Paid servers remain always-on 24/7.
-            </p>
-          </div>
-
-          {/* 3. 1-Click Installer */}
-          <div className="p-6 rounded-2xl bg-[#151821] border border-zinc-800 space-y-3">
-            <div className="w-10 h-10 rounded-xl bg-zinc-800 border border-zinc-700 text-emerald-400 flex items-center justify-center">
-              <RefreshCw className="w-5 h-5" />
-            </div>
-            <h3 className="font-bold text-sm text-zinc-100">1-Click Software & Modpacks</h3>
-            <p className="text-xs text-zinc-400 leading-relaxed">
-              Switch effortlessly between Paper, Purpur, Fabric, Spigot, Forge, and NeoForge. Install popular CurseForge and Modrinth modpacks with a single click.
-            </p>
-          </div>
-
-          {/* 4. Anti-DDoS */}
-          <div className="p-6 rounded-2xl bg-[#151821] border border-zinc-800 space-y-3">
-            <div className="w-10 h-10 rounded-xl bg-zinc-800 border border-zinc-700 text-emerald-400 flex items-center justify-center">
-              <Shield className="w-5 h-5" />
-            </div>
-            <h3 className="font-bold text-sm text-zinc-100">Enterprise Anti-DDoS Protection</h3>
-            <p className="text-xs text-zinc-400 leading-relaxed">
-              Multilayer 2.5+ Tbps traffic filtering shields your server from UDP packet floods, bot spam attacks, and targeted denial-of-service threats automatically.
-            </p>
-          </div>
-
-          {/* 5. NVMe Storage */}
-          <div className="p-6 rounded-2xl bg-[#151821] border border-zinc-800 space-y-3">
-            <div className="w-10 h-10 rounded-xl bg-zinc-800 border border-zinc-700 text-emerald-400 flex items-center justify-center">
-              <HardDrive className="w-5 h-5" />
-            </div>
-            <h3 className="font-bold text-sm text-zinc-100">Gen4 NVMe Solid State Storage</h3>
-            <p className="text-xs text-zinc-400 leading-relaxed">
-              Ultra-fast 7,000 MB/s sequential read/write drives ensure rapid chunk loading, zero autosave hitches, and near-instant world initialization.
-            </p>
-          </div>
-
-          {/* 6. Modern Web Panel */}
-          <div className="p-6 rounded-2xl bg-[#151821] border border-zinc-800 space-y-3">
-            <div className="w-10 h-10 rounded-xl bg-zinc-800 border border-zinc-700 text-emerald-400 flex items-center justify-center">
-              <Terminal className="w-5 h-5" />
-            </div>
-            <h3 className="font-bold text-sm text-zinc-100">Modern Web Management Panel</h3>
-            <p className="text-xs text-zinc-400 leading-relaxed">
-              Live web terminal console, visual player inventory & health inspector, online coordinates, file manager, and automated scheduler right from your browser.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* Hardware & Infrastructure Breakdown */}
-      <section id="hardware" className="py-16 px-4 bg-[#12151d] border-t border-zinc-800">
-        <div className="max-w-6xl mx-auto space-y-8">
-          <div className="text-center space-y-2">
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[11px] bg-zinc-800 text-zinc-300 font-semibold border border-zinc-700/60 uppercase tracking-wider">
-              Node Infrastructure
-            </div>
-            <h2 className="text-2xl sm:text-4xl font-extrabold text-zinc-100">
-              Enterprise Grade Server Hardware
-            </h2>
-            <p className="text-xs sm:text-sm text-zinc-400 max-w-xl mx-auto">
-              Minecraft is single-thread heavy. We only utilize high-frequency processors with maximum single-core IPC performance.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            <div className="p-5 rounded-2xl bg-[#151821] border border-zinc-800 space-y-3">
-              <Cpu className="w-6 h-6 text-emerald-400" />
-              <h3 className="text-sm font-bold text-zinc-100">High-Frequency Clocks</h3>
-              <p className="text-xs text-zinc-400 leading-relaxed">
-                Processor clock frequencies exceeding 3.8 GHz ensure that entity ticks, redstone contraptions, and mob farms run at a locked 20.0 TPS without tick drop.
-              </p>
-            </div>
-
-            <div className="p-5 rounded-2xl bg-[#151821] border border-zinc-800 space-y-3">
-              <HardDrive className="w-6 h-6 text-emerald-400" />
-              <h3 className="text-sm font-bold text-zinc-100">Enterprise ECC RAM</h3>
-              <p className="text-xs text-zinc-400 leading-relaxed">
-                Error-Correcting Code (ECC) memory prevents unexpected memory flips and eliminates data corruption during intensive chunk generation and world saves.
-              </p>
-            </div>
-
-            <div className="p-5 rounded-2xl bg-[#151821] border border-zinc-800 space-y-3">
-              <Radio className="w-6 h-6 text-emerald-400" />
-              <h3 className="text-sm font-bold text-zinc-100">Redundant 10Gbps Uplinks</h3>
-              <p className="text-xs text-zinc-400 leading-relaxed">
-                Direct connections to major Tier 1 network providers ensure low routing hops, minimal packet loss, and sub-15ms pings for domestic players.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Frequently Asked Questions */}
-      <section id="faq" className="max-w-4xl mx-auto px-4 py-20 space-y-8">
-        <div className="text-center space-y-2">
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[11px] bg-zinc-800 text-zinc-300 font-semibold border border-zinc-700/60 uppercase tracking-wider">
-            Got Questions?
-          </div>
-          <h2 className="text-2xl sm:text-3xl font-extrabold text-zinc-100">
-            Frequently Asked Questions
-          </h2>
-          <p className="text-xs sm:text-sm text-zinc-400">
-            Everything you need to know about setting up and running your server.
-          </p>
+          <h2 className="text-2xl sm:text-3xl font-bold text-white">Frequently Asked Questions</h2>
         </div>
 
         <div className="space-y-3">
           {[
             {
-              q: 'How fast is my server ready after creating an account?',
-              a: 'Instantly. Your Minecraft server is automatically provisioned and ready to join within 60 seconds of registration.',
+              q: 'How fast is my server ready after registration?',
+              a: 'Instantly. Your Paper 26.3 server instance is provisioned and listening for connections within 60 seconds.',
             },
             {
               q: 'How does Bedrock & Java Cross-Play work?',
-              a: 'Every server comes preconfigured with Geyser and Floodgate. Java edition players join using your custom domain (port 25565), while Bedrock players on mobile, Xbox, or PlayStation join on port 19132 into the same world.',
+              a: 'Every server has Geyser and Floodgate built-in. Java edition players join with port 25565, while Bedrock players on mobile or console join with port 19132 into the exact same world.',
             },
             {
               q: 'Can I upload my existing Minecraft singleplayer world?',
-              a: 'Yes! You have full access to our web-based file manager and SFTP. You can simply drag-and-drop your existing world folder or a zip archive directly into your server directory.',
+              a: 'Yes. You have full access to our web file manager and SFTP. Simply drag and drop your world folder or zip archive.',
             },
             {
-              q: 'What is the difference between the Free Starter plan and paid plans?',
-              a: 'Similar to MineKeep, our Free Starter plan includes automated hibernation—the server goes to sleep when empty and boots up automatically when someone attempts to connect. Paid plans remain online 24/7 without hibernation and offer more RAM and dedicated CPU cores.',
-            },
-            {
-              q: 'Can I install my own plugins and mods?',
-              a: 'Yes. You have 100% full file access. You can upload custom .jar plugins to the plugins directory or install Forge/Fabric mods through our 1-click installer.',
+              q: 'How does the Free Starter plan hibernation work?',
+              a: 'Similar to MineKeep, free servers enter a low-power hibernation state when all players disconnect. As soon as someone attempts to join, it wakes automatically in under 2 seconds.',
             },
           ].map((item, idx) => (
             <div
               key={idx}
-              className="bg-[#151821] border border-zinc-800 rounded-xl overflow-hidden transition-colors"
+              className="bg-[#16181d] border border-white/10 rounded-[16px] overflow-hidden"
             >
               <button
                 type="button"
-                onClick={() => toggleFaq(idx)}
-                className="w-full p-4 text-left flex items-center justify-between text-xs font-bold text-zinc-100 hover:text-emerald-400 transition-colors"
+                onClick={() => setActiveFaq(activeFaq === idx ? null : idx)}
+                className="w-full p-4 text-left flex items-center justify-between text-xs font-semibold text-zinc-100 hover:text-emerald-400 transition-colors"
               >
                 <span>{item.q}</span>
-                <ChevronRight
-                  className={`w-4 h-4 text-zinc-500 transition-transform ${
-                    activeFaq === idx ? 'rotate-90 text-emerald-400' : ''
+                <ChevronDown
+                  className={`w-4 h-4 text-zinc-400 transition-transform ${
+                    activeFaq === idx ? 'rotate-180 text-emerald-400' : ''
                   }`}
                 />
               </button>
               {activeFaq === idx && (
-                <div className="px-4 pb-4 pt-1 text-xs text-zinc-400 leading-relaxed border-t border-zinc-800/60">
+                <div className="px-4 pb-4 pt-1 text-xs text-zinc-400 leading-relaxed border-t border-white/5">
                   {item.a}
                 </div>
               )}
@@ -590,85 +633,52 @@ export default function HomePage() {
       </section>
 
       {/* Call to Action Banner */}
-      <section className="bg-[#12151d] border-t border-zinc-800 py-16 px-4">
-        <div className="max-w-4xl mx-auto text-center space-y-5">
-          <h2 className="text-2xl sm:text-4xl font-extrabold text-zinc-100">
-            Ready to Launch Your Minecraft Server?
+      <section className="py-20 px-5 bg-[#121417] border-t border-white/10 text-center">
+        <div className="max-w-2xl mx-auto space-y-5">
+          <h2 className="text-2xl sm:text-4xl font-extrabold text-white tracking-tight">
+            Ready to deploy your Minecraft world?
           </h2>
-          <p className="text-xs sm:text-sm text-zinc-400 max-w-xl mx-auto leading-relaxed">
-            Create your world in under 60 seconds with our free starter tier or choose high-frequency dedicated hardware. Zero credit card required to start.
+          <p className="text-xs sm:text-sm text-zinc-400 leading-relaxed">
+            Create your world in under 60 seconds with our free starter tier or choose high-frequency dedicated hardware.
           </p>
-
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-            <Link
-              href="/login"
-              className="w-full sm:w-auto px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs sm:text-sm transition-colors shadow-sm flex items-center justify-center gap-2 cursor-pointer"
-            >
+          <div className="flex items-center justify-center gap-3 pt-2">
+            <FilledPill href="/login">
               <span>Deploy Server Now</span>
               <ArrowRight className="w-4 h-4" />
-            </Link>
-            <Link
-              href="/plans"
-              className="w-full sm:w-auto px-6 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700/60 font-semibold text-xs sm:text-sm transition-colors flex items-center justify-center gap-2"
-            >
+            </FilledPill>
+            <GhostPill href="/plans">
               <span>Browse All Plans</span>
-            </Link>
+            </GhostPill>
           </div>
         </div>
       </section>
 
-      {/* Comprehensive Hosting Footer */}
-      <footer className="border-t border-zinc-800/80 bg-[#0e1117] py-12 px-4 text-xs text-zinc-500">
-        <div className="max-w-6xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8 pb-8 border-b border-zinc-800/60">
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded bg-emerald-600 flex items-center justify-center text-white">
-                <Server className="w-3.5 h-3.5" />
-              </div>
-              <span className="font-bold text-zinc-200 text-sm tracking-tight">KryinHost</span>
+      {/* Executive Footer */}
+      <footer className="border-t border-white/10 bg-[#0f1115] py-12 px-5 text-xs text-zinc-500">
+        <div className="max-w-[1200px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-2.5">
+            <div className="w-6 h-6 rounded bg-emerald-600 flex items-center justify-center text-white">
+              <Server className="w-3.5 h-3.5" />
             </div>
-            <p className="text-[11px] text-zinc-500 leading-relaxed">
-              Enterprise game server hosting. Low-latency Paper, Purpur, and Fabric instances with built-in Bedrock cross-play.
-            </p>
+            <span className="font-bold text-zinc-200 text-sm tracking-tight">KryinHost</span>
+            <span className="text-zinc-600">|</span>
+            <span className="text-zinc-500">Game Server Infrastructure</span>
           </div>
 
-          <div className="space-y-2">
-            <h4 className="font-bold text-zinc-300 uppercase tracking-wider text-[10px]">Hosting Solutions</h4>
-            <ul className="space-y-1.5 text-[11px]">
-              <li><Link href="/plans" className="hover:text-zinc-300 transition-colors">Minecraft Java Server</Link></li>
-              <li><Link href="/plans" className="hover:text-zinc-300 transition-colors">Minecraft Bedrock Server</Link></li>
-              <li><Link href="/plans" className="hover:text-zinc-300 transition-colors">Modpack Hosting (Forge)</Link></li>
-              <li><Link href="/plans" className="hover:text-zinc-300 transition-colors">Free Hibernation Tier</Link></li>
-            </ul>
-          </div>
-
-          <div className="space-y-2">
-            <h4 className="font-bold text-zinc-300 uppercase tracking-wider text-[10px]">Navigation & Panel</h4>
-            <ul className="space-y-1.5 text-[11px]">
-              <li><Link href="/login" className="hover:text-zinc-300 transition-colors">Client Control Panel</Link></li>
-              <li><Link href="/plans" className="hover:text-zinc-300 transition-colors">Server Plans & Pricing</Link></li>
-              <li><Link href="/#hardware" className="hover:text-zinc-300 transition-colors">Node Infrastructure</Link></li>
-              <li><Link href="/#faq" className="hover:text-zinc-300 transition-colors">Support & FAQ</Link></li>
-            </ul>
-          </div>
-
-          <div className="space-y-2">
-            <h4 className="font-bold text-zinc-300 uppercase tracking-wider text-[10px]">Legal & Status</h4>
-            <ul className="space-y-1.5 text-[11px]">
-              <li><span className="text-zinc-500">Terms of Service</span></li>
-              <li><span className="text-zinc-500">Privacy Policy</span></li>
-              <li><span className="text-zinc-500">Anti-DDoS SLA</span></li>
-              <li className="flex items-center gap-1.5 text-emerald-400">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                <span>All Systems Operational</span>
-              </li>
-            </ul>
+          <div className="flex items-center gap-5 text-[11px] text-zinc-400">
+            <Link href="/" className="hover:text-white transition-colors">Home</Link>
+            <Link href="/plans" className="hover:text-white transition-colors">Plans</Link>
+            <Link href="/login" className="hover:text-white transition-colors">Client Area</Link>
+            <span className="inline-flex items-center gap-1.5 text-emerald-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              All Systems Operational
+            </span>
           </div>
         </div>
 
-        <div className="max-w-6xl mx-auto pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px]">
-          <p>© 2026 KryinHost Inc. All rights reserved. Not an official Minecraft product. Not approved by or associated with Mojang or Microsoft.</p>
-          <p className="text-zinc-600 font-mono">ASUS ROG Phone 5s Node • Snapdragon 888 • OpenJDK 25</p>
+        <div className="max-w-[1200px] mx-auto mt-6 pt-6 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-zinc-600">
+          <p>© 2026 KryinHost Inc. All rights reserved. Not an official Minecraft product.</p>
+          <p className="font-mono">ASUS ROG Phone 5s Node • Snapdragon 888 • OpenJDK 25</p>
         </div>
       </footer>
     </div>
