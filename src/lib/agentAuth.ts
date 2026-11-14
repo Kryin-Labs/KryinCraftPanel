@@ -1,0 +1,38 @@
+import { createHash } from 'crypto';
+import { createClient } from '@supabase/supabase-js';
+
+// Service role client for backend agent authentication
+function getAdminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const secretKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SECRET_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+  return createClient(url, secretKey, {
+    auth: { persistSession: false },
+  });
+}
+
+export async function verifyAgentToken(req: Request) {
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return { error: 'Missing or invalid Authorization header', status: 401 };
+  }
+
+  const rawToken = authHeader.replace('Bearer ', '').trim();
+  const tokenHash = createHash('sha256').update(rawToken).digest('hex');
+
+  const supabase = getAdminClient();
+  const { data: server, error } = await supabase
+    .from('servers')
+    .select('*')
+    .eq('agent_token_hash', tokenHash)
+    .single();
+
+  if (error || !server) {
+    return { error: 'Unauthorized: invalid agent token', status: 401 };
+  }
+
+  return { server, supabase, rawToken };
+}
