@@ -57,8 +57,8 @@ export const MobileNav: React.FC = () => {
           <div>
             <div className="flex items-center gap-1.5">
               <span className="font-bold text-zinc-100 text-sm">KryinHost</span>
-              <span className="text-[9px] px-1 py-0.2 rounded bg-zinc-800 text-emerald-400 font-semibold border border-zinc-700/60">
-                ROG 5s
+              <span className="text-[9px] px-1 py-0.2 rounded bg-zinc-800 text-[#38bdf8] font-semibold border border-zinc-700/60">
+                India Node
               </span>
             </div>
             <p className="text-[10px] text-zinc-400">Paper 26.3 • {serverInfo.tps} TPS</p>
@@ -106,10 +106,10 @@ export const MobileNav: React.FC = () => {
               <div className="p-2.5 rounded-xl bg-[#151821] border border-zinc-800 space-y-1">
                 <div className="flex items-center justify-between text-[11px] text-zinc-300">
                   <span className="flex items-center gap-1 text-zinc-400">
-                    <Smartphone className="w-3 h-3 text-zinc-400" />
-                    ROG 5s Node
+                    <Server className="w-3 h-3 text-zinc-400" />
+                    Indian Node 01
                   </span>
-                  <span className="font-mono text-emerald-400">{metrics.batteryPercent}%</span>
+                  <span className="font-mono text-emerald-400">Online</span>
                 </div>
                 <p className="text-[10px] text-zinc-400">
                   RAM: {Math.round((metrics.usedRamMb / 1024) * 10) / 10} / 12 GB • Heap: {Math.round((metrics.javaHeapUsedMb / 1024) * 10) / 10} / 4 GB

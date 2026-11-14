@@ -346,7 +346,7 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
       const msg = trimmed.replace('say ', '');
       reply = `[Server] [Server] ${msg}`;
     } else if (trimmed === 'save-all') {
-      reply = `[Server] Saving the game (all chunks flushed to disk on ROG Phone 5s)`;
+      reply = `[Server] Saving the game (all chunks flushed to disk safely)`;
     }
 
     setTimeout(() => {

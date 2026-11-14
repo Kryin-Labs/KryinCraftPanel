@@ -115,8 +115,8 @@ export const Sidebar: React.FC = () => {
         <div className="p-2.5 rounded-xl bg-[#151821] border border-zinc-800 space-y-1.5">
           <div className="flex items-center justify-between text-[11px] text-zinc-400">
             <span className="flex items-center gap-1.5">
-              <Smartphone className="w-3.5 h-3.5 text-zinc-400" />
-              ROG 5s Node
+              <Server className="w-3.5 h-3.5 text-zinc-400" />
+              Indian Node 01
             </span>
             <span className="text-[10px] font-mono text-zinc-300">
               {metrics.batteryPercent}% ({metrics.batteryTempC ? `${metrics.batteryTempC}°C` : 'N/A'})

@@ -11,15 +11,15 @@ import {
 } from '@/types';
 
 export const initialServerInfo: ServerInfo = {
-  id: 'rog-5s-primary',
+  id: 'in-mumbai-01',
   name: 'Kryin Paper Server',
   status: 'online',
   pid: 18492,
   minecraftVersion: '26.3',
   paperBuild: 249,
   geyserVersion: '2.12.1-b1302',
-  device: 'ASUS ROG Phone 5s (Snapdragon 888)',
-  androidVersion: 'Android 13 (Termux aarch64)',
+  device: 'Indian High-Frequency Dedicated Node (Mumbai)',
+  androidVersion: 'OpenJDK 25 (Linux aarch64)',
   uptimeSeconds: 84320, // ~23.4 hours
   lastStartup: '2026-11-13T08:00:00Z',
   lastShutdown: null,
@@ -70,7 +70,7 @@ export const initialLogs: ConsoleLogEntry[] = [
   { id: '10', timestamp: '14:29:45', level: 'INFO', message: 'Notch[/192.168.0.105:51240] logged in with entity id 124 at (-142.5, 71.0, 320.4)' },
   { id: '11', timestamp: '14:31:02', level: 'INFO', message: 'UUID of player Jeb_ is 853c80ef-3c37-49fd-aa49-938b674adae6' },
   { id: '12', timestamp: '14:31:03', level: 'INFO', message: 'Jeb_[/192.168.0.120:53112] logged in with entity id 210 at (1205.8, 64.0, -840.1)' },
-  { id: '13', timestamp: '14:32:00', level: 'INFO', message: '<Notch> Welcome to Kryin server on ROG Phone 5s!' },
+  { id: '13', timestamp: '14:32:00', level: 'INFO', message: '<Notch> Welcome to Kryin India Server!' },
   { id: '14', timestamp: '14:32:15', level: 'INFO', message: '<Jeb_> Running smooth, 20 TPS is rock solid!' },
 ];
 
@@ -102,7 +102,7 @@ export const initialFiles: Record<string, ServerFile[]> = {
 
 export const sampleFileContents: Record<string, string> = {
   '/server.properties': `# Minecraft server properties for KryinCraftPanel
-# Running on ASUS ROG Phone 5s (Termux aarch64)
+# Running on Indian High-Frequency Dedicated Node
 enable-jmx-monitoring=false
 rcon.port=25575
 level-seed=
@@ -112,7 +112,7 @@ enable-query=false
 generator-settings={}
 enforce-secure-profile=false
 level-name=world
-motd=\\u00a7bKryin Paper Server \\u00a78[\\u00a7aROG 5s Phone\\u00a78]
+motd=\\u00a7bKryin Paper Server \\u00a78[\\u00a7aIndia Node\\u00a78]
 query.port=25565
 pvp=true
 generate-structures=true
