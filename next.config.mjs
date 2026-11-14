@@ -15,6 +15,18 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'minotar.net',
       },
+      {
+        protocol: 'https',
+        hostname: 'assets.mcasset.cloud',
+      },
+      {
+        protocol: 'https',
+        hostname: 'minecraft.wiki',
+      },
+      {
+        protocol: 'https',
+        hostname: 'raw.githubusercontent.com',
+      },
     ],
   },
 };

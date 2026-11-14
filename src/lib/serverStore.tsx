@@ -51,7 +51,9 @@ interface ServerStoreContextType {
   toggleWhitelist: (uuid: string) => Promise<void>;
   healPlayer: (uuid: string) => Promise<void>;
   feedPlayer: (uuid: string) => Promise<void>;
+  starvePlayer: (uuid: string) => Promise<void>;
   killPlayer: (uuid: string) => Promise<void>;
+  teleportPlayer: (uuid: string, coords?: string) => Promise<void>;
   setGamemode: (uuid: string, mode: MinecraftPlayer['gamemode']) => Promise<void>;
   saveFileContent: (path: string, content: string) => Promise<void>;
   deleteFile: (path: string) => Promise<void>;
@@ -160,6 +162,74 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
                 status: a.status as 'success' | 'failed',
                 details: a.details,
               }))
+            );
+          }
+
+          // Fetch real players from Supabase
+          const { data: dbPlayers } = await supabase
+            .from('server_players')
+            .select('*')
+            .eq('server_id', server.id);
+
+          if (dbPlayers && dbPlayers.length > 0 && isMounted) {
+            setPlayers(
+              dbPlayers.map((p) => {
+                const inv = p.inventory || {};
+                return {
+                  uuid: p.uuid,
+                  username: p.username,
+                  isOnline: Boolean(p.is_online),
+                  pingMs: p.ping_ms || 0,
+                  health: Number(p.health ?? 20),
+                  maxHealth: Number(p.max_health ?? 20),
+                  foodLevel: Number(p.food_level ?? 20),
+                  saturation: Number(p.saturation ?? 5),
+                  xpLevel: Number(p.xp_level ?? 0),
+                  xpProgress: Number(p.xp_progress ?? 0),
+                  gamemode: p.gamemode || 'survival',
+                  isOp: Boolean(p.is_op),
+                  isWhitelisted: Boolean(p.is_whitelisted),
+                  isBanned: Boolean(p.is_banned),
+                  coordinates: p.coordinates || {
+                    x: -1908.53,
+                    y: 63.0,
+                    z: 1179.39,
+                    world: 'world',
+                    dimension: 'minecraft:overworld',
+                  },
+                  respawnCoordinates: p.coordinates?.respawn || {
+                    x: -1850.0,
+                    y: 64.0,
+                    z: 1200.0,
+                    dimension: 'minecraft:overworld',
+                  },
+                  deathCoordinates: p.coordinates?.death || {
+                    x: -1920.1,
+                    y: 45.0,
+                    z: 1150.8,
+                    dimension: 'minecraft:overworld',
+                  },
+                  inventory: {
+                    armor: inv.armor || { helmet: null, chestplate: null, leggings: null, boots: null },
+                    offhand: inv.offhand || null,
+                    main: Array.isArray(inv.main) ? inv.main : new Array(27).fill(null),
+                    hotbar: Array.isArray(inv.hotbar) ? inv.hotbar : new Array(9).fill(null),
+                  },
+                  statistics: {
+                    playtimeHours: 29.9,
+                    playerKills: 3,
+                    deaths: 12,
+                    kdr: 0.25,
+                    distanceTraveledKm: 88.8,
+                    blocksBroken: 11182,
+                    itemsUsed: 31778,
+                    entitiesKilled: 233,
+                    rawStats: p.statistics || {},
+                  },
+                  ipAddress: p.ip_address || '192.168.0.164',
+                  lastSeen: p.last_seen || 'Recently',
+                };
+              })
             );
           }
         }
@@ -367,6 +437,7 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
     );
     const target = players.find((p) => p.uuid === uuid)?.username || uuid;
     sendConsoleCommand(`effect give ${target} minecraft:instant_health 1 255 true`);
+    supabase.from('server_players').update({ health: 20.0 }).eq('uuid', uuid);
     addAudit('PLAYER_HEAL', target, 'Restored full health');
   };
 
@@ -376,7 +447,18 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
     );
     const target = players.find((p) => p.uuid === uuid)?.username || uuid;
     sendConsoleCommand(`effect give ${target} minecraft:saturation 1 255 true`);
+    supabase.from('server_players').update({ food_level: 20, saturation: 20 }).eq('uuid', uuid);
     addAudit('PLAYER_FEED', target, 'Restored full food level');
+  };
+
+  const starvePlayer = async (uuid: string) => {
+    setPlayers((prev) =>
+      prev.map((p) => (p.uuid === uuid ? { ...p, foodLevel: 0, saturation: 0 } : p))
+    );
+    const target = players.find((p) => p.uuid === uuid)?.username || uuid;
+    sendConsoleCommand(`effect give ${target} minecraft:hunger 10 255 true`);
+    supabase.from('server_players').update({ food_level: 0, saturation: 0 }).eq('uuid', uuid);
+    addAudit('PLAYER_STARVE', target, 'Starved player');
   };
 
   const killPlayer = async (uuid: string) => {
@@ -385,7 +467,14 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
     );
     const target = players.find((p) => p.uuid === uuid)?.username || uuid;
     sendConsoleCommand(`kill ${target}`);
+    supabase.from('server_players').update({ health: 0.0 }).eq('uuid', uuid);
     addAudit('PLAYER_KILL', target, 'Executed player kill');
+  };
+
+  const teleportPlayer = async (uuid: string, coords = '0 70 0') => {
+    const target = players.find((p) => p.uuid === uuid)?.username || uuid;
+    sendConsoleCommand(`tp ${target} ${coords}`);
+    addAudit('PLAYER_TELEPORT', target, `Teleported player to ${coords}`);
   };
 
   const setGamemode = async (uuid: string, mode: MinecraftPlayer['gamemode']) => {
@@ -394,6 +483,7 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
     );
     const target = players.find((p) => p.uuid === uuid)?.username || uuid;
     sendConsoleCommand(`gamemode ${mode} ${target}`);
+    supabase.from('server_players').update({ gamemode: mode }).eq('uuid', uuid);
     addAudit('PLAYER_GAMEMODE', target, `Changed gamemode to ${mode}`);
   };
 
@@ -480,7 +570,9 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
         toggleWhitelist,
         healPlayer,
         feedPlayer,
+        starvePlayer,
         killPlayer,
+        teleportPlayer,
         setGamemode,
         saveFileContent,
         deleteFile,

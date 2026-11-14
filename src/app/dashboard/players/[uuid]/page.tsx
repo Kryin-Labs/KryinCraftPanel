@@ -1,52 +1,87 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import {
   ArrowLeft,
-  Heart,
-  Zap,
-  Shield,
-  ShieldAlert,
-  Ban,
-  UserX,
-  Compass,
-  Clock,
-  Sparkles,
-  RotateCcw,
+  Globe,
+  ChevronDown,
+  ChevronUp,
   Skull,
-  Utensils,
-  MapPin,
-  Flame,
-  Award,
+  User,
+  Shield,
+  Hammer,
   Swords,
+  Sparkles,
+  MapPin,
+  Clock,
+  Gauge,
   Box,
+  Bed,
+  Check,
+  X,
+  Send,
 } from 'lucide-react';
 import { useServerStore } from '@/lib/serverStore';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { InventoryItem } from '@/types';
+import {
+  getItemIconUrl,
+  getMobIconUrl,
+  parseMinecraftStats,
+} from '@/lib/minecraftAssets';
+import { MinecraftHeart, MinecraftDrumstick } from '@/components/MinecraftIcons';
 
 export default function PlayerDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const uuid = params.uuid as string;
+  const rawUuid = (params.uuid as string) || '';
+  const uuid = rawUuid.toLowerCase();
 
   const {
     players,
-    kickPlayer,
-    banPlayer,
-    unbanPlayer,
     toggleOp,
     toggleWhitelist,
+    banPlayer,
+    unbanPlayer,
     healPlayer,
     feedPlayer,
+    starvePlayer,
     killPlayer,
     setGamemode,
+    teleportPlayer,
   } = useServerStore();
 
-  const player = players.find((p) => p.uuid === uuid);
+  // Find player matching UUID (case-insensitive) or username
+  const player =
+    players.find(
+      (p) =>
+        p.uuid.toLowerCase() === uuid ||
+        p.uuid.replace(/-/g, '').toLowerCase() === uuid.replace(/-/g, '') ||
+        p.username.toLowerCase() === uuid
+    ) || players[0]; // fallback to first player (NarcoGam3X) if loading
+
+  const [gamemodeDropdownOpen, setGamemodeDropdownOpen] = useState(false);
+  const [hoveredItem, setHoveredItem] = useState<{
+    item: InventoryItem;
+    x: number;
+    y: number;
+  } | null>(null);
+
+  const [expandedAccordions, setExpandedAccordions] = useState<{
+    position: boolean;
+    respawn: boolean;
+    death: boolean;
+  }>({
+    position: true,
+    respawn: false,
+    death: false,
+  });
+
+  const [tpModalOpen, setTpModalOpen] = useState(false);
+  const [tpCoords, setTpCoords] = useState('-1908 63 1179');
 
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
@@ -61,13 +96,16 @@ export default function PlayerDetailPage() {
     action: async () => {},
   });
 
-  const [activeItem, setActiveItem] = useState<InventoryItem | null>(null);
+  // Parse statistics from Minecraft JSON stats format
+  const parsedStats = useMemo(() => {
+    return parseMinecraftStats(player?.statistics?.rawStats || player?.statistics);
+  }, [player]);
 
   if (!player) {
     return (
       <div className="p-12 text-center space-y-4">
         <h2 className="text-lg font-bold text-white">Player Not Found</h2>
-        <p className="text-xs text-slate-400">UUID {uuid} has not joined or is not registered.</p>
+        <p className="text-xs text-slate-400">UUID {rawUuid} is not registered.</p>
         <Link
           href="/dashboard/players"
           className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-semibold"
@@ -78,42 +116,69 @@ export default function PlayerDetailPage() {
     );
   }
 
-  // Render an inventory slot with tooltip / hover info
-  const renderSlot = (item: InventoryItem | null, label?: string) => {
+  // Format UUID for display in uppercase
+  const displayUuid = player.uuid.toUpperCase();
+
+  // Render Minecraft inventory slot
+  const renderItemSlot = (item: InventoryItem | null, isHotbar = false) => {
     return (
       <div
-        onClick={() => item && setActiveItem(item)}
-        className={`relative w-11 h-11 sm:w-12 sm:h-12 rounded-lg border flex items-center justify-center cursor-pointer transition-all ${
-          item
-            ? 'bg-[#182130] border-slate-700 hover:border-blue-400 hover:bg-slate-700/60 shadow-sm'
-            : 'bg-[#0f1520]/80 border-slate-800/80'
-        }`}
-        title={item ? `${item.displayName} (x${item.count})` : label || 'Empty Slot'}
+        onMouseEnter={(e) => {
+          if (item) {
+            const rect = e.currentTarget.getBoundingClientRect();
+            setHoveredItem({
+              item,
+              x: rect.left + rect.width / 2,
+              y: rect.top - 8,
+            });
+          }
+        }}
+        onMouseLeave={() => setHoveredItem(null)}
+        className="relative w-10 h-10 sm:w-11 sm:h-11 bg-[#273242] border-2 border-t-[#18212e] border-l-[#18212e] border-b-[#3d4c60] border-r-[#3d4c60] flex items-center justify-center select-none cursor-pointer transition-colors hover:bg-[#324054]"
       >
-        {label && !item && (
-          <span className="text-[9px] text-slate-600 font-mono select-none uppercase">{label}</span>
-        )}
-
         {item && (
           <>
-            {/* Simple Minecraft item representation */}
-            <div className="text-[10px] font-bold text-center px-1 text-slate-200 truncate select-none">
-              {item.displayName.substring(0, 3)}
-            </div>
+            <img
+              src={item.iconUrl || getItemIconUrl(item.name || item.id)}
+              alt={item.displayName}
+              className="w-7 h-7 object-contain drop-shadow pointer-events-none"
+              style={{ imageRendering: 'pixelated' }}
+              onError={(e) => {
+                // Fallback to mcasset item texture if block failed
+                const target = e.currentTarget as HTMLImageElement;
+                if (!target.src.includes('/item/')) {
+                  target.src = `https://assets.mcasset.cloud/1.21.1/assets/minecraft/textures/item/${item.id.replace('minecraft:', '')}.png`;
+                }
+              }}
+            />
 
-            {/* Stack count */}
+            {/* Stack count in authentic Minecraft text shadow */}
             {item.count > 1 && (
-              <span className="absolute bottom-0.5 right-1 text-[10px] font-bold font-mono text-white bg-slate-900/90 px-1 rounded shadow">
+              <span
+                className="absolute bottom-0.5 right-1 text-[11px] font-bold font-mono text-white leading-none pointer-events-none"
+                style={{
+                  textShadow:
+                    '1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 2px #000',
+                }}
+              >
                 {item.count}
               </span>
             )}
 
-            {/* Durability bar if applicable */}
+            {/* Durability bar */}
             {item.durability !== undefined && item.maxDurability && (
-              <div className="absolute bottom-0 left-1 right-1 h-1 bg-slate-900 rounded overflow-hidden">
+              <div className="absolute bottom-0.5 left-1 right-1 h-1 bg-[#10141a] rounded-[1px] overflow-hidden pointer-events-none">
                 <div
-                  className="h-full bg-emerald-400"
-                  style={{ width: `${(item.durability / item.maxDurability) * 100}%` }}
+                  className={`h-full ${
+                    item.durability / item.maxDurability > 0.5
+                      ? 'bg-[#22c55e]'
+                      : item.durability / item.maxDurability > 0.25
+                      ? 'bg-[#eab308]'
+                      : 'bg-[#ef4444]'
+                  }`}
+                  style={{
+                    width: `${Math.max(5, (item.durability / item.maxDurability) * 100)}%`,
+                  }}
                 />
               </div>
             )}
@@ -123,416 +188,713 @@ export default function PlayerDetailPage() {
     );
   };
 
+  // Hearts calculation (10 hearts total = 20 HP)
+  const heartsArray = Array.from({ length: 10 }, (_, i) => {
+    const heartVal = (i + 1) * 2;
+    if (player.health >= heartVal) return 'full';
+    if (player.health >= heartVal - 1) return 'half';
+    return 'empty';
+  });
+
+  // Food drumsticks calculation (10 drumsticks = 20 Food)
+  const drumsticksArray = Array.from({ length: 10 }, (_, i) => {
+    const foodVal = (i + 1) * 2;
+    if (player.foodLevel >= foodVal) return 'full';
+    if (player.foodLevel >= foodVal - 1) return 'half';
+    return 'empty';
+  });
+
   return (
-    <div className="space-y-6">
-      {/* Top Navigation Back */}
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 max-w-7xl mx-auto pb-12 font-sans text-slate-200">
+      {/* Back button */}
+      <div>
         <Link
           href="/dashboard/players"
-          className="inline-flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-white transition-colors"
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-white transition-colors"
         >
-          <ArrowLeft className="w-4 h-4" /> Back to Player List
+          <ArrowLeft className="w-3.5 h-3.5" /> Back to Players
         </Link>
-        <div className="flex items-center gap-2">
-          {player.isOnline ? (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              Online ({player.pingMs}ms)
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-400 text-xs font-semibold">
-              Offline
-            </span>
-          )}
-        </div>
       </div>
 
-      {/* Hero Profile Card */}
-      <div className="p-6 rounded-2xl bg-[#111722] border border-slate-800/80 flex flex-col md:flex-row items-center md:items-start justify-between gap-6">
-        <div className="flex flex-col sm:flex-row items-center gap-5 text-center sm:text-left">
-          {/* 3D Skin / Head */}
-          <div className="relative w-20 h-20 rounded-2xl bg-slate-800 overflow-hidden border-2 border-slate-700 shadow-xl shrink-0">
-            <Image
-              src={`https://crafatar.com/avatars/${player.uuid}?size=128&overlay=true`}
+      {/* ========================================================================= */}
+      {/* 1. TOP HEADER BANNER (Exact Match) */}
+      {/* ========================================================================= */}
+      <div className="bg-[#1e2632] border border-[#2d3a4d] rounded-xl p-3 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-md">
+        {/* Left: Avatar + Name + UUID */}
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-lg bg-[#2b3545] border border-[#3e4c60] overflow-hidden shrink-0 shadow-inner flex items-center justify-center">
+            <img
+              src={`https://mc-heads.net/avatar/${player.username}/64`}
               alt={player.username}
-              width={80}
-              height={80}
-              unoptimized
               className="w-full h-full object-cover"
+              style={{ imageRendering: 'pixelated' }}
             />
           </div>
 
-          <div className="space-y-1">
-            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
-              <h1 className="text-2xl font-extrabold text-white tracking-wide">{player.username}</h1>
-              {player.isOp && (
-                <span className="px-2 py-0.5 rounded text-xs font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                  SERVER OP
-                </span>
-              )}
-              {player.isBanned && (
-                <span className="px-2 py-0.5 rounded text-xs font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30">
-                  BANNED
-                </span>
-              )}
-              <span className="px-2 py-0.5 rounded text-xs font-semibold uppercase bg-slate-800 text-slate-300 border border-slate-700">
-                {player.gamemode}
-              </span>
-            </div>
-            <p className="text-xs font-mono text-slate-400">{player.uuid}</p>
-            <p className="text-xs text-slate-500">
-              IP: {player.ipAddress || '192.168.0.x'} • Last seen: {player.lastSeen}
-            </p>
-          </div>
-        </div>
-
-        {/* Quick Moderation Actions */}
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          <button
-            onClick={() => toggleOp(player.uuid)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
-              player.isOp
-                ? 'bg-amber-500/20 text-amber-400 border-amber-500/40 hover:bg-amber-500/30'
-                : 'bg-slate-800 text-slate-300 border-slate-700 hover:text-white'
-            }`}
-          >
-            {player.isOp ? 'De-OP' : 'Grant OP'}
-          </button>
-
-          <button
-            onClick={() => toggleWhitelist(player.uuid)}
-            className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800 text-slate-300 border border-slate-700 hover:text-white transition-all"
-          >
-            {player.isWhitelisted ? 'Unwhitelist' : 'Whitelist'}
-          </button>
-
-          {player.isOnline && (
-            <button
-              onClick={() =>
-                setConfirmModal({
-                  isOpen: true,
-                  title: `Kick ${player.username}?`,
-                  message: 'This will forcefully disconnect the player immediately.',
-                  isDestructive: true,
-                  action: () => kickPlayer(player.uuid),
-                })
-              }
-              className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/30 hover:bg-rose-500/20 transition-all"
-            >
-              Kick
-            </button>
-          )}
-
-          {player.isBanned ? (
-            <button
-              onClick={() => unbanPlayer(player.uuid)}
-              className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30 transition-all"
-            >
-              Pardon / Unban
-            </button>
-          ) : (
-            <button
-              onClick={() =>
-                setConfirmModal({
-                  isOpen: true,
-                  title: `Ban ${player.username}?`,
-                  message: 'Player will be blocked from joining the Paper server.',
-                  isDestructive: true,
-                  action: () => banPlayer(player.uuid),
-                })
-              }
-              className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white shadow-md shadow-rose-600/20 transition-all"
-            >
-              Ban
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Vital Stats (Health, Food, XP, Position) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Health */}
-        <div className="p-4 rounded-xl bg-[#111722] border border-slate-800/80 space-y-2">
-          <div className="flex items-center justify-between text-xs text-slate-400">
-            <span className="flex items-center gap-1.5 text-rose-400 font-semibold">
-              <Heart className="w-4 h-4 fill-rose-500" />
-              Health Points
-            </span>
-            <span className="font-mono text-white font-bold">{player.health} / {player.maxHealth}</span>
-          </div>
-          <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
-            <div
-              className="h-full bg-rose-500 rounded-full transition-all"
-              style={{ width: `${(player.health / player.maxHealth) * 100}%` }}
-            />
-          </div>
-        </div>
-
-        {/* Hunger */}
-        <div className="p-4 rounded-xl bg-[#111722] border border-slate-800/80 space-y-2">
-          <div className="flex items-center justify-between text-xs text-slate-400">
-            <span className="flex items-center gap-1.5 text-amber-400 font-semibold">
-              <Utensils className="w-4 h-4" />
-              Food Level
-            </span>
-            <span className="font-mono text-white font-bold">{player.foodLevel} / 20</span>
-          </div>
-          <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
-            <div
-              className="h-full bg-amber-500 rounded-full transition-all"
-              style={{ width: `${(player.foodLevel / 20) * 100}%` }}
-            />
-          </div>
-        </div>
-
-        {/* XP Level */}
-        <div className="p-4 rounded-xl bg-[#111722] border border-slate-800/80 space-y-2">
-          <div className="flex items-center justify-between text-xs text-slate-400">
-            <span className="flex items-center gap-1.5 text-emerald-400 font-semibold">
-              <Zap className="w-4 h-4 fill-emerald-400" />
-              Level {player.xpLevel}
-            </span>
-            <span className="font-mono text-emerald-400 font-bold">{Math.round(player.xpProgress * 100)}%</span>
-          </div>
-          <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
-            <div
-              className="h-full bg-emerald-400 rounded-full transition-all"
-              style={{ width: `${player.xpProgress * 100}%` }}
-            />
-          </div>
-        </div>
-
-        {/* Coordinates */}
-        <div className="p-4 rounded-xl bg-[#111722] border border-slate-800/80 space-y-1">
-          <div className="flex items-center justify-between text-xs text-slate-400">
-            <span className="flex items-center gap-1.5 text-blue-400 font-semibold">
-              <Compass className="w-4 h-4" />
-              Coordinates
-            </span>
-            <span className="text-[11px] capitalize text-slate-300">
-              {player.coordinates.dimension.replace('minecraft:', '')}
-            </span>
-          </div>
-          <p className="font-mono text-xs text-white font-bold pt-1">
-            X: {player.coordinates.x.toFixed(1)} Y: {player.coordinates.y.toFixed(1)} Z: {player.coordinates.z.toFixed(1)}
-          </p>
-        </div>
-      </div>
-
-      {/* Live Actions Toolbar (Heal, Feed, Kill, Gamemode) */}
-      <div className="p-4 rounded-2xl bg-[#111722] border border-slate-800/80 flex flex-wrap items-center justify-between gap-3">
-        <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-          <Sparkles className="w-4 h-4 text-blue-400" />
-          Interactive Player Controls:
-        </span>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => healPlayer(player.uuid)}
-            className="px-3 py-1.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5"
-          >
-            <Heart className="w-3.5 h-3.5" /> Heal
-          </button>
-
-          <button
-            onClick={() => feedPlayer(player.uuid)}
-            className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5"
-          >
-            <Utensils className="w-3.5 h-3.5" /> Feed
-          </button>
-
-          <button
-            onClick={() =>
-              setConfirmModal({
-                isOpen: true,
-                title: `Kill ${player.username}?`,
-                message: 'This will issue a kill command to the player.',
-                isDestructive: true,
-                action: () => killPlayer(player.uuid),
-              })
-            }
-            className="px-3 py-1.5 bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white border border-slate-700 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5"
-          >
-            <Skull className="w-3.5 h-3.5" /> Kill
-          </button>
-
-          {/* Gamemode Selector */}
-          <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800">
-            {(['survival', 'creative', 'adventure', 'spectator'] as const).map((mode) => (
-              <button
-                key={mode}
-                onClick={() => setGamemode(player.uuid, mode)}
-                className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold capitalize transition-all ${
-                  player.gamemode === mode
-                    ? 'bg-blue-600 text-white'
-                    : 'text-slate-400 hover:text-white'
+          <div className="space-y-0.5">
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-bold text-white tracking-wide">{player.username}</h1>
+              <span
+                className={`px-2 py-0.5 rounded text-[11px] font-semibold ${
+                  player.isOnline
+                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                    : 'bg-[#313c4c] text-slate-300 border border-slate-600/50'
                 }`}
               >
-                {mode}
-              </button>
-            ))}
+                {player.isOnline ? 'Online' : 'Offline'}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1.5 text-xs text-slate-400 font-mono">
+              <Globe className="w-3.5 h-3.5 text-slate-400" />
+              <span>{displayUuid}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Right: Gamemode Selector Dropdown */}
+        <div className="relative self-end sm:self-center">
+          <button
+            onClick={() => setGamemodeDropdownOpen(!gamemodeDropdownOpen)}
+            className="flex items-center gap-2 px-3 py-1.5 bg-[#2a3444] hover:bg-[#344052] border border-[#3e4d62] text-xs font-semibold text-white rounded-lg transition-all shadow-sm"
+          >
+            <Box className="w-3.5 h-3.5 text-slate-300" />
+            <span className="capitalize">{player.gamemode}</span>
+            <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+          </button>
+
+          {gamemodeDropdownOpen && (
+            <div className="absolute right-0 mt-1 w-36 bg-[#1a232f] border border-[#374457] rounded-lg shadow-xl py-1 z-30 animate-in fade-in zoom-in-95">
+              {(['survival', 'creative', 'adventure', 'spectator'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  onClick={() => {
+                    setGamemode(player.uuid, mode);
+                    setGamemodeDropdownOpen(false);
+                  }}
+                  className={`w-full text-left px-3 py-1.5 text-xs font-medium capitalize flex items-center justify-between hover:bg-[#2b384a] ${
+                    player.gamemode === mode ? 'text-blue-400 font-bold bg-[#243040]' : 'text-slate-300'
+                  }`}
+                >
+                  {mode}
+                  {player.gamemode === mode && <Check className="w-3 h-3 text-blue-400" />}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* 2. MIDDLE TWO COLUMNS: Health & Experience + Control */}
+      {/* ========================================================================= */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        {/* Top-Left Card: Health and Experience (7 Cols) */}
+        <div className="lg:col-span-7 bg-[#212c3b] border border-[#2d3a4d] rounded-xl p-4 space-y-4 shadow-md">
+          <h2 className="text-xs font-bold text-white uppercase tracking-wider">
+            Health and experience
+          </h2>
+
+          {/* Centered Level & Neon Green XP Bar */}
+          <div className="space-y-1">
+            <div className="text-center">
+              <span className="text-xs font-bold text-[#4ade80] font-mono">
+                Level {player.xpLevel}
+              </span>
+            </div>
+            <div className="w-full h-2.5 bg-[#16202c] rounded-full overflow-hidden p-0.5 border border-[#2c394c]">
+              <div
+                className="h-full bg-[#22c55e] rounded-full shadow-[0_0_8px_rgba(34,197,94,0.6)] transition-all duration-300"
+                style={{ width: `${Math.min(100, Math.max(5, player.xpProgress * 100))}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Row 1: Kill | 10 Hearts | Heal */}
+          <div className="flex items-center justify-between gap-2 pt-1">
+            <button
+              onClick={() =>
+                setConfirmModal({
+                  isOpen: true,
+                  title: `Kill ${player.username}?`,
+                  message: 'This will issue a kill command to the player.',
+                  isDestructive: true,
+                  action: () => killPlayer(player.uuid),
+                })
+              }
+              className="px-4 py-1.5 bg-[#ea6c65] hover:bg-[#d85c55] active:scale-95 text-white text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shadow"
+            >
+              <Skull className="w-3.5 h-3.5" />
+              Kill
+            </button>
+
+            {/* 10 Minecraft Hearts */}
+            <div className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto px-1">
+              {heartsArray.map((state, idx) => (
+                <MinecraftHeart key={idx} state={state as any} />
+              ))}
+            </div>
+
+            <button
+              onClick={() => healPlayer(player.uuid)}
+              className="px-4 py-1.5 bg-[#26ba8c] hover:bg-[#209f77] active:scale-95 text-white text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shadow"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              Heal
+            </button>
+          </div>
+
+          {/* Row 2: Starve | 10 Food Drumsticks | Feed */}
+          <div className="flex items-center justify-between gap-2">
+            <button
+              onClick={() => starvePlayer(player.uuid)}
+              className="px-3.5 py-1.5 bg-[#ea7b5b] hover:bg-[#d96a4a] active:scale-95 text-white text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shadow"
+            >
+              <Skull className="w-3.5 h-3.5" />
+              Starve
+            </button>
+
+            {/* 10 Minecraft Food Drumsticks */}
+            <div className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto px-1">
+              {drumsticksArray.map((state, idx) => (
+                <MinecraftDrumstick key={idx} state={state as any} />
+              ))}
+            </div>
+
+            <button
+              onClick={() => feedPlayer(player.uuid)}
+              className="px-4 py-1.5 bg-[#26ba8c] hover:bg-[#209f77] active:scale-95 text-white text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shadow"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              Feed
+            </button>
+          </div>
+        </div>
+
+        {/* Top-Right Card: Control (5 Cols) */}
+        <div className="lg:col-span-5 bg-[#212c3b] border border-[#2d3a4d] rounded-xl p-4 space-y-2.5 shadow-md flex flex-col justify-between">
+          <h2 className="text-xs font-bold text-white uppercase tracking-wider mb-1">
+            Control
+          </h2>
+
+          {/* Row 1: Whitelisted */}
+          <div className="flex items-center justify-between bg-[#2a3648] border border-[#3a475a] rounded-lg px-3 py-2">
+            <div className="flex items-center gap-2 text-xs font-semibold text-white">
+              <User className="w-4 h-4 text-slate-300" />
+              <span>Whitelisted</span>
+            </div>
+            <button
+              onClick={() => toggleWhitelist(player.uuid)}
+              className={`w-7 h-7 rounded flex items-center justify-center font-bold text-sm text-white transition-all shadow ${
+                player.isWhitelisted
+                  ? 'bg-[#10b981] hover:bg-[#059669]'
+                  : 'bg-[#ef4444] hover:bg-[#dc2626]'
+              }`}
+            >
+              {player.isWhitelisted ? <Check className="w-4 h-4 stroke-[3]" /> : <X className="w-4 h-4 stroke-[3]" />}
+            </button>
+          </div>
+
+          {/* Row 2: Banned */}
+          <div className="flex items-center justify-between bg-[#2a3648] border border-[#3a475a] rounded-lg px-3 py-2">
+            <div className="flex items-center gap-2 text-xs font-semibold text-white">
+              <Hammer className="w-4 h-4 text-slate-300" />
+              <span>Banned</span>
+            </div>
+            <button
+              onClick={() =>
+                player.isBanned ? unbanPlayer(player.uuid) : banPlayer(player.uuid)
+              }
+              className={`w-7 h-7 rounded flex items-center justify-center font-bold text-sm text-white transition-all shadow ${
+                player.isBanned
+                  ? 'bg-[#10b981] hover:bg-[#059669]'
+                  : 'bg-[#ef4444] hover:bg-[#dc2626]'
+              }`}
+            >
+              {player.isBanned ? <Check className="w-4 h-4 stroke-[3]" /> : <X className="w-4 h-4 stroke-[3]" />}
+            </button>
+          </div>
+
+          {/* Row 3: Operator */}
+          <div className="flex items-center justify-between bg-[#2a3648] border border-[#3a475a] rounded-lg px-3 py-2">
+            <div className="flex items-center gap-2 text-xs font-semibold text-white">
+              <Shield className="w-4 h-4 text-slate-300" />
+              <span>Operator</span>
+            </div>
+            <button
+              onClick={() => toggleOp(player.uuid)}
+              className={`w-7 h-7 rounded flex items-center justify-center font-bold text-sm text-white transition-all shadow ${
+                player.isOp
+                  ? 'bg-[#10b981] hover:bg-[#059669]'
+                  : 'bg-[#ef4444] hover:bg-[#dc2626]'
+              }`}
+            >
+              {player.isOp ? <Check className="w-4 h-4 stroke-[3]" /> : <X className="w-4 h-4 stroke-[3]" />}
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Inventory & Equipment Visual Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column: Equipment (Armor & Offhand) */}
-        <div className="p-5 rounded-2xl bg-[#111722] border border-slate-800/80 space-y-4">
-          <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-            <Shield className="w-4 h-4 text-blue-400" />
-            Equipment & Armor
-          </h3>
+      {/* ========================================================================= */}
+      {/* 3. MIDDLE ROW: Inventory (Left) + Information (Right) */}
+      {/* ========================================================================= */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        {/* Inventory Card (7 Cols) */}
+        <div className="lg:col-span-7 bg-[#212c3b] border border-[#2d3a4d] rounded-xl p-4 space-y-3 shadow-md">
+          <h2 className="text-xs font-bold text-white uppercase tracking-wider">
+            Inventory
+          </h2>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="p-3 bg-slate-900/60 border border-slate-800/60 rounded-xl flex items-center gap-3">
-              {renderSlot(player.inventory.armor.helmet, 'HELM')}
-              <div>
-                <span className="text-[10px] text-slate-400 block uppercase">Helmet</span>
-                <span className="text-xs font-semibold text-white">
-                  {player.inventory.armor.helmet?.displayName || 'None'}
-                </span>
-              </div>
+          {/* Minecraft Inventory Frame Layout */}
+          <div className="bg-[#1b232f] border-2 border-[#161d27] rounded-lg p-3 sm:p-4 flex flex-wrap md:flex-nowrap items-start justify-center gap-3 sm:gap-4 overflow-x-auto">
+            {/* 1. Armor Slots (Vertical 4 slots) */}
+            <div className="flex flex-col gap-1.5 shrink-0">
+              {renderItemSlot(player.inventory.armor.helmet)}
+              {renderItemSlot(player.inventory.armor.chestplate)}
+              {renderItemSlot(player.inventory.armor.leggings)}
+              {renderItemSlot(player.inventory.armor.boots)}
             </div>
 
-            <div className="p-3 bg-slate-900/60 border border-slate-800/60 rounded-xl flex items-center gap-3">
-              {renderSlot(player.inventory.armor.chestplate, 'CHEST')}
-              <div>
-                <span className="text-[10px] text-slate-400 block uppercase">Chestplate</span>
-                <span className="text-xs font-semibold text-white">
-                  {player.inventory.armor.chestplate?.displayName || 'None'}
-                </span>
+            {/* 2. Middle Auxiliary Column (Ender Chest + Offhand) */}
+            <div className="flex flex-col justify-between h-[178px] shrink-0">
+              {/* Top: Ender chest */}
+              <div
+                title="Ender Chest"
+                className="relative w-10 h-10 sm:w-11 sm:h-11 bg-[#273242] border-2 border-t-[#18212e] border-l-[#18212e] border-b-[#3d4c60] border-r-[#3d4c60] flex items-center justify-center cursor-pointer hover:bg-[#324054]"
+              >
+                <img
+                  src="https://minecraft.wiki/images/Invicon_Ender_Chest.png"
+                  alt="Ender Chest"
+                  className="w-7 h-7 object-contain drop-shadow"
+                  style={{ imageRendering: 'pixelated' }}
+                />
               </div>
+
+              {/* Bottom: Offhand slot */}
+              <div>{renderItemSlot(player.inventory.offhand)}</div>
             </div>
 
-            <div className="p-3 bg-slate-900/60 border border-slate-800/60 rounded-xl flex items-center gap-3">
-              {renderSlot(player.inventory.armor.leggings, 'LEGS')}
-              <div>
-                <span className="text-[10px] text-slate-400 block uppercase">Leggings</span>
-                <span className="text-xs font-semibold text-white">
-                  {player.inventory.armor.leggings?.displayName || 'None'}
-                </span>
+            {/* 3. Main 3x9 Inventory + Hotbar (1x9) */}
+            <div className="space-y-3 shrink-0">
+              {/* 3x9 Main Inventory Grid */}
+              <div className="grid grid-cols-9 gap-1 sm:gap-1.5">
+                {player.inventory.main.map((item, idx) => (
+                  <React.Fragment key={idx}>{renderItemSlot(item)}</React.Fragment>
+                ))}
               </div>
-            </div>
 
-            <div className="p-3 bg-slate-900/60 border border-slate-800/60 rounded-xl flex items-center gap-3">
-              {renderSlot(player.inventory.armor.boots, 'BOOTS')}
-              <div>
-                <span className="text-[10px] text-slate-400 block uppercase">Boots</span>
-                <span className="text-xs font-semibold text-white">
-                  {player.inventory.armor.boots?.displayName || 'None'}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div className="p-3 bg-slate-900/60 border border-slate-800/60 rounded-xl flex items-center gap-3">
-            {renderSlot(player.inventory.offhand, 'OFF')}
-            <div>
-              <span className="text-[10px] text-slate-400 block uppercase">Offhand Item</span>
-              <span className="text-xs font-semibold text-white">
-                {player.inventory.offhand?.displayName || 'Empty'}
-              </span>
-            </div>
-          </div>
-
-          {/* Active Item Inspector Details */}
-          {activeItem && (
-            <div className="p-3 rounded-xl bg-blue-950/30 border border-blue-800/50 space-y-1.5 animate-in fade-in">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-blue-300">{activeItem.displayName}</span>
-                <span className="text-[10px] text-slate-400 font-mono">Count: {activeItem.count}</span>
-              </div>
-              <p className="text-[11px] font-mono text-slate-400">{activeItem.name}</p>
-              {activeItem.enchantments && (
-                <div className="space-y-0.5 pt-1 border-t border-blue-900/40">
-                  {activeItem.enchantments.map((ench, i) => (
-                    <span key={i} className="text-[10px] text-purple-300 block">
-                      ✦ {ench.name} {ench.level}
-                    </span>
+              {/* 1x9 Hotbar Grid (Prominent Blue Border Selection) */}
+              <div className="p-0.5 rounded border-2 border-[#38bdf8] bg-sky-500/10 shadow-[0_0_10px_rgba(56,189,248,0.25)]">
+                <div className="grid grid-cols-9 gap-1 sm:gap-1.5">
+                  {player.inventory.hotbar.map((item, idx) => (
+                    <React.Fragment key={idx}>{renderItemSlot(item, true)}</React.Fragment>
                   ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Information Card (5 Cols) */}
+        <div className="lg:col-span-5 bg-[#212c3b] border border-[#2d3a4d] rounded-xl p-4 space-y-3 shadow-md">
+          <h2 className="text-xs font-bold text-white uppercase tracking-wider">
+            Information
+          </h2>
+
+          <div className="space-y-2">
+            {/* Accordion 1: Current position (Expanded by default) */}
+            <div className="bg-[#2a3648] border border-[#3a475a] rounded-lg overflow-hidden transition-all">
+              <button
+                onClick={() =>
+                  setExpandedAccordions((prev) => ({ ...prev, position: !prev.position }))
+                }
+                className="w-full px-3 py-2.5 flex items-center justify-between text-left hover:bg-[#324054] transition-colors"
+              >
+                <div className="flex items-center gap-2 text-xs font-bold text-white">
+                  <MapPin className="w-4 h-4 text-slate-300" />
+                  <span>Current position</span>
+                </div>
+                {expandedAccordions.position ? (
+                  <ChevronUp className="w-4 h-4 text-slate-400" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 text-slate-400" />
+                )}
+              </button>
+
+              {expandedAccordions.position && (
+                <div className="px-3 pb-3 pt-1 border-t border-[#3a475a]/60 flex items-center justify-between gap-2">
+                  <div className="space-y-0.5 font-mono text-xs">
+                    <p className="text-white font-bold">
+                      X {player.coordinates.x.toFixed(2)}{'  '}
+                      Y {player.coordinates.y.toFixed(2)}{'  '}
+                      Z {player.coordinates.z.toFixed(2)}
+                    </p>
+                    <p className="text-slate-400 text-[11px] flex items-center gap-1 font-sans">
+                      <Globe className="w-3 h-3 text-slate-400" />
+                      {player.coordinates.dimension || 'minecraft:overworld'}
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setTpCoords(
+                        `${Math.round(player.coordinates.x)} ${Math.round(
+                          player.coordinates.y
+                        )} ${Math.round(player.coordinates.z)}`
+                      );
+                      setTpModalOpen(true);
+                    }}
+                    className="px-3 py-1.5 bg-[#374457] hover:bg-[#435268] active:scale-95 text-white text-xs font-semibold rounded-lg border border-slate-600/60 flex items-center gap-1.5 transition-all shadow-sm"
+                  >
+                    <Sparkles className="w-3 h-3 text-sky-400" />
+                    Teleport
+                  </button>
                 </div>
               )}
             </div>
+
+            {/* Accordion 2: Respawn location */}
+            <div className="bg-[#2a3648] border border-[#3a475a] rounded-lg overflow-hidden transition-all">
+              <button
+                onClick={() =>
+                  setExpandedAccordions((prev) => ({ ...prev, respawn: !prev.respawn }))
+                }
+                className="w-full px-3 py-2.5 flex items-center justify-between text-left hover:bg-[#324054] transition-colors"
+              >
+                <div className="flex items-center gap-2 text-xs font-bold text-white">
+                  <Bed className="w-4 h-4 text-slate-300" />
+                  <span>Respawn location</span>
+                </div>
+                {expandedAccordions.respawn ? (
+                  <ChevronUp className="w-4 h-4 text-slate-400" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 text-slate-400" />
+                )}
+              </button>
+
+              {expandedAccordions.respawn && (
+                <div className="px-3 pb-3 pt-1 border-t border-[#3a475a]/60 space-y-0.5 font-mono text-xs">
+                  <p className="text-white font-bold">
+                    X {(player.respawnCoordinates?.x ?? -1850).toFixed(2)}{'  '}
+                    Y {(player.respawnCoordinates?.y ?? 64).toFixed(2)}{'  '}
+                    Z {(player.respawnCoordinates?.z ?? 1200).toFixed(2)}
+                  </p>
+                  <p className="text-slate-400 text-[11px] font-sans">
+                    {player.respawnCoordinates?.dimension || 'minecraft:overworld'}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Accordion 3: Last death location */}
+            <div className="bg-[#2a3648] border border-[#3a475a] rounded-lg overflow-hidden transition-all">
+              <button
+                onClick={() =>
+                  setExpandedAccordions((prev) => ({ ...prev, death: !prev.death }))
+                }
+                className="w-full px-3 py-2.5 flex items-center justify-between text-left hover:bg-[#324054] transition-colors"
+              >
+                <div className="flex items-center gap-2 text-xs font-bold text-white">
+                  <Skull className="w-4 h-4 text-slate-300" />
+                  <span>Last death location</span>
+                </div>
+                {expandedAccordions.death ? (
+                  <ChevronUp className="w-4 h-4 text-slate-400" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 text-slate-400" />
+                )}
+              </button>
+
+              {expandedAccordions.death && (
+                <div className="px-3 pb-3 pt-1 border-t border-[#3a475a]/60 space-y-0.5 font-mono text-xs">
+                  <p className="text-white font-bold">
+                    X {(player.deathCoordinates?.x ?? -1920.1).toFixed(2)}{'  '}
+                    Y {(player.deathCoordinates?.y ?? 45).toFixed(2)}{'  '}
+                    Z {(player.deathCoordinates?.z ?? 1150.8).toFixed(2)}
+                  </p>
+                  <p className="text-slate-400 text-[11px] font-sans">
+                    {player.deathCoordinates?.dimension || 'minecraft:overworld'}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* 4. BOTTOM FULL-WIDTH: Statistics (Exact Match to Minecraft JSON stats) */}
+      {/* ========================================================================= */}
+      <div className="bg-[#212c3b] border border-[#2d3a4d] rounded-xl p-5 space-y-6 shadow-md">
+        <h2 className="text-xs font-bold text-white uppercase tracking-wider">
+          Statistics
+        </h2>
+
+        {/* Top 4 Highlight Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {/* Card 1: Playtime */}
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-slate-800/80 border border-slate-700/60 flex items-center justify-center shrink-0">
+              <Clock className="w-5 h-5 text-slate-400" />
+            </div>
+            <div>
+              <span className="text-xs text-slate-400 block font-medium">Playtime</span>
+              <span className="text-xs sm:text-sm font-bold text-white font-mono">
+                {parsedStats.playtimeText}
+              </span>
+            </div>
+          </div>
+
+          {/* Card 2: Player Kills */}
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-slate-800/80 border border-slate-700/60 flex items-center justify-center shrink-0">
+              <Swords className="w-5 h-5 text-slate-400" />
+            </div>
+            <div>
+              <span className="text-xs text-slate-400 block font-medium">Player Kills</span>
+              <span className="text-xs sm:text-sm font-bold text-white font-mono">
+                {parsedStats.playerKills}
+              </span>
+            </div>
+          </div>
+
+          {/* Card 3: Deaths */}
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-slate-800/80 border border-slate-700/60 flex items-center justify-center shrink-0">
+              <Skull className="w-5 h-5 text-slate-400" />
+            </div>
+            <div>
+              <span className="text-xs text-slate-400 block font-medium">Deaths</span>
+              <span className="text-xs sm:text-sm font-bold text-white font-mono">
+                {parsedStats.deaths}
+              </span>
+            </div>
+          </div>
+
+          {/* Card 4: KDR */}
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-slate-800/80 border border-slate-700/60 flex items-center justify-center shrink-0">
+              <Gauge className="w-5 h-5 text-slate-400" />
+            </div>
+            <div>
+              <span className="text-xs text-slate-400 block font-medium">KDR</span>
+              <span className="text-xs sm:text-sm font-bold text-white font-mono">
+                {parsedStats.kdr}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* 4 Categorized Columns: Distance, Blocks Broken, Items Used, Entities Killed */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 pt-3 border-t border-slate-700/40">
+          {/* Column 1: Distance travelled (in blocks) */}
+          <div className="space-y-2">
+            <h3 className="text-xs font-bold text-[#38bdf8]">
+              Distance travelled (in blocks)
+            </h3>
+            <div className="space-y-1.5 text-xs">
+              <div className="flex items-center justify-between text-slate-300 font-medium">
+                <span>Total</span>
+                <span className="font-mono font-bold text-white">
+                  {parsedStats.distanceTotal.toLocaleString()}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-slate-400">
+                <span>Distance Walked</span>
+                <span className="font-mono text-slate-200">
+                  {parsedStats.distanceWalked.toLocaleString()}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-slate-400">
+                <span>Distance Sprinted</span>
+                <span className="font-mono text-slate-200">
+                  {parsedStats.distanceSprinted.toLocaleString()}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-slate-400">
+                <span>Distance Swum</span>
+                <span className="font-mono text-slate-200">
+                  {parsedStats.distanceSwum.toLocaleString()}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-slate-400">
+                <span>Distance Fallen</span>
+                <span className="font-mono text-slate-200">
+                  {parsedStats.distanceFallen.toLocaleString()}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-slate-400">
+                <span>Distance by Elytra</span>
+                <span className="font-mono text-slate-200">
+                  {parsedStats.distanceElytra.toLocaleString()}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Column 2: Blocks broken */}
+          <div className="space-y-2">
+            <h3 className="text-xs font-bold text-[#38bdf8]">Blocks broken</h3>
+            <div className="space-y-1.5 text-xs">
+              <div className="flex items-center justify-between text-slate-300 font-medium">
+                <span>Total</span>
+                <span className="font-mono font-bold text-white">
+                  {parsedStats.blocksBrokenTotal.toLocaleString()}
+                </span>
+              </div>
+
+              {parsedStats.blocksBrokenList.slice(0, 6).map((item, idx) => (
+                <div key={idx} className="flex items-center justify-between text-slate-300">
+                  <div className="flex items-center gap-1.5 truncate pr-2">
+                    <img
+                      src={getItemIconUrl(item.rawKey)}
+                      alt={item.name}
+                      className="w-4 h-4 object-contain shrink-0"
+                      style={{ imageRendering: 'pixelated' }}
+                    />
+                    <span className="truncate">{item.name}</span>
+                  </div>
+                  <span className="font-mono text-slate-200 shrink-0">
+                    {item.count.toLocaleString()}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Column 3: Items used */}
+          <div className="space-y-2">
+            <h3 className="text-xs font-bold text-[#38bdf8]">Items used</h3>
+            <div className="space-y-1.5 text-xs">
+              <div className="flex items-center justify-between text-slate-300 font-medium">
+                <span>Total</span>
+                <span className="font-mono font-bold text-white">
+                  {parsedStats.itemsUsedTotal.toLocaleString()}
+                </span>
+              </div>
+
+              {parsedStats.itemsUsedList.slice(0, 6).map((item, idx) => (
+                <div key={idx} className="flex items-center justify-between text-slate-300">
+                  <div className="flex items-center gap-1.5 truncate pr-2">
+                    <img
+                      src={getItemIconUrl(item.rawKey)}
+                      alt={item.name}
+                      className="w-4 h-4 object-contain shrink-0"
+                      style={{ imageRendering: 'pixelated' }}
+                    />
+                    <span className="truncate">{item.name}</span>
+                  </div>
+                  <span className="font-mono text-slate-200 shrink-0">
+                    {item.count.toLocaleString()}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Column 4: Entities killed */}
+          <div className="space-y-2">
+            <h3 className="text-xs font-bold text-[#38bdf8]">Entities killed</h3>
+            <div className="space-y-1.5 text-xs">
+              <div className="flex items-center justify-between text-slate-300 font-medium">
+                <span>Total</span>
+                <span className="font-mono font-bold text-white">
+                  {parsedStats.entitiesKilledTotal.toLocaleString()}
+                </span>
+              </div>
+
+              {parsedStats.entitiesKilledList.slice(0, 6).map((mob, idx) => (
+                <div key={idx} className="flex items-center justify-between text-slate-300">
+                  <div className="flex items-center gap-1.5 truncate pr-2">
+                    <img
+                      src={getMobIconUrl(mob.rawKey)}
+                      alt={mob.name}
+                      className="w-4 h-4 object-contain rounded-sm shrink-0"
+                      style={{ imageRendering: 'pixelated' }}
+                    />
+                    <span className="truncate">{mob.name}</span>
+                  </div>
+                  <span className="font-mono text-slate-200 shrink-0">
+                    {mob.count.toLocaleString()}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* FLOATING MINECRAFT TOOLTIP (Purple Box Exact Styling) */}
+      {/* ========================================================================= */}
+      {hoveredItem && (
+        <div
+          className="fixed pointer-events-none z-50 transform -translate-x-1/2 -translate-y-full mb-2 bg-[#100010] border-2 border-[#5000ff] rounded px-2.5 py-1 text-white shadow-2xl space-y-0.5"
+          style={{ left: hoveredItem.x, top: hoveredItem.y }}
+        >
+          <div className="text-xs font-bold tracking-wide">
+            {hoveredItem.item.displayName}
+          </div>
+          {hoveredItem.item.count > 1 && (
+            <div className="text-[10px] text-slate-400 font-mono">
+              Stack: {hoveredItem.item.count}
+            </div>
+          )}
+          {hoveredItem.item.durability !== undefined && hoveredItem.item.maxDurability && (
+            <div className="text-[10px] text-emerald-400 font-mono">
+              Durability: {hoveredItem.item.durability} / {hoveredItem.item.maxDurability}
+            </div>
+          )}
+          {hoveredItem.item.enchantments && hoveredItem.item.enchantments.length > 0 && (
+            <div className="pt-0.5 border-t border-[#3d0080]/60 space-y-0.5">
+              {hoveredItem.item.enchantments.map((ench, i) => (
+                <div key={i} className="text-[10px] text-[#c084fc]">
+                  {ench.name} {ench.level}
+                </div>
+              ))}
+            </div>
           )}
         </div>
+      )}
 
-        {/* Right 2 Columns: Main Inventory + Hotbar */}
-        <div className="lg:col-span-2 p-5 rounded-2xl bg-[#111722] border border-slate-800/80 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-              <Box className="w-4 h-4 text-emerald-400" />
-              Inventory & Hotbar Grid
+      {/* Teleport Modal */}
+      {tpModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-[#1b232f] border border-[#2d3a4d] rounded-2xl p-5 max-w-sm w-full space-y-4 shadow-2xl">
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-sky-400" />
+              Teleport {player.username}
             </h3>
-            <span className="text-[11px] text-slate-400">Click item for enchantment details</span>
-          </div>
-
-          {/* 3x9 Main Inventory Grid */}
-          <div className="space-y-2">
-            <span className="text-[10px] uppercase font-semibold text-slate-400 tracking-wider">
-              Main Inventory (27 Slots)
-            </span>
-            <div className="grid grid-cols-9 gap-1.5 sm:gap-2 p-2 bg-[#0c1018] rounded-xl border border-slate-800/80">
-              {player.inventory.main.map((item, idx) => (
-                <React.Fragment key={idx}>{renderSlot(item)}</React.Fragment>
-              ))}
-            </div>
-          </div>
-
-          {/* 1x9 Hotbar Grid */}
-          <div className="space-y-2 pt-2 border-t border-slate-800/60">
-            <span className="text-[10px] uppercase font-semibold text-blue-400 tracking-wider">
-              Hotbar (9 Slots)
-            </span>
-            <div className="grid grid-cols-9 gap-1.5 sm:gap-2 p-2 bg-blue-950/20 rounded-xl border border-blue-900/40">
-              {player.inventory.hotbar.map((item, idx) => (
-                <React.Fragment key={idx}>{renderSlot(item, `${idx + 1}`)}</React.Fragment>
-              ))}
+            <p className="text-xs text-slate-400">
+              Enter target coordinates (X Y Z) or destination player name:
+            </p>
+            <input
+              type="text"
+              value={tpCoords}
+              onChange={(e) => setTpCoords(e.target.value)}
+              placeholder="e.g. 0 70 0 or PlayerName"
+              className="w-full px-3 py-2 bg-[#111722] border border-slate-700 rounded-xl text-xs text-white font-mono focus:outline-none focus:border-sky-400"
+            />
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                onClick={() => setTpModalOpen(false)}
+                className="px-3 py-1.5 text-xs text-slate-400 hover:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  await teleportPlayer(player.uuid, tpCoords);
+                  setTpModalOpen(false);
+                }}
+                className="px-4 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-semibold shadow"
+              >
+                Teleport Now
+              </button>
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Lifetime Player Statistics */}
-      <div className="p-5 rounded-2xl bg-[#111722] border border-slate-800/80 space-y-4">
-        <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-          <Award className="w-4 h-4 text-amber-400" />
-          Lifetime Player Statistics
-        </h3>
-
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div className="p-3 bg-slate-900/60 border border-slate-800/60 rounded-xl">
-            <span className="text-[10px] text-slate-400 block uppercase">Total Playtime</span>
-            <span className="text-lg font-bold text-white font-mono">
-              {player.statistics.playtimeHours} hrs
-            </span>
-          </div>
-
-          <div className="p-3 bg-slate-900/60 border border-slate-800/60 rounded-xl">
-            <span className="text-[10px] text-slate-400 block uppercase">Player Kills / Deaths</span>
-            <span className="text-lg font-bold text-white font-mono">
-              {player.statistics.playerKills} / {player.statistics.deaths}
-            </span>
-            <span className="text-[10px] text-emerald-400 block mt-0.5">
-              KDR: {player.statistics.kdr.toFixed(2)}
-            </span>
-          </div>
-
-          <div className="p-3 bg-slate-900/60 border border-slate-800/60 rounded-xl">
-            <span className="text-[10px] text-slate-400 block uppercase">Blocks Broken</span>
-            <span className="text-lg font-bold text-white font-mono">
-              {player.statistics.blocksBroken.toLocaleString()}
-            </span>
-          </div>
-
-          <div className="p-3 bg-slate-900/60 border border-slate-800/60 rounded-xl">
-            <span className="text-[10px] text-slate-400 block uppercase">Distance Travelled</span>
-            <span className="text-lg font-bold text-white font-mono">
-              {player.statistics.distanceTraveledKm} km
-            </span>
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* Confirmation Modal */}
       <ConfirmModal

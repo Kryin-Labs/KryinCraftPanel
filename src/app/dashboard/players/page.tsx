@@ -136,16 +136,13 @@ export default function PlayersListPage() {
               {/* Player Top Card */}
               <div className="flex items-center gap-3">
                 <div className="relative w-12 h-12 rounded-xl bg-slate-800 overflow-hidden border border-slate-700/80 shrink-0">
-                  <Image
-                    src={`https://crafatar.com/avatars/${player.uuid}?size=64&overlay=true`}
+                  <img
+                    src={`https://mc-heads.net/avatar/${player.username}/64`}
                     alt={player.username}
-                    width={48}
-                    height={48}
-                    unoptimized
                     className="w-full h-full object-cover"
+                    style={{ imageRendering: 'pixelated' }}
                     onError={(e) => {
-                      // Fallback if avatar fails
-                      (e.target as HTMLElement).style.display = 'none';
+                      (e.currentTarget as HTMLImageElement).src = `https://minotar.net/avatar/${player.username}/64`;
                     }}
                   />
                   {player.isOnline && (

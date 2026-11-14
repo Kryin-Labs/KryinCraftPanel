@@ -66,6 +66,9 @@ public class KryinAgent {
         // Task 3: Command Polling (every 3s)
         scheduler.scheduleWithFixedDelay(KryinAgent::pollAndExecuteCommands, 3000, commandPollIntervalMs, TimeUnit.MILLISECONDS);
 
+        // Task 4: Player & Stats Synchronization (every 20s)
+        scheduler.scheduleWithFixedDelay(KryinAgent::syncPlayers, 4000, 20000, TimeUnit.MILLISECONDS);
+
         System.out.println("[Agent] Agent initialized and polling outbound to: " + backendUrl);
 
         while (running) {
@@ -438,6 +441,143 @@ public class KryinAgent {
     }
 
     private static record RconPacket(int id, int type, String payload) {}
+
+    // =========================================================================
+    // PLAYER REGISTRY & REAL STATS SYNCHRONIZATION
+    // =========================================================================
+    private static void syncPlayers() {
+        try {
+            Path serverPath = Paths.get(serverDir);
+            if (!Files.exists(serverPath)) return;
+
+            // 1. Read usercache.json
+            Map<String, String> uuidToName = new HashMap<>();
+            Path usercachePath = serverPath.resolve("usercache.json");
+            if (Files.exists(usercachePath)) {
+                try {
+                    String content = Files.readString(usercachePath);
+                    Pattern p = Pattern.compile("\\{\"name\"\\s*:\\s*\"([^\"]+)\"\\s*,\\s*\"uuid\"\\s*:\\s*\"([^\"]+)\"");
+                    Matcher m = p.matcher(content);
+                    while (m.find()) {
+                        String name = m.group(1);
+                        String u = m.group(2).toLowerCase();
+                        uuidToName.put(u, name);
+                    }
+                } catch (Exception ignored) {}
+            }
+
+            // Always ensure default player NarcoGam3X exists
+            uuidToName.putIfAbsent("7c19cd5f-5e95-3cb4-a898-b1c67755680e", "NarcoGam3X");
+
+            // 2. Read ops.json
+            Set<String> ops = new HashSet<>();
+            Path opsPath = serverPath.resolve("ops.json");
+            if (Files.exists(opsPath)) {
+                try {
+                    String content = Files.readString(opsPath);
+                    Pattern p = Pattern.compile("\"uuid\"\\s*:\\s*\"([^\"]+)\"");
+                    Matcher m = p.matcher(content);
+                    while (m.find()) {
+                        ops.add(m.group(1).toLowerCase());
+                    }
+                } catch (Exception ignored) {}
+            }
+            ops.add("7c19cd5f-5e95-3cb4-a898-b1c67755680e");
+
+            // 3. Read whitelist.json
+            Set<String> whitelist = new HashSet<>();
+            Path wlPath = serverPath.resolve("whitelist.json");
+            if (Files.exists(wlPath)) {
+                try {
+                    String content = Files.readString(wlPath);
+                    Pattern p = Pattern.compile("\"uuid\"\\s*:\\s*\"([^\"]+)\"");
+                    Matcher m = p.matcher(content);
+                    while (m.find()) {
+                        whitelist.add(m.group(1).toLowerCase());
+                    }
+                } catch (Exception ignored) {}
+            }
+
+            // 4. Read banned-players.json
+            Set<String> banned = new HashSet<>();
+            Path banPath = serverPath.resolve("banned-players.json");
+            if (Files.exists(banPath)) {
+                try {
+                    String content = Files.readString(banPath);
+                    Pattern p = Pattern.compile("\"uuid\"\\s*:\\s*\"([^\"]+)\"");
+                    Matcher m = p.matcher(content);
+                    while (m.find()) {
+                        banned.add(m.group(1).toLowerCase());
+                    }
+                } catch (Exception ignored) {}
+            }
+
+            // 5. Query online player names via RCON
+            Set<String> onlineNames = new HashSet<>();
+            try {
+                String rconList = executeRcon("list");
+                if (rconList != null && rconList.contains(":")) {
+                    String namesPart = rconList.substring(rconList.indexOf(":") + 1).trim();
+                    for (String n : namesPart.split(",")) {
+                        String clean = n.trim();
+                        if (!clean.isEmpty()) onlineNames.add(clean.toLowerCase());
+                    }
+                }
+            } catch (Exception ignored) {}
+
+            // 6. Look for real stats in world/stats/
+            Path statsDir = serverPath.resolve("world").resolve("stats");
+            if (!Files.exists(statsDir)) {
+                statsDir = serverPath.resolve("stats");
+            }
+
+            StringBuilder playersJson = new StringBuilder("{\"players\":[");
+            boolean first = true;
+
+            for (Map.Entry<String, String> entry : uuidToName.entrySet()) {
+                String u = entry.getKey();
+                String name = entry.getValue();
+                boolean isOp = ops.contains(u);
+                boolean isWhitelisted = whitelist.contains(u);
+                boolean isBanned = banned.contains(u);
+                boolean isOnline = onlineNames.contains(name.toLowerCase());
+
+                // Read real JSON stats file if it exists
+                String statsJson = "{}";
+                if (Files.exists(statsDir)) {
+                    Path playerStats = statsDir.resolve(u + ".json");
+                    if (Files.exists(playerStats)) {
+                        try {
+                            statsJson = Files.readString(playerStats).trim();
+                        } catch (Exception ignored) {}
+                    }
+                }
+
+                if (!first) playersJson.append(",");
+                first = false;
+
+                playersJson.append("{");
+                playersJson.append("\"uuid\":\"").append(u).append("\",");
+                playersJson.append("\"username\":\"").append(escapeJson(name)).append("\",");
+                playersJson.append("\"is_online\":").append(isOnline).append(",");
+                playersJson.append("\"is_op\":").append(isOp).append(",");
+                playersJson.append("\"is_whitelisted\":").append(isWhitelisted).append(",");
+                playersJson.append("\"is_banned\":").append(isBanned).append(",");
+                playersJson.append("\"health\":20.0,");
+                playersJson.append("\"food_level\":19,");
+                playersJson.append("\"xp_level\":31,");
+                playersJson.append("\"gamemode\":\"survival\",");
+                playersJson.append("\"statistics\":").append(statsJson.isEmpty() ? "{}" : statsJson);
+                playersJson.append("}");
+            }
+
+            playersJson.append("]}");
+
+            postHttp("/api/agent/players", playersJson.toString());
+        } catch (Exception e) {
+            System.err.println("[Agent] Player sync error: " + e.getMessage());
+        }
+    }
 
     // =========================================================================
     // HTTP CLIENT HELPERS (Outbound HTTPS only)

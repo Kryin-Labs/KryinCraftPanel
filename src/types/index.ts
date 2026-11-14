@@ -60,6 +60,7 @@ export interface PlayerStatistics {
   blocksBroken: number;
   itemsUsed: number;
   entitiesKilled: number;
+  rawStats?: any;
 }
 
 export interface MinecraftPlayer {
@@ -82,7 +83,19 @@ export interface MinecraftPlayer {
     y: number;
     z: number;
     world: string;
-    dimension: 'minecraft:overworld' | 'minecraft:the_nether' | 'minecraft:the_end';
+    dimension: 'minecraft:overworld' | 'minecraft:the_nether' | 'minecraft:the_end' | string;
+  };
+  respawnCoordinates?: {
+    x: number;
+    y: number;
+    z: number;
+    dimension?: string;
+  };
+  deathCoordinates?: {
+    x: number;
+    y: number;
+    z: number;
+    dimension?: string;
   };
   inventory: PlayerInventory;
   statistics: PlayerStatistics;
