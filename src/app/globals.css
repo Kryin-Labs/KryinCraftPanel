@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./warp-theme.css";
 
 @layer base {
   :root {

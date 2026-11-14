@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import {
   Server,
@@ -20,10 +20,105 @@ import {
   Sparkles,
   Copy,
   CheckCheck,
+  FileCode,
+  Folder,
+  File,
 } from 'lucide-react';
 
 /* ------------------------------------------------------------------ */
-/* Page Data Constants                                                */
+/* File Structure Data for "Your software factory, defined in code"    */
+/* ------------------------------------------------------------------ */
+
+interface CodeFile {
+  name: string;
+  type: 'file' | 'folder';
+  language: string;
+  content: string;
+  lines: number;
+}
+
+const FILE_ITEMS: CodeFile[] = [
+  {
+    name: 'server.properties',
+    type: 'file',
+    language: 'properties',
+    lines: 12,
+    content: `# KryinHost Server Configuration (Indian Datacenter)
+server-port=25565
+query.port=25565
+enable-rcon=true
+rcon.port=25575
+motd=\\u00a7bKryin Server \\u00a78[\\u00a7aIndian Node 01\\u00a78]
+difficulty=hard
+gamemode=survival
+max-players=40
+online-mode=true
+auto-sleep.enabled=true
+auto-sleep.idle-timeout-minutes=5
+auto-wake.port-listen=25565,19132`,
+  },
+  {
+    name: 'paper-global.yml',
+    type: 'file',
+    language: 'yaml',
+    lines: 14,
+    content: `# Paper 26.3 Global Optimization Engine
+_version: 29
+timings:
+  enabled: true
+  verbose: true
+chunk-loading:
+  min-load-radius: 2
+  max-concurrent-loads: 8
+tick-rates:
+  sensor:
+    villager:
+      secondarypoisensor: 40
+collisions:
+  enable-player-collisions: true
+async-chunks:
+  threads: -1`,
+  },
+  {
+    name: 'geyser.yml',
+    type: 'file',
+    language: 'yaml',
+    lines: 13,
+    content: `# GeyserBridge Crossplay Configuration (Bedrock & Console)
+bedrock:
+  address: 0.0.0.0
+  port: 19132
+  clone-remote-port: false
+  motd1: "KryinHost Console Crossplay"
+  motd2: "PlayStation / Xbox / Switch / Mobile"
+remote:
+  address: 127.0.0.1
+  port: 25565
+  auth-type: floodgate
+floodgate:
+  key-file: key.pem`,
+  },
+  {
+    name: 'auto-sleep.json',
+    type: 'file',
+    language: 'json',
+    lines: 11,
+    content: `{
+  "policy": "smart-eco-sleep",
+  "idleTimeoutSeconds": 300,
+  "hibernateOnEmpty": true,
+  "wakeOnConnection": true,
+  "wakeTimeSecondsTarget": 90,
+  "preserveWorldState": true,
+  "flushChunksOnSleep": true,
+  "region": "ap-south-mumbai",
+  "nodeId": "in-mumbai-01"
+}`,
+  },
+];
+
+/* ------------------------------------------------------------------ */
+/* RAM Plans Data (No Free Plan)                                      */
 /* ------------------------------------------------------------------ */
 
 const RAM_PLANS = [
@@ -109,447 +204,583 @@ const RAM_PLANS = [
   },
 ];
 
-const CAPABILITIES = [
-  {
-    tag: '01 // NETWORK',
-    icon: Radio,
-    label: 'Indian Datacenter Nodes',
-    desc: 'Direct peering in Mumbai and Delhi datacenters for minimal ping and zero routing packet loss across the Indian subcontinent.',
-  },
-  {
-    tag: '02 // ARCHITECTURE',
-    icon: Zap,
-    label: 'Smart Auto-Sleep & Wake',
-    desc: 'Eliminates 24/7 idle power drain. When empty, servers enter a low-power sleep state and automatically wake in under 2 minutes when players join.',
-  },
-  {
-    tag: '03 // CROSSPLAY',
-    icon: Plug,
-    label: 'Console Ready Built-In',
-    desc: 'Pre-configured Geyser & Floodgate. Friends on mobile (iOS/Android), consoles (Xbox, PlayStation, Nintendo Switch), and PC join seamlessly.',
-  },
-  {
-    tag: '04 // PERFORMANCE',
-    icon: Shield,
-    label: 'Fast · No Lag Guarantee',
-    desc: 'Dedicated single-thread clock priority and Paper 26.3 runtime holding a rock-solid 20.0 TPS with zero tick lag.',
-  },
-  {
-    tag: '05 // STORAGE',
-    icon: HardDrive,
-    label: 'Gen4 NVMe Arrays',
-    desc: '7,000 MB/s read/write speeds ensure instant chunk loading, smooth teleportation, and lag-free world autosaves.',
-  },
-  {
-    tag: '06 // CONTROL',
-    icon: Terminal,
-    label: 'Real-Time Web Console',
-    desc: 'Interactive live command stream, visual player inventory viewer, 1-click server restart, and SFTP file access.',
-  },
-];
+/* ------------------------------------------------------------------ */
+/* FAQ Data                                                           */
+/* ------------------------------------------------------------------ */
 
 const FAQ = [
   {
-    q: 'How does server auto-sleep and wake work?',
+    q: 'how does server auto-sleep and wake work?',
     a: 'To keep hosting affordable and eliminate 24/7 idle power waste, servers enter an automatic low-power sleep state when all players disconnect. As soon as any player connects to your server address (or you click Wake in your web dashboard), the server automatically boots up and resumes the world in under 2 minutes with all progress, inventories, and builds 100% saved.',
   },
   {
-    q: 'Where are the servers hosted?',
+    q: 'where are the servers hosted?',
     a: 'All our nodes are hosted in top Indian datacenters (Mumbai / Delhi), giving players across India, South Asia, and nearby regions ultra-fast routing, stable 20.0 TPS, and minimal ping.',
   },
   {
-    q: 'Can console and mobile players join (Console Ready)?',
+    q: 'can console and mobile players join (console ready)?',
     a: 'Yes. Every server comes with Geyser and Floodgate pre-configured. Players on Bedrock (PlayStation, Xbox, Nintendo Switch, iOS, Android, and Windows) connect via port 19132 and play together with Java edition players on port 25565.',
   },
   {
-    q: 'Can I upload my existing Minecraft world or plugins?',
+    q: 'can i upload my existing minecraft world or plugins?',
     a: 'Yes. You have full access to our web-based file manager and SFTP. You can simply drag and drop your existing singleplayer world folder, datapacks, or plugin jars into your server directory.',
   },
   {
-    q: 'Can I upgrade my RAM plan later?',
-    a: 'Yes. You can upgrade from 4GB (₹600) to 6GB (₹800), 10GB (₹1,000), or 12GB (₹1,500) anytime with a single click. Your world files, configs, and player inventories remain completely intact.',
+    q: 'can i upgrade my ram plan later?',
+    a: 'Yes. You can upgrade between 4GB (₹600), 6GB (₹800), 10GB (₹1,000), and 12GB (₹1,500) anytime with a single click. Your world files, configs, and player inventories remain completely intact.',
   },
 ];
 
 /* ------------------------------------------------------------------ */
-/* Main Warp-Style Home Page Component                                */
+/* Main Warp-Replicated Page Component                                */
 /* ------------------------------------------------------------------ */
 
 export default function HomePage() {
+  const [selectedFileIndex, setSelectedFileIndex] = useState(0);
   const [copied, setCopied] = useState(false);
-  const [activeTab, setActiveTab] = useState<'console' | 'telemetry' | 'players'>('console');
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
 
-  const copyAddress = () => {
-    navigator.clipboard.writeText('play.kryin.gg');
+  const selectedFile = FILE_ITEMS[selectedFileIndex];
+
+  const handleCopyCode = () => {
+    navigator.clipboard.writeText(selectedFile.content);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
   return (
-    <div className="min-h-screen bg-[#000000] text-[#f3f4f6] selection:bg-[#38bdf8] selection:text-[#000000]">
-      {/* Top Navigation Bar */}
-      <header className="fixed inset-x-0 top-0 z-50 border-b border-[#1a1e29] bg-[#000000]/85 backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
-          <Link href="/" className="flex items-center gap-3">
-            <div className="flex size-8 items-center justify-center rounded-lg bg-[#ffffff] text-[#000000] font-black">
-              <Server className="size-4" />
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-[16px] tracking-tight text-[#ffffff]">KryinHost</span>
-              <span className="rounded border border-[#1e2433] bg-[#0d0f16] px-1.5 py-0.5 text-[10px] font-mono font-medium text-[#38bdf8]">
-                India
+    <div data-ds="warp-next" className="w-page w-homepage bg-white text-[#1a1522] min-h-screen">
+      {/* ===== Top Navigation (Warp w-topnav) ===== */}
+      <nav className="w-topnav" aria-label="Primary">
+        <div className="w-topnav-bar">
+          <div className="w-wrap w-topnav-wrap flex items-center justify-between">
+            <Link className="w-topnav-logo flex items-center gap-2" aria-label="KryinHost home" href="/">
+              <div className="flex size-7 items-center justify-center rounded bg-[#1a1522] text-white">
+                <Server className="size-4" />
+              </div>
+              <span className="font-bold text-[16px] tracking-tight text-[#1a1522]">KryinHost</span>
+              <span className="text-[11px] font-mono px-1.5 py-0.5 rounded border border-[#1a1522]/20 text-[#1a1522]/70 font-semibold">
+                IN
               </span>
+            </Link>
+
+            <div className="hidden md:flex items-center gap-6 text-[14px] text-[#1a1522]/80 font-medium">
+              <Link href="#code" className="hover:text-[#1a1522] transition-colors">Server as Code</Link>
+              <Link href="#measurement" className="hover:text-[#1a1522] transition-colors">Measurement</Link>
+              <Link href="#control" className="hover:text-[#1a1522] transition-colors">Control Plane</Link>
+              <Link href="#plans" className="hover:text-[#1a1522] transition-colors font-semibold">Plans & Pricing</Link>
+              <Link href="#faq" className="hover:text-[#1a1522] transition-colors">FAQ</Link>
             </div>
-          </Link>
 
-          <nav className="hidden items-center gap-8 md:flex text-[13px] text-[#94a3b8] font-medium">
-            <Link href="#plans" className="hover:text-[#ffffff] transition-colors">
-              Plans & Pricing
-            </Link>
-            <Link href="#capabilities" className="hover:text-[#ffffff] transition-colors">
-              Features
-            </Link>
-            <Link href="#terminal" className="hover:text-[#ffffff] transition-colors">
-              Live Console
-            </Link>
-            <Link href="#faq" className="hover:text-[#ffffff] transition-colors">
-              FAQ
-            </Link>
-          </nav>
-
-          <div className="flex items-center gap-3">
-            <Link
-              href="/login"
-              className="text-[13px] font-medium text-[#94a3b8] hover:text-[#ffffff] transition-colors px-3 py-1.5"
-            >
-              Sign In
-            </Link>
-            <Link
-              href="/login"
-              className="rounded-full bg-[#ffffff] px-4 py-2 text-[13px] font-semibold text-[#000000] hover:bg-[#e2e8f0] transition-all active:scale-95"
-            >
-              Deploy Server
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      {/* ===== Hero Section (Warp Style) ===== */}
-      <section className="relative overflow-hidden pt-36 pb-16 sm:pt-40 sm:pb-20">
-        {/* Subtle grid background */}
-        <div className="warp-grid pointer-events-none absolute inset-0 opacity-20" aria-hidden />
-
-        <div className="relative mx-auto max-w-5xl px-4 sm:px-6 text-center">
-          {/* Top Announcement Badge */}
-          <div className="inline-flex items-center gap-2 rounded-full border border-[#1e2433] bg-[#090b10] px-3.5 py-1.5 text-[12px] font-medium text-[#94a3b8] mb-8 hover:border-[#2e3547] transition-all">
-            <span className="size-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="font-semibold text-[#ffffff]">Indian Hosted Nodes</span>
-            <span className="h-3 w-[1px] bg-[#1e2433]" />
-            <span className="text-[#38bdf8]">4GB RAM from ₹600/mo</span>
-            <ArrowRight className="size-3 text-[#94a3b8]" />
-          </div>
-
-          {/* Bold Modern Headline */}
-          <h1 className="text-[42px] leading-[1.06] font-extrabold tracking-[-0.03em] text-[#ffffff] sm:text-[60px] md:text-[72px]">
-            The modern Minecraft <br className="hidden sm:inline" />
-            server hosting platform.
-          </h1>
-
-          {/* Subtitle */}
-          <p className="mx-auto mt-6 max-w-2xl text-[16px] sm:text-[18px] text-[#94a3b8] leading-relaxed">
-            High-speed Indian hosted servers with smart auto-sleep architecture, zero 24/7 idle drain, and instant Bedrock & Java crossplay.
-          </p>
-
-          {/* Hero CTAs */}
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-            <Link
-              href="#plans"
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-[#ffffff] px-6 py-3 text-[14px] font-semibold text-[#000000] hover:bg-[#e2e8f0] transition-all active:scale-95 shadow-md"
-            >
-              <span>View Plans (From ₹600)</span>
-              <ArrowRight className="size-4" />
-            </Link>
-
-            <button
-              onClick={copyAddress}
-              className="inline-flex items-center justify-center gap-2 rounded-full border border-[#1e2433] bg-[#090b10] px-5 py-3 text-[14px] font-mono text-[#f3f4f6] hover:bg-[#12151e] hover:border-[#2e3547] transition-all active:scale-95"
-            >
-              <span>play.kryin.gg</span>
-              {copied ? <CheckCheck className="size-4 text-emerald-400" /> : <Copy className="size-4 text-[#94a3b8]" />}
-            </button>
-          </div>
-
-          {/* Feature Highlights Pills */}
-          <div className="mt-10 flex flex-wrap items-center justify-center gap-6 text-[13px] font-medium text-[#94a3b8]">
-            <div className="flex items-center gap-2">
-              <Check className="size-4 text-[#38bdf8]" />
-              <span>Indian Hosted (Low Ping)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Check className="size-4 text-[#38bdf8]" />
-              <span>Fast · No Lag (20.0 TPS)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Check className="size-4 text-[#38bdf8]" />
-              <span>Console Ready (Bedrock + Java)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Check className="size-4 text-[#38bdf8]" />
-              <span>Smart Sleep (<span className="text-[#f3f4f6]">No 24/7 idle waste</span>)</span>
+            <div className="flex items-center gap-3">
+              <Link
+                href="/login"
+                className="text-[13px] font-medium text-[#1a1522]/80 hover:text-[#1a1522] transition-colors px-2 py-1"
+              >
+                Sign In
+              </Link>
+              <Link
+                href="#plans"
+                className="w-btn w-btn-solid text-[13px] font-semibold"
+                style={{ background: '#eef17c', color: '#1a1522' }}
+              >
+                Deploy Server
+              </Link>
             </div>
           </div>
         </div>
+      </nav>
 
-        {/* ===== Warp Terminal Window Mockup ===== */}
-        <div id="terminal" className="relative mx-auto max-w-4xl px-4 sm:px-6 mt-14">
-          <div className="warp-terminal overflow-hidden">
-            {/* Terminal Window Header */}
-            <div className="flex items-center justify-between border-b border-[#1c202d] bg-[#0c0e14] px-4 py-3">
-              <div className="flex items-center gap-2">
-                <span className="size-3 rounded-full bg-[#ff5f56]" />
-                <span className="size-3 rounded-full bg-[#ffbd2e]" />
-                <span className="size-3 rounded-full bg-[#27c93f]" />
-                <span className="ml-2 text-[12px] font-mono text-[#94a3b8]">
-                  kryin-node-01 — Paper 26.3 — Mumbai
+      {/* ===== Hero Section (The software factory infrastructure platform) ===== */}
+      <section className="w-hero">
+        <div className="w-wrap">
+          <div className="w-hero-body pt-12 pb-6 text-center">
+            <div className="w-hero-head max-w-4xl mx-auto space-y-4">
+              <h1 className="w-headline text-[38px] sm:text-[54px] md:text-[64px] font-bold tracking-tight text-[#1a1522] leading-[1.08]">
+                The software factory infrastructure platform
+              </h1>
+              <p className="w-lead text-[16px] sm:text-[19px] text-[#1a1522]/70 max-w-2xl mx-auto leading-relaxed">
+                build on Kryin: servers as code, any runtime or harness, with telemetry, auto-sleep, and Bedrock crossplay built in.
+              </p>
+              <div className="w-hero-actions pt-2 flex flex-wrap items-center justify-center gap-3">
+                <Link
+                  href="#plans"
+                  className="w-btn w-btn-solid font-semibold px-6 py-3 rounded text-[14px]"
+                  style={{ background: '#1a1522', color: '#ffffff' }}
+                >
+                  deploy server (from ₹600)
+                </Link>
+                <Link
+                  href="#code"
+                  className="w-btn w-btn-outline font-medium px-5 py-3 rounded text-[14px] border border-[#1a1522]/20 text-[#1a1522] hover:bg-[#1a1522]/5"
+                >
+                  explore configuration
+                </Link>
+              </div>
+            </div>
+          </div>
+
+          {/* Hero Media Figure (28-Column Node Grid Mockup) */}
+          <div className="w-hero-media max-w-5xl mx-auto mt-6">
+            <figure className="w-fig border border-[#1a1522]/15 rounded-lg overflow-hidden bg-white shadow-sm">
+              <figcaption className="w-fig-bar flex items-center justify-between px-4 py-2.5 bg-[#f6f5fb] border-b border-[#1a1522]/10 text-[12px] font-mono text-[#1a1522]/70">
+                <span className="w-fig-caption font-semibold">[ fig. 1 — the server cluster ]</span>
+                <span className="text-[11px] text-emerald-600 font-bold flex items-center gap-1.5">
+                  <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
+                  Indian Datacenter Nodes · Mumbai & Delhi Online
                 </span>
-              </div>
+              </figcaption>
+              <div className="w-fig-well p-5 bg-[#fafafc]">
+                <div className="w-fig-figure">
+                  <div className="w-fig-body space-y-3">
+                    <div className="w-fig-meta flex items-center justify-between text-[11px] font-mono text-[#1a1522]/60 border-b border-[#1a1522]/10 pb-2">
+                      <span>[ fig. t4 · the factory cluster ]</span>
+                      <span>8 × 28 · live telemetry · 20.0 TPS</span>
+                    </div>
 
-              {/* Tabs */}
-              <div className="flex items-center gap-1">
-                {(['console', 'telemetry', 'players'] as const).map((tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => setActiveTab(tab)}
-                    className={`px-3 py-1 rounded-md text-[11px] font-mono capitalize transition-all ${
-                      activeTab === tab
-                        ? 'bg-[#1c202d] text-[#ffffff] font-semibold'
-                        : 'text-[#94a3b8] hover:text-[#f3f4f6]'
-                    }`}
-                  >
-                    {tab}
-                  </button>
-                ))}
+                    {/* Interactive 28-column grid representing active server instances / ticks */}
+                    <div className="w-fig-plane grid grid-cols-14 sm:grid-cols-28 gap-1 py-2">
+                      {Array.from({ length: 56 }).map((_, i) => (
+                        <div
+                          key={i}
+                          className="h-6 rounded-xs flex items-center justify-center text-[9px] font-mono transition-all hover:scale-110 cursor-pointer"
+                          style={{
+                            background:
+                              i === 12 || i === 24 || i === 38
+                                ? '#38bdf8'
+                                : i % 5 === 0
+                                ? '#22c55e'
+                                : '#e8e7ee',
+                            color: i % 5 === 0 || i === 12 || i === 24 ? '#fff' : '#1a1522',
+                          }}
+                          title={`Node shard #${i + 1}: Active (20.0 TPS, <18ms)`}
+                        >
+                          ▩
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between text-[11px] font-mono text-[#1a1522]/70 pt-2 border-t border-[#1a1522]/10">
+                      <span>Address: play.kryin.gg (Java: 25565, Bedrock: 19132)</span>
+                      <span className="font-semibold text-emerald-700">Stable 20.0 TPS · Zero Lag</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </figure>
+          </div>
+        </div>
+      </section>
+
+      {/* ===== SECTION: Your software factory, defined in code. ===== */}
+      <section id="code" className="w-section py-16 border-t border-[#1a1522]/15">
+        <div className="w-wrap max-w-5xl mx-auto px-4 sm:px-6">
+          <div className="w-section-heading mb-8 space-y-2">
+            <h2 className="w-headline text-[32px] sm:text-[40px] font-bold text-[#1a1522] tracking-tight">
+              Your software factory, defined in code.
+            </h2>
+            <p className="w-lead text-[16px] text-[#1a1522]/70 max-w-2xl leading-relaxed">
+              Factories-as-code allows for a versioned and measured approach to optimizing costs and performance of your factories.
+            </p>
+          </div>
+
+          {/* Interactive File Structure View (Exact Warp w-code component) */}
+          <div className="w-section-content">
+            <div className="w-code border border-[#1a1522]/15 rounded-lg overflow-hidden bg-white shadow-sm flex flex-col md:flex-row min-h-[380px]">
+              {/* Left File Tree Navigation */}
+              <nav className="w-code-tree md:w-64 border-r border-[#1a1522]/15 bg-[#f6f5fb] p-3 shrink-0" aria-label="Files">
+                <p className="text-[11px] font-mono font-bold uppercase tracking-wider text-[#1a1522]/50 px-2 py-1 mb-1">
+                  Server Tree
+                </p>
+                <ul className="space-y-1 font-mono text-[13px]">
+                  {FILE_ITEMS.map((item, idx) => (
+                    <li key={item.name}>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedFileIndex(idx)}
+                        className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-left transition-all ${
+                          selectedFileIndex === idx
+                            ? 'bg-[#1a1522] text-white font-semibold'
+                            : 'text-[#1a1522]/80 hover:bg-[#1a1522]/10'
+                        }`}
+                      >
+                        <FileCode className="size-3.5 shrink-0 opacity-70" />
+                        <span className="truncate">{item.name}</span>
+                      </button>
+                    </li>
+                  ))}
+
+                  <li className="pt-2 text-[12px] text-[#1a1522]/50 px-2 flex items-center gap-1.5">
+                    <Folder className="size-3.5" />
+                    <span>plugins/</span>
+                  </li>
+                  <li className="text-[11px] text-[#1a1522]/70 pl-6 space-y-1">
+                    <p>• Geyser-Spigot.jar</p>
+                    <p>• Floodgate.jar</p>
+                    <p>• ViaVersion.jar</p>
+                  </li>
+
+                  <li className="pt-2 text-[12px] text-[#1a1522]/50 px-2 flex items-center gap-1.5">
+                    <Folder className="size-3.5" />
+                    <span>world/</span>
+                  </li>
+                  <li className="text-[11px] text-[#1a1522]/70 pl-6">
+                    <p>• playerdata/ & stats/</p>
+                  </li>
+                </ul>
+              </nav>
+
+              {/* Right Code Pane with Syntax Styling */}
+              <div className="w-code-pane flex-1 flex flex-col bg-[#ffffff]">
+                <div className="w-code-bar flex items-center justify-between px-4 py-2.5 bg-[#fbf9fe] border-b border-[#1a1522]/10 text-[12px] font-mono text-[#1a1522]/70">
+                  <span className="w-code-path font-bold text-[#1a1522]">{selectedFile.name}</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[11px] uppercase tracking-wider">{selectedFile.language}</span>
+                    <button
+                      type="button"
+                      onClick={handleCopyCode}
+                      className="p-1 rounded hover:bg-[#1a1522]/10 text-[#1a1522]/70 transition-colors"
+                      title="Copy contents"
+                    >
+                      {copied ? <CheckCheck className="size-3.5 text-emerald-600" /> : <Copy className="size-3.5" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="w-code-body p-4 font-mono text-[12px] sm:text-[13px] leading-relaxed overflow-x-auto flex-1 bg-[#ffffff]">
+                  <pre className="text-[#1a1522]">
+                    <code>
+                      {selectedFile.content.split('\n').map((line, lineIdx) => (
+                        <div key={lineIdx} className="flex gap-4">
+                          <span className="w-6 text-right select-none text-[#1a1522]/30">{lineIdx + 1}</span>
+                          <span className={line.startsWith('#') ? 'text-[#1a1522]/50 italic' : line.includes('=') ? 'text-blue-700' : 'text-[#1a1522]'}>
+                            {line}
+                          </span>
+                        </div>
+                      ))}
+                    </code>
+                  </pre>
+                </div>
               </div>
             </div>
 
-            {/* Terminal Content Body */}
-            <div className="p-5 font-mono text-[13px] leading-relaxed bg-[#050608] min-h-[220px]">
-              {activeTab === 'console' && (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-[#38bdf8]">
-                    <span>❯</span>
-                    <span>kryin-host status --node=mumbai-primary</span>
-                  </div>
-                  <div className="text-[#94a3b8] space-y-1 pl-4 border-l-2 border-[#1c202d]">
-                    <p className="text-emerald-400">✔ Node: Indian Datacenter (Mumbai Node 01) • Online</p>
-                    <p className="text-[#f3f4f6]">✔ Version: Paper 26.3 • Build #249 • Java 25 Runtime</p>
-                    <p className="text-[#f3f4f6]">✔ Performance: 20.0 TPS • 0.0% tick drop • Fast No Lag</p>
-                    <p className="text-[#38bdf8]">✔ GeyserBridge: Active • Java: 25565 • Bedrock: 19132 (Console Ready)</p>
-                    <p className="text-[#fb923c]">✔ Smart Sleep: Enabled • Auto-wakes on player join in &lt;2 mins</p>
-                  </div>
-                  <div className="flex items-center gap-2 pt-2 text-[#94a3b8]">
-                    <span className="text-[#38bdf8]">❯</span>
-                    <span className="text-[#94a3b8] animate-pulse">Server ready for connections on play.kryin.gg</span>
-                  </div>
+            {/* 4 Numbered Navigation Markers Under Code */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-8">
+              {[
+                {
+                  n: '01',
+                  label: 'Server definition',
+                  desc: 'The shared foundation for your server. Defines ports (25565), MOTD, max players, and game rules.',
+                },
+                {
+                  n: '02',
+                  label: 'Paper 26.3 Engine',
+                  desc: 'High single-thread clock execution and optimized chunk rendering for a stable 20.0 TPS with zero lag.',
+                },
+                {
+                  n: '03',
+                  label: 'Console Crossplay',
+                  desc: 'Geyser & Floodgate bridge allowing Bedrock clients on Xbox, PlayStation, Switch, iOS & Android to join.',
+                },
+                {
+                  n: '04',
+                  label: 'Smart Auto-Sleep',
+                  desc: 'Low-power sleep mode when empty; wakes automatically in under 2 minutes when players join (no 24/7 idle drain).',
+                },
+              ].map((item) => (
+                <div key={item.n} className="p-4 rounded-lg border border-[#1a1522]/15 bg-[#fbf9fe] space-y-1.5">
+                  <span className="font-mono text-xs font-bold text-[#1a1522]/40">{item.n}</span>
+                  <h4 className="font-bold text-[14px] text-[#1a1522]">{item.label}</h4>
+                  <p className="text-[12px] text-[#1a1522]/70 leading-relaxed">{item.desc}</p>
                 </div>
-              )}
-
-              {activeTab === 'telemetry' && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between text-[#94a3b8] border-b border-[#1c202d] pb-2 text-[12px]">
-                    <span>METRIC</span>
-                    <span>CURRENT VALUE</span>
-                    <span>STATUS</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[#f3f4f6]">Ticks Per Second (TPS)</span>
-                    <span className="text-emerald-400 font-bold">20.00 TPS</span>
-                    <span className="text-emerald-400 text-[11px]">OPT_PERFECT</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[#f3f4f6]">RAM Allocation</span>
-                    <span className="text-[#38bdf8]">4.0 GB / 4.0 GB High-Speed</span>
-                    <span className="text-[#38bdf8] text-[11px]">UNTHROTTLED</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[#f3f4f6]">Auto-Sleep Mode</span>
-                    <span className="text-[#fb923c]">Smart Eco Standby</span>
-                    <span className="text-[#fb923c] text-[11px]">READY_ON_JOIN</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[#f3f4f6]">Server Host Location</span>
-                    <span className="text-[#f3f4f6]">Mumbai, India (Subcontinent Tier 1)</span>
-                    <span className="text-emerald-400 text-[11px]">LOW_PING</span>
-                  </div>
-                </div>
-              )}
-
-              {activeTab === 'players' && (
-                <div className="space-y-2">
-                  <p className="text-[#94a3b8] text-[12px] mb-2">Connected Cross-Platform Players (Sample Telemetry):</p>
-                  <div className="rounded-lg border border-[#1c202d] bg-[#0c0e14] p-3 space-y-1.5 text-[12px]">
-                    <div className="flex items-center justify-between">
-                      <span className="text-emerald-400 font-bold">• NarcoGam3X (OP)</span>
-                      <span className="text-[#94a3b8]">Java Edition • Ping: 18ms</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[#38bdf8] font-bold">• Steve_Console</span>
-                      <span className="text-[#94a3b8]">Bedrock (PlayStation / Xbox) • Ping: 24ms</span>
-                    </div>
-                  </div>
-                </div>
-              )}
+              ))}
             </div>
           </div>
         </div>
       </section>
 
-      {/* ===== 4 RAM Plans Section (NO Free Plan) ===== */}
-      <section id="plans" className="border-t border-[#1a1e29] bg-[#050608] py-24 px-4 sm:px-6">
-        <div className="mx-auto max-w-6xl space-y-12">
-          {/* Header */}
-          <div className="text-center space-y-3 max-w-xl mx-auto">
-            <span className="rounded-full border border-[#1e2433] bg-[#0d0f16] px-3 py-1 font-mono text-[11px] font-semibold text-[#38bdf8] uppercase tracking-wider">
-              Indian Hosted Plans
-            </span>
-            <h2 className="text-[36px] sm:text-[46px] font-extrabold tracking-tight text-[#ffffff]">
-              Simple RAM-Based Plans
+      {/* ===== SECTION: Baked-in measurement and self-improvement ===== */}
+      <section id="measurement" className="w-section py-16 bg-[#f6f5fb] border-t border-[#1a1522]/15">
+        <div className="w-wrap max-w-5xl mx-auto px-4 sm:px-6">
+          <div className="w-section-heading mb-8 space-y-2">
+            <h2 className="w-headline text-[32px] sm:text-[40px] font-bold text-[#1a1522] tracking-tight">
+              Baked-in measurement and self-improvement
             </h2>
-            <p className="text-[15px] text-[#94a3b8]">
-              High-speed Indian nodes. Fast, no lag, console ready, with smart sleep architecture (no 24/7 idle power drain).
+            <p className="w-lead text-[16px] text-[#1a1522]/70 max-w-2xl leading-relaxed">
+              evals, benchmarks, and self-improvement loops drive measurable gains.
             </p>
           </div>
 
-          {/* 4 Cards Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className="w-section-content">
+            <figure className="w-fig border border-[#1a1522]/15 rounded-lg overflow-hidden bg-white shadow-sm">
+              <figcaption className="w-fig-bar flex items-center justify-between px-4 py-2.5 bg-[#fbf9fe] border-b border-[#1a1522]/10 text-[12px] font-mono text-[#1a1522]/70">
+                <span className="w-fig-caption">[ fig. 2 · telemetry loop · live instance ]</span>
+                <span className="text-[11px] text-emerald-600 font-bold">100% TICK FIDELITY</span>
+              </figcaption>
+
+              <div className="w-fig-well p-6 bg-white">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* Metric 1 */}
+                  <div className="p-4 rounded-lg border border-[#1a1522]/15 bg-[#fafafc] space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-mono font-bold text-[#1a1522]/60 uppercase">TPS Stability</span>
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">PASS</span>
+                    </div>
+                    <p className="text-[28px] font-mono font-bold text-[#1a1522]">20.0 TPS</p>
+                    <p className="text-[12px] text-[#1a1522]/70">0.0% tick drop over last 24h</p>
+                    <svg viewBox="0 0 200 30" className="w-full h-8 pt-2" aria-hidden>
+                      <polyline
+                        points="0,15 25,15 50,14 75,15 100,15 125,14 150,15 175,15 200,15"
+                        fill="none"
+                        stroke="#22c55e"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </div>
+
+                  {/* Metric 2 */}
+                  <div className="p-4 rounded-lg border border-[#1a1522]/15 bg-[#fafafc] space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-mono font-bold text-[#1a1522]/60 uppercase">Memory Allocation</span>
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 font-bold">DEDICATED</span>
+                    </div>
+                    <p className="text-[28px] font-mono font-bold text-[#1a1522]">4GB – 12GB</p>
+                    <p className="text-[12px] text-[#1a1522]/70">High-speed DDR4/DDR5 unthrottled</p>
+                    <div className="w-full bg-[#1a1522]/10 rounded-full h-2 mt-4">
+                      <div className="bg-[#1a1522] h-2 rounded-full w-[70%]" />
+                    </div>
+                  </div>
+
+                  {/* Metric 3 */}
+                  <div className="p-4 rounded-lg border border-[#1a1522]/15 bg-[#fafafc] space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-mono font-bold text-[#1a1522]/60 uppercase">Subcontinent Ping</span>
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">LOWEST</span>
+                    </div>
+                    <p className="text-[28px] font-mono font-bold text-[#1a1522]">&lt; 18ms</p>
+                    <p className="text-[12px] text-[#1a1522]/70">Mumbai & Delhi direct fiber routing</p>
+                    <div className="text-[11px] font-mono text-[#1a1522]/60 pt-3">
+                      Tier 1 Indian peering points
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </figure>
+          </div>
+        </div>
+      </section>
+
+      {/* ===== SECTION: Control your coding agent chaos ===== */}
+      <section id="control" className="w-section py-16 border-t border-[#1a1522]/15">
+        <div className="w-wrap max-w-5xl mx-auto px-4 sm:px-6">
+          <div className="w-section-heading mb-8 space-y-2">
+            <h2 className="w-headline text-[32px] sm:text-[40px] font-bold text-[#1a1522] tracking-tight">
+              Control your coding agent chaos
+            </h2>
+            <p className="w-lead text-[16px] text-[#1a1522]/70 max-w-2xl leading-relaxed">
+              continuous improvement, better governance and security, by default.
+            </p>
+          </div>
+
+          <div className="w-section-content">
+            <figure className="w-fig border border-[#1a1522]/15 rounded-lg overflow-hidden bg-white shadow-sm">
+              <figcaption className="w-fig-bar flex items-center justify-between px-4 py-2.5 bg-[#fbf9fe] border-b border-[#1a1522]/10 text-[12px] font-mono text-[#1a1522]/70">
+                <span className="w-fig-caption">[ fig. 3 · control plane · player & server management ]</span>
+                <span className="text-[11px] font-mono text-emerald-600 font-bold">ONLINE</span>
+              </figcaption>
+
+              <div className="w-fig-well p-6 bg-white space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Console Streaming */}
+                  <div className="border border-[#1a1522]/15 rounded-lg p-4 bg-[#fbf9fe] space-y-3">
+                    <div className="flex items-center justify-between text-xs font-mono font-bold text-[#1a1522]">
+                      <span className="flex items-center gap-1.5">
+                        <Terminal className="size-4" /> Real-Time Console Stream
+                      </span>
+                      <span className="text-emerald-600">CONNECTED</span>
+                    </div>
+                    <div className="font-mono text-[11px] bg-[#1a1522] text-[#f3f4f6] p-3 rounded space-y-1">
+                      <p className="text-emerald-400">[INFO] Paper 26.3 initialized (Build #249)</p>
+                      <p className="text-blue-400">[INFO] Geyser-Spigot listening on 0.0.0.0:19132</p>
+                      <p className="text-[#94a3b8]">[INFO] Auto-sleep monitoring active (idle: 0 players)</p>
+                      <p className="text-yellow-400">[WARN] Standby armed: server will sleep after 5m empty</p>
+                    </div>
+                  </div>
+
+                  {/* Player & Sleep Governance */}
+                  <div className="border border-[#1a1522]/15 rounded-lg p-4 bg-[#fbf9fe] space-y-3">
+                    <div className="flex items-center justify-between text-xs font-mono font-bold text-[#1a1522]">
+                      <span className="flex items-center gap-1.5">
+                        <Users className="size-4" /> Player & Sleep Governance
+                      </span>
+                      <span className="text-blue-600">CROSSPLAY</span>
+                    </div>
+                    <div className="space-y-2 text-xs">
+                      <div className="flex items-center justify-between p-2 rounded bg-white border border-[#1a1522]/10">
+                        <span className="font-semibold text-[#1a1522]">NarcoGam3X (OP)</span>
+                        <span className="text-[#1a1522]/60 font-mono">Java · 18ms · Survival</span>
+                      </div>
+                      <div className="flex items-center justify-between p-2 rounded bg-white border border-[#1a1522]/10">
+                        <span className="font-semibold text-[#1a1522]">Steve_Console</span>
+                        <span className="text-[#1a1522]/60 font-mono">Bedrock · Xbox · 24ms</span>
+                      </div>
+                      <div className="p-2.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-900 text-[11px]">
+                        <b>Smart Sleep Active:</b> Server automatically sleeps when no players are connected. Wakes in &lt;2 mins upon connection.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </figure>
+          </div>
+        </div>
+      </section>
+
+      {/* ===== SECTION: Use Warp everywhere (plans instead of this) ===== */}
+      <section id="plans" className="w-section py-20 bg-[#fbf9fe] border-t border-[#1a1522]/15">
+        <div className="w-wrap max-w-6xl mx-auto px-4 sm:px-6 space-y-10">
+          <div className="w-section-heading text-center max-w-xl mx-auto space-y-2">
+            <span className="text-[11px] font-mono font-bold text-[#1a1522]/60 uppercase tracking-wider">
+              Indian Hosted Plans
+            </span>
+            <h2 className="w-headline text-[34px] sm:text-[44px] font-bold text-[#1a1522] tracking-tight">
+              Use Warp everywhere (plans instead of this)
+            </h2>
+            <p className="w-lead text-[15px] text-[#1a1522]/70 leading-relaxed">
+              High-speed Indian nodes. Fast, zero lag, console ready, with smart sleep architecture (no 24/7 idle power drain).
+            </p>
+          </div>
+
+          {/* 4 Cards Grid (Warp w-cards layout) */}
+          <ul className="w-cards grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
             {RAM_PLANS.map((plan) => (
-              <div
+              <li
                 key={plan.ram}
-                className={`warp-card p-6 flex flex-col justify-between ${
+                className={`w-card border rounded-lg p-6 flex flex-col justify-between transition-all bg-white shadow-sm ${
                   plan.highlight
-                    ? 'border-[#38bdf8]/60 bg-[#0c0f17] shadow-xl ring-1 ring-[#38bdf8]/20 relative'
-                    : 'bg-[#090b10]'
+                    ? 'border-[#1a1522] ring-2 ring-[#1a1522]/10'
+                    : 'border-[#1a1522]/15 hover:border-[#1a1522]/40'
                 }`}
               >
                 <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <span
-                      className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
-                        plan.highlight
-                          ? 'bg-[#38bdf8]/20 text-[#38bdf8] border border-[#38bdf8]/40'
-                          : 'bg-[#161a26] text-[#94a3b8] border border-[#1e2433]'
-                      }`}
-                    >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-[#1a1522]/5 text-[#1a1522] border border-[#1a1522]/10">
                       {plan.badge}
                     </span>
                     {plan.highlight && (
-                      <span className="text-[10px] font-bold uppercase text-emerald-400 flex items-center gap-1">
+                      <span className="text-[10px] font-bold uppercase text-emerald-700 flex items-center gap-1 font-mono">
                         <Sparkles className="size-3" /> Recommended
                       </span>
                     )}
                   </div>
 
-                  <h3 className="text-[24px] font-black text-[#ffffff] tracking-tight">{plan.ram} RAM</h3>
-                  <p className="text-[12px] text-[#94a3b8] mt-1 min-h-[34px] leading-snug">
+                  <h3 className="w-item-title text-[24px] font-bold text-[#1a1522] mt-2 font-mono">
+                    {plan.ram} RAM
+                  </h3>
+                  <p className="w-item-body text-[12px] text-[#1a1522]/70 mt-1 min-h-[34px] leading-snug">
                     {plan.idealFor}
                   </p>
 
                   {/* Price */}
-                  <div className="my-5 pb-5 border-b border-[#1c202d]">
+                  <div className="my-4 pb-4 border-b border-[#1a1522]/10">
                     <div className="flex items-baseline gap-1">
-                      <span className="text-4xl font-extrabold text-[#ffffff] font-mono tracking-tight">
+                      <span className="text-3xl font-bold font-mono text-[#1a1522]">
                         ₹{plan.price}
                       </span>
-                      <span className="text-xs text-[#94a3b8] font-medium">/ month</span>
+                      <span className="text-xs text-[#1a1522]/60 font-mono">/ month</span>
                     </div>
                   </div>
 
-                  {/* Specs summary */}
-                  <div className="space-y-1.5 text-xs text-[#f3f4f6] mb-5 pb-5 border-b border-[#1c202d]">
+                  {/* Specs */}
+                  <div className="space-y-1.5 text-xs text-[#1a1522] mb-5 pb-5 border-b border-[#1a1522]/10 font-mono">
                     <div className="flex items-center justify-between">
-                      <span className="text-[#94a3b8]">RAM:</span>
-                      <span className="font-semibold text-[#ffffff]">{plan.ram}</span>
+                      <span className="text-[#1a1522]/60">RAM:</span>
+                      <span className="font-semibold">{plan.ram}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-[#94a3b8]">vCPU:</span>
+                      <span className="text-[#1a1522]/60">vCPU:</span>
                       <span className="font-semibold">{plan.vCpu}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-[#94a3b8]">NVMe Storage:</span>
+                      <span className="text-[#1a1522]/60">NVMe:</span>
                       <span className="font-semibold">{plan.storage}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-[#94a3b8]">Player Slots:</span>
+                      <span className="text-[#1a1522]/60">Slots:</span>
                       <span className="font-semibold">{plan.slots}</span>
                     </div>
                   </div>
 
-                  {/* Features list */}
-                  <ul className="space-y-2.5 text-[12px] text-[#94a3b8] mb-6">
+                  {/* Features */}
+                  <ul className="space-y-2 text-[12px] text-[#1a1522]/80 mb-6">
                     {plan.features.map((f, i) => (
                       <li key={i} className="flex items-start gap-2">
-                        <Check className="size-3.5 text-[#38bdf8] shrink-0 mt-0.5" />
-                        <span className="text-[#cbd5e1]">{f}</span>
+                        <Check className="size-3.5 text-[#1a1522] shrink-0 mt-0.5" />
+                        <span>{f}</span>
                       </li>
                     ))}
                   </ul>
                 </div>
 
-                <Link
-                  href="/login"
-                  className={`w-full py-2.5 rounded-xl text-xs font-bold text-center transition-all flex items-center justify-center gap-1.5 ${
-                    plan.highlight
-                      ? 'bg-[#ffffff] hover:bg-[#e2e8f0] text-[#000000] shadow-md'
-                      : 'bg-[#161a26] hover:bg-[#202738] text-[#ffffff] border border-[#1e2433]'
-                  }`}
-                >
-                  <span>Deploy {plan.ram} Server</span>
-                  <ArrowRight className="size-3.5" />
-                </Link>
-              </div>
+                <div className="w-card-action">
+                  <Link
+                    href="/login"
+                    className={`w-btn w-full py-2.5 rounded text-xs font-bold text-center block transition-all ${
+                      plan.highlight
+                        ? 'w-btn-solid bg-[#1a1522] text-white hover:opacity-90'
+                        : 'w-btn-outline border border-[#1a1522]/30 text-[#1a1522] hover:bg-[#1a1522]/5'
+                    }`}
+                  >
+                    Deploy {plan.ram} Server
+                  </Link>
+                </div>
+              </li>
             ))}
-          </div>
+          </ul>
 
-          {/* Smart Sleep explanation card */}
-          <div className="warp-card max-w-3xl mx-auto p-5 text-center text-[13px] text-[#94a3b8] space-y-1">
+          {/* Smart Sleep Notice */}
+          <div className="max-w-3xl mx-auto rounded-lg border border-[#1a1522]/15 bg-white p-4 text-center text-[13px] text-[#1a1522]/70 space-y-1">
             <p>
-              <span className="text-[#38bdf8] font-bold">Smart Sleep Architecture:</span> To eliminate 24/7 idle power drain and keep hosting costs low, servers enter an automatic low-power sleep state when all players disconnect.
+              <b className="text-[#1a1522]">Smart Sleep Architecture:</b> To eliminate 24/7 idle power drain and keep hosting costs low, servers enter an automatic low-power sleep state when all players disconnect.
             </p>
-            <p className="text-[12px] text-[#64748b]">
+            <p className="text-[12px] text-[#1a1522]/50">
               When any player connects to your address, the server wakes automatically in under 2 minutes with all world progress and inventories 100% saved.
             </p>
           </div>
         </div>
       </section>
 
-      {/* ===== Capabilities Grid ===== */}
-      <section id="capabilities" className="border-t border-[#1a1e29] bg-[#000000] py-24 px-4 sm:px-6">
-        <div className="mx-auto max-w-6xl space-y-12">
-          <div className="text-center space-y-2 max-w-md mx-auto">
-            <span className="font-mono text-[11px] font-semibold text-[#38bdf8] uppercase tracking-wider">
-              Engineering
-            </span>
-            <h2 className="text-[34px] sm:text-[44px] font-extrabold tracking-tight text-[#ffffff]">
-              Hosting Capabilities
+      {/* ===== SECTION: Frequently asked questions ===== */}
+      <section id="faq" className="w-section py-16 border-t border-[#1a1522]/15">
+        <div className="w-wrap max-w-3xl mx-auto px-4 sm:px-6 space-y-8">
+          <div className="w-section-heading text-center space-y-2">
+            <h2 className="w-headline text-[32px] sm:text-[40px] font-bold text-[#1a1522] tracking-tight">
+              Frequently asked questions
             </h2>
-            <p className="text-[14px] text-[#94a3b8]">
-              Built for speed, reliability, and simple web-first server management.
-            </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {CAPABILITIES.map((c) => {
-              const Icon = c.icon;
+          <div className="w-faq-list space-y-3">
+            {FAQ.map((item, idx) => {
+              const isOpen = openFaq === idx;
               return (
-                <div key={c.tag} className="warp-card p-6 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-[11px] text-[#64748b]">{c.tag}</span>
-                    <div className="size-8 rounded-lg bg-[#161a26] border border-[#1e2433] flex items-center justify-center text-[#38bdf8]">
-                      <Icon className="size-4" />
+                <div key={idx} className="w-faq-item border border-[#1a1522]/15 rounded-lg bg-white overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setOpenFaq(isOpen ? null : idx)}
+                    className="w-faq-row w-full flex items-center justify-between p-4 text-left font-mono text-[14px] font-semibold text-[#1a1522] hover:bg-[#f6f5fb] transition-colors"
+                  >
+                    <span className="w-faq-q">{item.q}</span>
+                    <span className="w-faq-toggle text-[12px] font-bold text-[#1a1522]/60">
+                      {isOpen ? '[-]' : '[+]'}
+                    </span>
+                  </button>
+                  {isOpen && (
+                    <div className="w-faq-a p-4 border-t border-[#1a1522]/10 bg-[#fafafc] text-[13px] leading-relaxed text-[#1a1522]/70">
+                      <div>{item.a}</div>
                     </div>
-                  </div>
-                  <h3 className="text-[17px] font-bold text-[#ffffff]">{c.label}</h3>
-                  <p className="text-[13px] text-[#94a3b8] leading-relaxed">{c.desc}</p>
+                  )}
                 </div>
               );
             })}
@@ -557,89 +788,29 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ===== FAQ Accordion ===== */}
-      <section id="faq" className="border-t border-[#1a1e29] bg-[#050608] py-24 px-4 sm:px-6">
-        <div className="mx-auto max-w-3xl space-y-8">
-          <div className="text-center space-y-2">
-            <span className="font-mono text-[11px] font-semibold text-[#38bdf8] uppercase tracking-wider">
-              Help & Information
-            </span>
-            <h2 className="text-[32px] sm:text-[42px] font-extrabold tracking-tight text-[#ffffff]">
-              Frequently Asked Questions
-            </h2>
-          </div>
-
-          <div className="space-y-3">
-            {FAQ.map((item, idx) => (
-              <details
-                key={idx}
-                className="group warp-card p-5 transition-all [&_summary::-webkit-details-marker]:hidden"
-              >
-                <summary className="flex cursor-pointer items-center justify-between text-[15px] font-semibold text-[#ffffff] hover:text-[#38bdf8] transition-colors">
-                  <span>{item.q}</span>
-                  <ChevronDown className="size-4 text-[#94a3b8] transition-transform duration-200 group-open:rotate-180" />
-                </summary>
-                <p className="mt-3 text-[13px] leading-relaxed text-[#94a3b8] border-t border-[#1c202d] pt-3">
-                  {item.a}
-                </p>
-              </details>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ===== Bottom CTA Banner ===== */}
-      <section className="border-t border-[#1a1e29] bg-[#000000] py-20 px-4 sm:px-6 text-center">
-        <div className="mx-auto max-w-2xl space-y-6">
-          <h2 className="text-[36px] sm:text-[48px] font-extrabold tracking-tight text-[#ffffff]">
-            Launch your Minecraft server today.
-          </h2>
-          <p className="text-[15px] text-[#94a3b8] leading-relaxed">
-            Choose from 4GB (₹600) to 12GB (₹1,500) high-speed Indian nodes. Fast, zero lag, console ready, and instant auto-wake.
-          </p>
-          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-            <Link
-              href="#plans"
-              className="rounded-full bg-[#ffffff] px-6 py-3 text-[14px] font-semibold text-[#000000] hover:bg-[#e2e8f0] transition-all shadow-md active:scale-95"
-            >
-              Get Started with 4GB (₹600/mo)
-            </Link>
-            <Link
-              href="/login"
-              className="rounded-full border border-[#1e2433] bg-[#090b10] px-6 py-3 text-[14px] font-medium text-[#f3f4f6] hover:bg-[#12151e] transition-all"
-            >
-              Sign In to Control Panel
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* ===== Clean Warp Footer ===== */}
-      <footer className="border-t border-[#1a1e29] bg-[#000000] py-10 px-4 sm:px-6 text-[13px] text-[#64748b]">
-        <div className="mx-auto max-w-6xl flex flex-col sm:flex-row items-center justify-between gap-4">
+      {/* ===== Footer (Warp w-footer) ===== */}
+      <footer className="w-footer border-t border-[#1a1522]/15 bg-[#f6f5fb] py-12 px-4 sm:px-6 text-[13px] text-[#1a1522]/60">
+        <div className="w-wrap max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2.5">
-            <div className="flex size-6 items-center justify-center rounded bg-[#ffffff] text-[#000000] font-bold">
+            <div className="flex size-6 items-center justify-center rounded bg-[#1a1522] text-white font-bold">
               <Server className="size-3.5" />
             </div>
-            <span className="font-bold text-[14px] text-[#ffffff]">KryinHost</span>
+            <span className="font-bold text-[14px] text-[#1a1522]">KryinHost</span>
             <span>·</span>
-            <span>Indian Game Server Hosting</span>
+            <span>Indian Game Server Infrastructure</span>
           </div>
 
-          <div className="flex items-center gap-6 text-[13px] text-[#94a3b8]">
-            <Link href="#plans" className="hover:text-[#ffffff] transition-colors">Plans</Link>
-            <Link href="#capabilities" className="hover:text-[#ffffff] transition-colors">Capabilities</Link>
-            <Link href="/login" className="hover:text-[#ffffff] transition-colors">Control Panel</Link>
-            <span className="inline-flex items-center gap-1.5 text-emerald-400 font-medium">
-              <span className="size-1.5 rounded-full bg-emerald-400" />
-              Indian Nodes Online
-            </span>
+          <div className="flex items-center gap-6 text-[13px] font-mono text-[#1a1522]/70">
+            <Link href="#plans" className="hover:text-[#1a1522] transition-colors">Plans</Link>
+            <Link href="#code" className="hover:text-[#1a1522] transition-colors">Configuration</Link>
+            <Link href="/login" className="hover:text-[#1a1522] transition-colors">Control Panel</Link>
+            <span className="text-emerald-700 font-bold">Indian Nodes Online</span>
           </div>
         </div>
 
-        <div className="mx-auto max-w-6xl mt-6 pt-6 border-t border-[#1a1e29] flex flex-col sm:flex-row items-center justify-between gap-2 text-[12px] text-[#64748b]">
+        <div className="w-wrap max-w-5xl mx-auto mt-6 pt-6 border-t border-[#1a1522]/10 flex flex-col sm:flex-row items-center justify-between gap-2 text-[12px] font-mono text-[#1a1522]/50">
           <p>© 2026 KryinHost Inc. All rights reserved. Not an official Minecraft product.</p>
-          <p className="font-mono">Indian Datacenter Nodes (Mumbai & Delhi) · Paper 26.3 · OpenJDK 25</p>
+          <p>Indian Datacenter Nodes (Mumbai & Delhi) · Paper 26.3 · OpenJDK 25</p>
         </div>
       </footer>
     </div>
