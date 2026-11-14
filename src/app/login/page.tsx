@@ -3,10 +3,12 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Server, Lock, Mail, ArrowRight, ShieldCheck, AlertCircle, Sparkles } from 'lucide-react';
+import { Server, Lock, Mail, ArrowRight, ShieldCheck, AlertCircle, Sparkles, CheckCircle2 } from 'lucide-react';
+import { createClient } from '@/lib/supabase/client';
 
 export default function LoginPage() {
   const router = useRouter();
+  const supabase = createClient();
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -20,11 +22,46 @@ export default function LoginPage() {
     setErrorMsg(null);
     setInfoMsg(null);
 
-    // In Phase 1 mock mode, simulate immediate successful login:
-    setTimeout(() => {
+    try {
+      if (isSignUp) {
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+        });
+        if (error) throw error;
+        if (data.session) {
+          router.push('/dashboard');
+        } else {
+          setInfoMsg('Account created! Please check your email to confirm your account, or sign in.');
+        }
+      } else {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (error) throw error;
+        router.push('/dashboard');
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Authentication failed. Please check your credentials.');
+    } finally {
       setIsSubmitting(false);
-      router.push('/dashboard');
-    }, 600);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!email) {
+      setErrorMsg('Please enter your email address to receive password reset instructions.');
+      return;
+    }
+    setErrorMsg(null);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email);
+      if (error) throw error;
+      setInfoMsg('Password reset instructions sent to ' + email);
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Could not send reset email.');
+    }
   };
 
   const handleDemoBypass = () => {
@@ -98,7 +135,7 @@ export default function LoginPage() {
               {!isSignUp && (
                 <button
                   type="button"
-                  onClick={() => setInfoMsg('Password reset instructions will be sent to your email.')}
+                  onClick={handleResetPassword}
                   className="text-[11px] text-blue-400 hover:underline"
                 >
                   Forgot password?
