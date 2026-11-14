@@ -9,7 +9,6 @@ import {
   Users,
   FolderTree,
   Sliders,
-  ExternalLink,
   ArrowLeft
 } from 'lucide-react';
 import { useServerStore } from '@/lib/serverStore';
@@ -28,30 +27,30 @@ export const MobileNav: React.FC = () => {
   const onlineCount = players.filter((p) => p.isOnline).length;
 
   return (
-    <div className="lg:hidden flex flex-col font-mono">
+    <div className="lg:hidden flex flex-col font-mono text-[#1a1522]">
       {/* Top Mobile Bar */}
-      <header className="h-14 bg-[#0e0d13] border-b border-[#242131] px-4 flex items-center justify-between sticky top-0 z-30">
-        <Link href="/" className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-md bg-[#181622] border border-[#2d293d] flex items-center justify-center text-zinc-100">
+      <header className="h-14 bg-white border-b border-[#1a1522]/10 px-4 flex items-center justify-between sticky top-0 z-30 shadow-xs">
+        <Link href="/" className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center">
             <svg width="15" height="15" viewBox="0 0 32 32" fill="none">
               <path d="M16 2L3 9.5V22.5L16 30L29 22.5V9.5L16 2Z" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round"/>
-              <path d="M16 2V30M3 9.5L29 22.5M29 9.5L3 22.5" stroke="currentColor" strokeWidth="1.4" strokeOpacity="0.3"/>
-              <circle cx="16" cy="16" r="3.5" fill="#52ff94" />
+              <path d="M16 2V30M3 9.5L29 22.5M29 9.5L3 22.5" stroke="currentColor" strokeWidth="1.4" strokeOpacity="0.4"/>
+              <circle cx="16" cy="16" r="3.5" fill="#ffffff" />
             </svg>
           </div>
-          <span className="font-bold text-zinc-100 text-sm">KryinHost</span>
+          <span className="font-bold text-[#1a1522] text-sm tracking-tight font-mono">KryinHost</span>
         </Link>
 
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] bg-emerald-950/70 border border-emerald-700/50 text-emerald-400">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 border border-emerald-200 text-emerald-700">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             20.0 TPS
           </span>
 
           <Link
             href="/"
-            className="p-1.5 rounded bg-[#181622] border border-[#262333] text-zinc-400 hover:text-zinc-100"
-            title="Landing Page"
+            className="p-1.5 rounded-lg bg-[#f8f9fd] border border-[#1a1522]/10 text-[#1a1522]/70 hover:text-[#1a1522]"
+            title="Homepage"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
           </Link>
@@ -59,7 +58,7 @@ export const MobileNav: React.FC = () => {
       </header>
 
       {/* Bottom Sticky Tab Bar */}
-      <nav className="fixed bottom-0 left-0 right-0 h-16 bg-[#0e0d13]/95 backdrop-blur-md border-t border-[#242131] px-2 flex items-center justify-around z-40">
+      <nav className="fixed bottom-0 left-0 right-0 h-16 bg-white/95 backdrop-blur-md border-t border-[#1a1522]/10 px-2 flex items-center justify-around z-40 shadow-lg">
         {navItems.map((item) => {
           const isActive =
             item.href === '/dashboard'
@@ -72,13 +71,13 @@ export const MobileNav: React.FC = () => {
               key={item.href}
               href={item.href}
               className={`flex flex-col items-center justify-center flex-1 py-1 text-[10px] transition-colors relative ${
-                isActive ? 'text-zinc-100 font-bold' : 'text-zinc-400 hover:text-zinc-300'
+                isActive ? 'text-blue-700 font-bold' : 'text-[#1a1522]/60 hover:text-[#1a1522]'
               }`}
             >
               <div className="relative">
-                <Icon className={`w-4 h-4 mb-1 ${isActive ? 'text-emerald-400' : 'text-zinc-400'}`} />
+                <Icon className={`w-4 h-4 mb-1 ${isActive ? 'text-blue-600' : 'text-[#1a1522]/40'}`} />
                 {item.name === 'Players' && onlineCount > 0 && (
-                  <span className="absolute -top-1 -right-2 w-3.5 h-3.5 rounded-full bg-emerald-500 text-[8px] text-zinc-950 font-bold flex items-center justify-center">
+                  <span className="absolute -top-1 -right-2 w-3.5 h-3.5 rounded-full bg-blue-600 text-[8px] text-white font-bold flex items-center justify-center">
                     {onlineCount}
                   </span>
                 )}

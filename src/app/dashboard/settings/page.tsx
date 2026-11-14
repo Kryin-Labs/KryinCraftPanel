@@ -5,13 +5,9 @@ import {
   Sliders,
   Save,
   Check,
-  Zap,
   Server,
   Cpu,
-  Moon,
-  Shield,
-  Layers,
-  Globe
+  Moon
 } from 'lucide-react';
 import { useServerStore } from '@/lib/serverStore';
 
@@ -36,35 +32,35 @@ export default function ServerSettingsPage() {
   };
 
   return (
-    <div className="space-y-6 max-w-4xl font-mono">
+    <div className="space-y-6 max-w-4xl font-mono text-[#1a1522]">
       {/* Toast Notice */}
       {savedSuccess && (
-        <div className="p-3.5 rounded-lg bg-emerald-950/80 border border-emerald-700/60 text-emerald-300 text-xs flex items-center justify-between animate-fade-in">
+        <div className="p-3.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs font-semibold flex items-center justify-between shadow-xs animate-fade-in">
           <span className="flex items-center gap-2">
-            <Check className="w-4 h-4 text-emerald-400" />
+            <Check className="w-4 h-4 text-blue-600 flex-shrink-0" />
             Configuration saved to server.properties and applied to node.
           </span>
-          <button onClick={() => setSavedSuccess(false)} className="text-emerald-400 hover:text-emerald-200">
+          <button onClick={() => setSavedSuccess(false)} className="text-blue-600 hover:text-blue-800 font-bold">
             ✕
           </button>
         </div>
       )}
 
       {/* Header */}
-      <div className="p-5 rounded-xl bg-[#121019] border border-[#242131] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="p-5 sm:p-6 rounded-2xl bg-white border border-[#1a1522]/10 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-zinc-100 flex items-center gap-2">
-            <Sliders className="w-5 h-5 text-emerald-400" />
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[#1a1522] flex items-center gap-2.5">
+            <Sliders className="w-6 h-6 text-blue-600" />
             Server Configuration & Node Fleet
           </h1>
-          <p className="text-xs text-zinc-400 mt-1">
+          <p className="text-xs text-[#1a1522]/60 mt-1">
             Configure server.properties, Smart Hibernation sleep cycles, and Indian datacenter peering.
           </p>
         </div>
 
         <button
           onClick={handleSave}
-          className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-bold text-xs flex items-center gap-2 transition-colors self-start sm:self-auto font-mono"
+          className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-2 transition-all self-start sm:self-auto font-mono shadow-xs"
         >
           <Save className="w-4 h-4" />
           <span>Save Changes</span>
@@ -73,47 +69,49 @@ export default function ServerSettingsPage() {
 
       <form onSubmit={handleSave} className="space-y-6">
         {/* Minecraft Server Properties Card */}
-        <div className="p-5 rounded-xl bg-[#121019] border border-[#242131] space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-[#242131]">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-200 flex items-center gap-2">
-              <Server className="w-4 h-4 text-emerald-400" />
+        <div className="p-5 sm:p-6 rounded-2xl bg-white border border-[#1a1522]/10 shadow-xs space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-[#1a1522]/10">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-[#1a1522] flex items-center gap-2">
+              <Server className="w-4 h-4 text-blue-600" />
               Minecraft Properties (server.properties)
             </h2>
-            <span className="text-[11px] text-zinc-400">Paper 1.21.4</span>
+            <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+              Paper 1.21.4
+            </span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
             {/* MOTD */}
-            <div className="space-y-1 sm:col-span-2">
-              <label className="text-zinc-300 font-semibold">Message of the Day (MOTD)</label>
+            <div className="space-y-1.5 sm:col-span-2">
+              <label className="text-[#1a1522] font-bold">Message of the Day (MOTD)</label>
               <input
                 type="text"
                 value={motd}
                 onChange={(e) => setMotd(e.target.value)}
-                className="w-full bg-[#181622] border border-[#2b273b] rounded-lg px-3 py-2 text-xs text-zinc-100 font-mono focus:outline-none focus:border-emerald-500"
+                className="w-full bg-[#f8f9fd] border border-[#1a1522]/15 rounded-xl px-3.5 py-2 text-xs text-[#1a1522] font-mono focus:outline-none focus:border-blue-600"
               />
             </div>
 
             {/* Max Players */}
-            <div className="space-y-1">
-              <label className="text-zinc-300 font-semibold">Max Player Capacity</label>
+            <div className="space-y-1.5">
+              <label className="text-[#1a1522] font-bold">Max Player Capacity</label>
               <input
                 type="number"
                 min={1}
                 max={50}
                 value={maxPlayers}
                 onChange={(e) => setMaxPlayers(parseInt(e.target.value) || 20)}
-                className="w-full bg-[#181622] border border-[#2b273b] rounded-lg px-3 py-2 text-xs text-zinc-100 font-mono focus:outline-none focus:border-emerald-500"
+                className="w-full bg-[#f8f9fd] border border-[#1a1522]/15 rounded-xl px-3.5 py-2 text-xs text-[#1a1522] font-mono focus:outline-none focus:border-blue-600"
               />
             </div>
 
             {/* Difficulty */}
-            <div className="space-y-1">
-              <label className="text-zinc-300 font-semibold">World Difficulty</label>
+            <div className="space-y-1.5">
+              <label className="text-[#1a1522] font-bold">World Difficulty</label>
               <select
                 value={difficulty}
                 onChange={(e) => setDifficulty(e.target.value)}
-                className="w-full bg-[#181622] border border-[#2b273b] rounded-lg px-3 py-2 text-xs text-zinc-100 font-mono focus:outline-none focus:border-emerald-500"
+                className="w-full bg-[#f8f9fd] border border-[#1a1522]/15 rounded-xl px-3.5 py-2 text-xs text-[#1a1522] font-mono focus:outline-none focus:border-blue-600"
               >
                 <option value="peaceful">Peaceful</option>
                 <option value="easy">Easy</option>
@@ -123,127 +121,127 @@ export default function ServerSettingsPage() {
             </div>
 
             {/* View Distance */}
-            <div className="space-y-1">
-              <label className="text-zinc-300 font-semibold">View Distance (Chunks)</label>
+            <div className="space-y-1.5">
+              <label className="text-[#1a1522] font-bold">View Distance (Chunks)</label>
               <input
                 type="number"
                 min={4}
                 max={16}
                 value={viewDistance}
                 onChange={(e) => setViewDistance(parseInt(e.target.value) || 10)}
-                className="w-full bg-[#181622] border border-[#2b273b] rounded-lg px-3 py-2 text-xs text-zinc-100 font-mono focus:outline-none focus:border-emerald-500"
+                className="w-full bg-[#f8f9fd] border border-[#1a1522]/15 rounded-xl px-3.5 py-2 text-xs text-[#1a1522] font-mono focus:outline-none focus:border-blue-600"
               />
             </div>
 
             {/* Simulation Distance */}
-            <div className="space-y-1">
-              <label className="text-zinc-300 font-semibold">Simulation Distance (Chunks)</label>
+            <div className="space-y-1.5">
+              <label className="text-[#1a1522] font-bold">Simulation Distance (Chunks)</label>
               <input
                 type="number"
                 min={3}
                 max={12}
                 value={simulationDistance}
                 onChange={(e) => setSimulationDistance(parseInt(e.target.value) || 8)}
-                className="w-full bg-[#181622] border border-[#2b273b] rounded-lg px-3 py-2 text-xs text-zinc-100 font-mono focus:outline-none focus:border-emerald-500"
+                className="w-full bg-[#f8f9fd] border border-[#1a1522]/15 rounded-xl px-3.5 py-2 text-xs text-[#1a1522] font-mono focus:outline-none focus:border-blue-600"
               />
             </div>
 
             {/* PVP & Whitelist Toggles */}
-            <div className="flex items-center justify-between p-3 rounded-lg bg-[#161420] border border-[#242131]">
-              <span className="text-xs text-zinc-300 font-semibold">Player vs Player (PVP)</span>
+            <div className="flex items-center justify-between p-3.5 rounded-xl bg-[#f8f9fd] border border-[#1a1522]/10">
+              <span className="text-xs text-[#1a1522] font-bold">Player vs Player (PVP)</span>
               <input
                 type="checkbox"
                 checked={pvp}
                 onChange={(e) => setPvp(e.target.checked)}
-                className="rounded bg-[#1a1724] border-[#2f2b3e] text-emerald-500 focus:ring-0 w-4 h-4"
+                className="rounded border-[#1a1522]/20 text-blue-600 focus:ring-0 w-4 h-4 cursor-pointer"
               />
             </div>
 
-            <div className="flex items-center justify-between p-3 rounded-lg bg-[#161420] border border-[#242131]">
-              <span className="text-xs text-zinc-300 font-semibold">Server Whitelist Enforced</span>
+            <div className="flex items-center justify-between p-3.5 rounded-xl bg-[#f8f9fd] border border-[#1a1522]/10">
+              <span className="text-xs text-[#1a1522] font-bold">Server Whitelist Enforced</span>
               <input
                 type="checkbox"
                 checked={whitelist}
                 onChange={(e) => setWhitelist(e.target.checked)}
-                className="rounded bg-[#1a1724] border-[#2f2b3e] text-emerald-500 focus:ring-0 w-4 h-4"
+                className="rounded border-[#1a1522]/20 text-blue-600 focus:ring-0 w-4 h-4 cursor-pointer"
               />
             </div>
           </div>
         </div>
 
         {/* Smart Hibernation & Power Cycles */}
-        <div className="p-5 rounded-xl bg-[#121019] border border-[#242131] space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-[#242131]">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-200 flex items-center gap-2">
-              <Moon className="w-4 h-4 text-indigo-400" />
+        <div className="p-5 sm:p-6 rounded-2xl bg-white border border-[#1a1522]/10 shadow-xs space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-[#1a1522]/10">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-[#1a1522] flex items-center gap-2">
+              <Moon className="w-4 h-4 text-indigo-600" />
               Smart Hibernation & Wake Management
             </h2>
-            <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-850">
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
               LOW-POWER IDLE
             </span>
           </div>
 
-          <p className="text-xs text-zinc-400 leading-relaxed">
+          <p className="text-xs text-[#1a1522]/60 leading-relaxed">
             Servers enter low-power hibernation state when all players disconnect. As soon as someone attempts to join, it wakes automatically in under 90 seconds.
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-            <div className="space-y-1">
-              <label className="text-zinc-300 font-semibold">Idle Timeout Before Sleep (Minutes)</label>
+            <div className="space-y-1.5">
+              <label className="text-[#1a1522] font-bold">Idle Timeout Before Sleep (Minutes)</label>
               <input
                 type="number"
                 min={5}
                 max={60}
                 value={idleSleepMinutes}
                 onChange={(e) => setIdleSleepMinutes(parseInt(e.target.value) || 10)}
-                className="w-full bg-[#181622] border border-[#2b273b] rounded-lg px-3 py-2 text-xs text-zinc-100 font-mono focus:outline-none focus:border-emerald-500"
+                className="w-full bg-[#f8f9fd] border border-[#1a1522]/15 rounded-xl px-3.5 py-2 text-xs text-[#1a1522] font-mono focus:outline-none focus:border-blue-600"
               />
             </div>
 
-            <div className="flex items-center justify-between p-3 rounded-lg bg-[#161420] border border-[#242131]">
+            <div className="flex items-center justify-between p-3.5 rounded-xl bg-[#f8f9fd] border border-[#1a1522]/10">
               <div>
-                <span className="text-xs text-zinc-300 font-semibold block">Auto-Wake on Join</span>
-                <span className="text-[10px] text-zinc-400">Instantly wakes node when client connects</span>
+                <span className="text-xs text-[#1a1522] font-bold block">Auto-Wake on Join</span>
+                <span className="text-[10px] text-[#1a1522]/50">Instantly wakes node when client connects</span>
               </div>
               <input
                 type="checkbox"
                 checked={autoWake}
                 onChange={(e) => setAutoWake(e.target.checked)}
-                className="rounded bg-[#1a1724] border-[#2f2b3e] text-emerald-500 focus:ring-0 w-4 h-4"
+                className="rounded border-[#1a1522]/20 text-blue-600 focus:ring-0 w-4 h-4 cursor-pointer"
               />
             </div>
           </div>
         </div>
 
         {/* Indian Datacenter Node Compute Info */}
-        <div className="p-5 rounded-xl bg-[#121019] border border-[#242131] space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-[#242131]">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-200 flex items-center gap-2">
-              <Cpu className="w-4 h-4 text-purple-400" />
+        <div className="p-5 sm:p-6 rounded-2xl bg-white border border-[#1a1522]/10 shadow-xs space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-[#1a1522]/10">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-[#1a1522] flex items-center gap-2">
+              <Cpu className="w-4 h-4 text-blue-600" />
               Indian Bare-Metal Node Infrastructure
             </h2>
-            <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-850">
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
               MUMBAI DC-1
             </span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-            <div className="p-3 rounded-lg bg-[#161420] border border-[#242131]">
-              <span className="text-[10px] text-zinc-400 uppercase block">Compute Core</span>
-              <span className="text-zinc-200 font-bold mt-0.5 block">AMD EPYC 9654</span>
-              <span className="text-[10px] text-zinc-400">Up to 4.4 GHz Turbo</span>
+            <div className="p-3.5 rounded-xl bg-[#f8f9fd] border border-[#1a1522]/10">
+              <span className="text-[10px] text-[#1a1522]/50 uppercase font-bold block">Compute Core</span>
+              <span className="text-[#1a1522] font-bold mt-0.5 block">AMD EPYC 9654</span>
+              <span className="text-[10px] text-[#1a1522]/60">Up to 4.4 GHz Turbo</span>
             </div>
 
-            <div className="p-3 rounded-lg bg-[#161420] border border-[#242131]">
-              <span className="text-[10px] text-zinc-400 uppercase block">Allocated RAM</span>
-              <span className="text-zinc-200 font-bold mt-0.5 block">6.0 GB DDR5</span>
-              <span className="text-[10px] text-emerald-400">Low-Latency G1GC</span>
+            <div className="p-3.5 rounded-xl bg-[#f8f9fd] border border-[#1a1522]/10">
+              <span className="text-[10px] text-[#1a1522]/50 uppercase font-bold block">Allocated RAM</span>
+              <span className="text-[#1a1522] font-bold mt-0.5 block">6.0 GB DDR5</span>
+              <span className="text-[10px] text-emerald-700 font-semibold">Low-Latency G1GC</span>
             </div>
 
-            <div className="p-3 rounded-lg bg-[#161420] border border-[#242131]">
-              <span className="text-[10px] text-zinc-400 uppercase block">Network Peering</span>
-              <span className="text-zinc-200 font-bold mt-0.5 block">10 Gbps Peering</span>
-              <span className="text-[10px] text-zinc-400">Pan-India Peering Routes</span>
+            <div className="p-3.5 rounded-xl bg-[#f8f9fd] border border-[#1a1522]/10">
+              <span className="text-[10px] text-[#1a1522]/50 uppercase font-bold block">Network Peering</span>
+              <span className="text-[#1a1522] font-bold mt-0.5 block">10 Gbps Peering</span>
+              <span className="text-[10px] text-[#1a1522]/60">Pan-India Peering Routes</span>
             </div>
           </div>
         </div>
@@ -252,7 +250,7 @@ export default function ServerSettingsPage() {
         <div className="flex justify-end">
           <button
             type="submit"
-            className="px-6 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-bold text-xs flex items-center gap-2 transition-colors font-mono"
+            className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-2 transition-all font-mono shadow-xs"
           >
             <Save className="w-4 h-4" />
             <span>Save Configuration</span>

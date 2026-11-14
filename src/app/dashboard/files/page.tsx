@@ -7,8 +7,6 @@ import {
   File,
   FileCode,
   FolderPlus,
-  Upload,
-  Download,
   Trash2,
   Edit3,
   ChevronRight,
@@ -16,7 +14,6 @@ import {
   X,
   Archive,
   Check,
-  Zap,
   CornerLeftUp
 } from 'lucide-react';
 import { useServerStore } from '@/lib/serverStore';
@@ -61,11 +58,11 @@ export default function FileManagerPage() {
     setEditingFile(null);
   };
 
-  const handleCreateFolder = async (e: React.FormEvent) => {
+  const handleCreateFolder = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newFolderName.trim()) return;
-    await createFolder(currentPath, newFolderName.trim());
-    showNotice(`Created directory "${newFolderName.trim()}".`);
+    createFolder(currentPath, newFolderName.trim());
+    showNotice(`Created folder "${newFolderName.trim()}".`);
     setNewFolderName('');
     setIsNewFolderOpen(false);
   };
@@ -74,8 +71,7 @@ export default function FileManagerPage() {
     if (currentPath === '/') return;
     const parts = currentPath.split('/').filter(Boolean);
     parts.pop();
-    const newPath = '/' + parts.join('/');
-    setCurrentPath(newPath === '' ? '/' : newPath);
+    setCurrentPath(parts.length === 0 ? '/' : '/' + parts.join('/'));
   };
 
   const formatFileSize = (bytes: number) => {
@@ -85,37 +81,37 @@ export default function FileManagerPage() {
   };
 
   const getFileIcon = (item: ServerFile) => {
-    if (item.isDirectory) return <Folder className="w-4 h-4 text-blue-400" />;
-    if (item.extension === 'jar') return <Archive className="w-4 h-4 text-purple-400" />;
+    if (item.isDirectory) return <Folder className="w-4 h-4 text-blue-600" />;
+    if (item.extension === 'jar') return <Archive className="w-4 h-4 text-indigo-600" />;
     if (['properties', 'yml', 'json', 'toml'].includes(item.extension || '')) {
-      return <FileCode className="w-4 h-4 text-emerald-400" />;
+      return <FileCode className="w-4 h-4 text-blue-600" />;
     }
-    return <File className="w-4 h-4 text-zinc-400" />;
+    return <File className="w-4 h-4 text-[#1a1522]/50" />;
   };
 
   return (
-    <div className="space-y-6 font-mono">
+    <div className="space-y-6 font-mono text-[#1a1522]">
       {/* Toast Notice */}
       {notice && (
-        <div className="p-3 rounded-lg bg-emerald-950/80 border border-emerald-700/60 text-emerald-300 text-xs flex items-center justify-between animate-fade-in">
+        <div className="p-3.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs font-semibold flex items-center justify-between shadow-xs animate-fade-in">
           <span className="flex items-center gap-2">
-            <Check className="w-4 h-4 text-emerald-400" />
+            <Check className="w-4 h-4 text-blue-600 flex-shrink-0" />
             {notice}
           </span>
-          <button onClick={() => setNotice(null)} className="text-emerald-400 hover:text-emerald-200">
+          <button onClick={() => setNotice(null)} className="text-blue-600 hover:text-blue-800 font-bold">
             ✕
           </button>
         </div>
       )}
 
       {/* Header Bar */}
-      <div className="p-5 rounded-xl bg-[#121019] border border-[#242131] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="p-5 sm:p-6 rounded-2xl bg-white border border-[#1a1522]/10 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-zinc-100 flex items-center gap-2">
-            <FolderTree className="w-5 h-5 text-emerald-400" />
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[#1a1522] flex items-center gap-2.5">
+            <FolderTree className="w-6 h-6 text-blue-600" />
             Server File Manager
           </h1>
-          <p className="text-xs text-zinc-400 mt-1">
+          <p className="text-xs text-[#1a1522]/60 mt-1">
             Browse and configure server.properties, plugins, world saves, and Paper configs.
           </p>
         </div>
@@ -123,9 +119,9 @@ export default function FileManagerPage() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setIsNewFolderOpen(!isNewFolderOpen)}
-            className="px-3.5 py-1.5 rounded-lg bg-[#1a1724] hover:bg-[#231f31] text-zinc-200 border border-[#2b273b] text-xs font-semibold flex items-center gap-1.5 transition-colors"
+            className="px-4 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold flex items-center gap-2 transition-all shadow-xs"
           >
-            <FolderPlus className="w-3.5 h-3.5 text-blue-400" />
+            <FolderPlus className="w-4 h-4 text-blue-600" />
             <span>New Folder</span>
           </button>
         </div>
@@ -133,26 +129,26 @@ export default function FileManagerPage() {
 
       {/* New Folder Modal / Input */}
       {isNewFolderOpen && (
-        <form onSubmit={handleCreateFolder} className="p-4 rounded-xl bg-[#121019] border border-[#242131] flex items-center gap-3">
-          <Folder className="w-4 h-4 text-blue-400" />
+        <form onSubmit={handleCreateFolder} className="p-4 rounded-2xl bg-white border border-[#1a1522]/10 shadow-xs flex items-center gap-3">
+          <Folder className="w-4 h-4 text-blue-600" />
           <input
             type="text"
             placeholder="Folder name (e.g. plugins_backup)..."
             value={newFolderName}
             onChange={(e) => setNewFolderName(e.target.value)}
-            className="flex-1 bg-[#181622] border border-[#2b273b] rounded-lg px-3 py-1.5 text-xs text-zinc-100 focus:outline-none focus:border-emerald-500 font-mono"
+            className="flex-1 bg-[#f8f9fd] border border-[#1a1522]/15 rounded-xl px-3.5 py-2 text-xs text-[#1a1522] focus:outline-none focus:border-blue-600 font-mono"
             autoFocus
           />
           <button
             type="submit"
-            className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-bold text-xs font-mono"
+            className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs font-mono transition-all shadow-xs"
           >
             Create
           </button>
           <button
             type="button"
             onClick={() => setIsNewFolderOpen(false)}
-            className="px-3 py-1.5 rounded-lg bg-[#181622] text-zinc-400 hover:text-white text-xs font-mono"
+            className="px-4 py-2 rounded-xl bg-[#f8f9fd] text-[#1a1522]/60 hover:text-[#1a1522] text-xs font-mono border border-[#1a1522]/10"
           >
             Cancel
           </button>
@@ -160,11 +156,11 @@ export default function FileManagerPage() {
       )}
 
       {/* Breadcrumb Path Bar */}
-      <div className="p-3 rounded-xl bg-[#121019] border border-[#242131] flex items-center justify-between text-xs">
-        <div className="flex items-center gap-1.5 overflow-x-auto text-zinc-300">
+      <div className="p-3.5 rounded-xl bg-white border border-[#1a1522]/10 shadow-xs flex items-center justify-between text-xs">
+        <div className="flex items-center gap-1.5 overflow-x-auto text-[#1a1522]/70 font-semibold">
           <button
             onClick={() => setCurrentPath('/')}
-            className="hover:text-emerald-400 transition-colors font-bold px-1 py-0.5 rounded"
+            className="hover:text-blue-600 transition-colors font-bold px-1.5 py-0.5 rounded"
           >
             root
           </button>
@@ -176,10 +172,10 @@ export default function FileManagerPage() {
                 const fullPath = '/' + arr.slice(0, idx + 1).join('/');
                 return (
                   <React.Fragment key={fullPath}>
-                    <ChevronRight className="w-3.5 h-3.5 text-zinc-500 flex-shrink-0" />
+                    <ChevronRight className="w-3.5 h-3.5 text-[#1a1522]/30 flex-shrink-0" />
                     <button
                       onClick={() => setCurrentPath(fullPath)}
-                      className="hover:text-emerald-400 transition-colors px-1 py-0.5 rounded truncate max-w-[120px]"
+                      className="hover:text-blue-600 transition-colors px-1.5 py-0.5 rounded truncate max-w-[140px]"
                     >
                       {segment}
                     </button>
@@ -191,43 +187,43 @@ export default function FileManagerPage() {
         {currentPath !== '/' && (
           <button
             onClick={handleNavigateUp}
-            className="flex items-center gap-1 text-[11px] text-zinc-400 hover:text-zinc-200 transition-colors pl-2"
+            className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 font-bold transition-colors pl-2"
           >
             <CornerLeftUp className="w-3.5 h-3.5" />
-            <span>Up</span>
+            <span>Up One Level</span>
           </button>
         )}
       </div>
 
       {/* Files Grid / List */}
-      <div className="rounded-xl bg-[#121019] border border-[#242131] overflow-hidden">
+      <div className="rounded-2xl bg-white border border-[#1a1522]/10 shadow-xs overflow-hidden">
         {currentFiles.length === 0 ? (
-          <div className="p-12 text-center text-zinc-400 text-xs">
+          <div className="p-12 text-center text-[#1a1522]/50 text-xs">
             This directory is empty.
           </div>
         ) : (
-          <div className="divide-y divide-[#1e1b29]">
+          <div className="divide-y divide-[#1a1522]/8">
             {currentFiles.map((file) => (
               <div
                 key={file.path}
-                className="p-3.5 flex items-center justify-between gap-4 hover:bg-[#161421] transition-colors group cursor-pointer"
+                className="p-3.5 sm:p-4 flex items-center justify-between gap-4 hover:bg-[#f8f9fd] transition-colors group cursor-pointer"
                 onClick={() => handleOpenItem(file)}
               >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="p-2 rounded-lg bg-[#181622] border border-[#262333] flex-shrink-0">
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="p-2 rounded-xl bg-[#f8f9fd] border border-[#1a1522]/10 flex-shrink-0">
                     {getFileIcon(file)}
                   </div>
                   <div className="min-w-0">
-                    <span className="font-semibold text-xs text-zinc-200 group-hover:text-emerald-300 transition-colors truncate block font-mono">
+                    <span className="font-semibold text-xs text-[#1a1522] group-hover:text-blue-600 transition-colors truncate block font-mono">
                       {file.name}
                     </span>
-                    <span className="text-[10px] text-zinc-400 block mt-0.5">
+                    <span className="text-[10px] text-[#1a1522]/50 block mt-0.5">
                       {file.modifiedAt}
                     </span>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-4 text-xs text-zinc-400 flex-shrink-0">
+                <div className="flex items-center gap-4 text-xs text-[#1a1522]/60 flex-shrink-0">
                   <span className="font-mono text-[11px]">
                     {file.isDirectory ? 'Directory' : formatFileSize(file.sizeBytes)}
                   </span>
@@ -239,7 +235,7 @@ export default function FileManagerPage() {
                           e.stopPropagation();
                           handleOpenItem(file);
                         }}
-                        className="p-1.5 rounded hover:bg-[#231f31] text-zinc-300 hover:text-white"
+                        className="p-1.5 rounded-lg hover:bg-blue-50 text-[#1a1522]/60 hover:text-blue-600 border border-transparent hover:border-blue-200 transition-colors"
                         title="Edit file"
                       >
                         <Edit3 className="w-3.5 h-3.5" />
@@ -251,7 +247,7 @@ export default function FileManagerPage() {
                         deleteFile(file.path);
                         showNotice(`Deleted ${file.name}.`);
                       }}
-                      className="p-1.5 rounded hover:bg-red-950/50 text-zinc-400 hover:text-red-400"
+                      className="p-1.5 rounded-lg hover:bg-red-50 text-[#1a1522]/60 hover:text-red-600 border border-transparent hover:border-red-200 transition-colors"
                       title="Delete"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -266,26 +262,26 @@ export default function FileManagerPage() {
 
       {/* Interactive Code Editor Modal */}
       {editingFile && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in font-mono">
-          <div className="w-full max-w-4xl bg-[#0e0d13] border border-[#2b273b] rounded-2xl flex flex-col h-[85vh] shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in font-mono">
+          <div className="w-full max-w-4xl bg-white border border-[#1a1522]/15 rounded-2xl flex flex-col h-[85vh] shadow-2xl overflow-hidden">
             {/* Modal Header */}
-            <div className="p-4 bg-[#14121c] border-b border-[#242131] flex items-center justify-between">
+            <div className="p-4 bg-[#fbfbfe] border-b border-[#1a1522]/10 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <FileCode className="w-4 h-4 text-emerald-400" />
-                <span className="font-bold text-xs text-zinc-100">{editingFile.path}</span>
+                <FileCode className="w-4 h-4 text-blue-600" />
+                <span className="font-bold text-xs text-[#1a1522]">{editingFile.path}</span>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleSaveEditor}
                   disabled={isSaving}
-                  className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-zinc-950 font-bold text-xs flex items-center gap-1.5 transition-colors font-mono"
+                  className="px-4 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white font-bold text-xs flex items-center gap-1.5 transition-all font-mono shadow-xs"
                 >
                   <Save className="w-3.5 h-3.5" />
                   <span>{isSaving ? 'Saving...' : 'Save File'}</span>
                 </button>
                 <button
                   onClick={() => setEditingFile(null)}
-                  className="p-1.5 rounded-lg hover:bg-[#221f2f] text-zinc-400 hover:text-white"
+                  className="p-1.5 rounded-lg hover:bg-[#1a1522]/10 text-[#1a1522]/60 hover:text-[#1a1522]"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -293,21 +289,21 @@ export default function FileManagerPage() {
             </div>
 
             {/* Editor Textarea */}
-            <div className="flex-1 p-4 bg-[#08070b] overflow-hidden">
+            <div className="flex-1 p-4 bg-[#0e1117] overflow-hidden">
               <textarea
                 value={editingFile.content}
                 onChange={(e) =>
                   setEditingFile({ ...editingFile, content: e.target.value })
                 }
-                className="w-full h-full bg-transparent text-xs text-zinc-200 font-mono resize-none focus:outline-none leading-relaxed select-text"
+                className="w-full h-full bg-transparent text-xs text-zinc-100 font-mono resize-none focus:outline-none leading-relaxed select-text"
                 spellCheck={false}
               />
             </div>
 
             {/* Modal Footer */}
-            <div className="p-2.5 bg-[#14121c] border-t border-[#242131] flex items-center justify-between text-[11px] text-zinc-400">
+            <div className="p-3 bg-[#fbfbfe] border-t border-[#1a1522]/10 flex items-center justify-between text-[11px] text-[#1a1522]/60">
               <span>Lines: {editingFile.content.split('\n').length}</span>
-              <span className="text-emerald-400">Ready to save to disk</span>
+              <span className="text-blue-700 font-bold">Ready to save to disk</span>
             </div>
           </div>
         </div>

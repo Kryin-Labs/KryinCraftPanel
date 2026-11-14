@@ -13,10 +13,10 @@ import {
   Check,
   ExternalLink,
   ArrowLeft,
-  CircleDot,
   Server
 } from 'lucide-react';
 import { useServerStore } from '@/lib/serverStore';
+import { StatusBadge } from './StatusBadge';
 
 const navItems = [
   { name: 'Overview', href: '/dashboard', icon: LayoutDashboard },
@@ -41,54 +41,51 @@ export const Sidebar: React.FC = () => {
   };
 
   return (
-    <aside className="hidden lg:flex flex-col w-64 bg-[#0e0d13] border-r border-[#242131] p-4 justify-between h-screen sticky top-0 select-none font-mono text-zinc-300">
+    <aside className="hidden lg:flex flex-col w-64 bg-white border-r border-[#1a1522]/10 p-4 justify-between h-screen sticky top-0 select-none font-mono text-[#1a1522] shadow-[1px_0_0_rgba(0,0,0,0.02)]">
       <div className="space-y-5">
         {/* Brand / Logo */}
-        <Link href="/" className="flex items-center gap-3 px-2 py-2 group">
-          <div className="w-8 h-8 rounded-md bg-[#181622] border border-[#2d293d] flex items-center justify-center text-zinc-100 group-hover:border-zinc-400 transition-colors">
+        <Link href="/" className="flex items-center gap-2.5 px-2 py-2 group">
+          <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shadow-xs group-hover:bg-blue-700 transition-colors">
             <svg width="18" height="18" viewBox="0 0 32 32" fill="none">
               <path d="M16 2L3 9.5V22.5L16 30L29 22.5V9.5L16 2Z" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round"/>
-              <path d="M16 2V30M3 9.5L29 22.5M29 9.5L3 22.5" stroke="currentColor" strokeWidth="1.4" strokeOpacity="0.3"/>
-              <circle cx="16" cy="16" r="3.5" fill="#52ff94" />
+              <path d="M16 2V30M3 9.5L29 22.5M29 9.5L3 22.5" stroke="currentColor" strokeWidth="1.4" strokeOpacity="0.4"/>
+              <circle cx="16" cy="16" r="3.5" fill="#ffffff" />
             </svg>
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
-              <span className="font-bold text-zinc-100 text-sm tracking-tight font-mono">KryinHost</span>
-              <span className="text-[9px] uppercase px-1 py-0.5 rounded bg-[#1e1b29] text-emerald-400 border border-emerald-900/40">
+              <span className="font-bold text-[#1a1522] text-sm tracking-tight font-mono">KryinHost</span>
+              <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-bold">
                 PRO
               </span>
             </div>
-            <p className="text-[10px] text-zinc-400 truncate">Mumbai Node 01</p>
+            <p className="text-[10px] text-[#1a1522]/50 truncate font-mono">Mumbai Node 01</p>
           </div>
         </Link>
 
-        {/* Server Telemetry Badge */}
-        <div className="p-3 rounded-lg bg-[#14121c] border border-[#262333] space-y-2.5">
+        {/* Server State Quick Card */}
+        <div className="p-3.5 rounded-xl bg-[#f8f9fd] border border-[#1a1522]/10 space-y-2.5">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] text-zinc-400 font-medium">Server Status</span>
-            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] bg-emerald-950/70 border border-emerald-700/50 text-emerald-400">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              ONLINE
-            </span>
+            <span className="text-[11px] text-[#1a1522]/60 font-semibold uppercase tracking-wider">Server Status</span>
+            <StatusBadge status={serverInfo.status} size="sm" />
           </div>
 
-          <div className="grid grid-cols-2 gap-2 pt-1 border-t border-[#262333] text-[11px]">
+          <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[#1a1522]/10 text-[11px]">
             <div>
-              <span className="text-[10px] text-zinc-400 block">TPS</span>
-              <span className="text-zinc-200 font-semibold">{serverInfo.tps.toFixed(1)}</span>
+              <span className="text-[10px] text-[#1a1522]/50 block">TPS</span>
+              <span className="text-emerald-700 font-bold">{serverInfo.tps.toFixed(1)}</span>
             </div>
             <div>
-              <span className="text-[10px] text-zinc-400 block">Players</span>
-              <span className="text-zinc-200 font-semibold">{onlineCount}/{serverInfo.maxPlayers}</span>
+              <span className="text-[10px] text-[#1a1522]/50 block">Players</span>
+              <span className="text-blue-700 font-bold">{onlineCount} / {serverInfo.maxPlayers}</span>
             </div>
           </div>
         </div>
 
         {/* Navigation Links */}
         <nav className="space-y-1">
-          <p className="text-[10px] uppercase tracking-wider text-zinc-400 px-2 py-1 font-semibold">
-            Server Controls
+          <p className="text-[10px] uppercase tracking-wider text-[#1a1522]/40 px-2 py-1 font-bold">
+            Navigation
           </p>
           {navItems.map((item) => {
             const isActive =
@@ -101,16 +98,16 @@ export const Sidebar: React.FC = () => {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-2.5 px-3 py-2 rounded-md text-xs transition-colors ${
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs transition-all ${
                   isActive
-                    ? 'bg-[#221f2f] text-zinc-100 font-bold border border-[#37334b]'
-                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-[#181622]'
+                    ? 'bg-blue-50 text-blue-700 font-bold border border-blue-200/90 shadow-xs'
+                    : 'text-[#1a1522]/70 hover:text-[#1a1522] hover:bg-slate-50'
                 }`}
               >
-                <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-emerald-400' : 'text-zinc-400'}`} />
+                <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-blue-600' : 'text-[#1a1522]/50'}`} />
                 <span>{item.name}</span>
                 {item.name === 'Players' && onlineCount > 0 && (
-                  <span className="ml-auto text-[10px] px-1.5 py-0.2 rounded bg-emerald-950/80 text-emerald-400 border border-emerald-800/40">
+                  <span className="ml-auto text-[10px] px-1.5 py-0.2 rounded-full bg-blue-100 text-blue-700 font-bold">
                     {onlineCount}
                   </span>
                 )}
@@ -121,19 +118,19 @@ export const Sidebar: React.FC = () => {
       </div>
 
       {/* Bottom Footer Actions */}
-      <div className="space-y-3 pt-3 border-t border-[#242131]">
+      <div className="space-y-3 pt-3 border-t border-[#1a1522]/10">
         {/* Copy IP Widget */}
-        <div className="p-2.5 rounded-md bg-[#14121c] border border-[#262333]">
-          <span className="text-[10px] text-zinc-400 block mb-1">Server Address</span>
+        <div className="p-2.5 rounded-xl bg-[#f8f9fd] border border-[#1a1522]/10">
+          <span className="text-[10px] text-[#1a1522]/60 block mb-1 font-bold uppercase">Server Address</span>
           <button
             onClick={copyIp}
-            className="w-full flex items-center justify-between px-2 py-1.5 rounded bg-[#1b1926] hover:bg-[#232031] text-[11px] text-zinc-300 border border-[#2b273b] transition-colors text-left font-mono"
+            className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-white hover:bg-blue-50/50 text-[11px] text-[#1a1522] border border-[#1a1522]/15 transition-colors text-left font-mono shadow-xs"
           >
-            <span className="truncate">{serverIp}</span>
+            <span className="truncate font-semibold">{serverIp}</span>
             {copied ? (
-              <Check className="w-3 h-3 text-emerald-400 flex-shrink-0" />
+              <Check className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
             ) : (
-              <Copy className="w-3 h-3 text-zinc-400 flex-shrink-0" />
+              <Copy className="w-3.5 h-3.5 text-[#1a1522]/40 flex-shrink-0" />
             )}
           </button>
         </div>
@@ -143,21 +140,21 @@ export const Sidebar: React.FC = () => {
           <Link
             href="http://localhost:3001/panel/terminal"
             target="_blank"
-            className="flex items-center justify-between px-2 py-1.5 rounded hover:bg-[#181622] text-zinc-400 hover:text-zinc-200 transition-colors"
+            className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-slate-50 text-[#1a1522]/70 hover:text-[#1a1522] transition-colors"
           >
-            <span className="flex items-center gap-1.5">
-              <ExternalLink className="w-3 h-3 text-zinc-400" />
+            <span className="flex items-center gap-1.5 font-medium">
+              <ExternalLink className="w-3 h-3 text-blue-600" />
               OPanel Suite
             </span>
-            <span className="text-[9px] text-zinc-400">:3001</span>
+            <span className="text-[9px] text-blue-600 bg-blue-50 px-1 py-0.2 rounded font-bold">:3001</span>
           </Link>
 
           <Link
             href="/"
-            className="flex items-center gap-1.5 px-2 py-1.5 rounded hover:bg-[#181622] text-zinc-400 hover:text-zinc-200 transition-colors"
+            className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-slate-50 text-[#1a1522]/70 hover:text-[#1a1522] transition-colors font-medium"
           >
-            <ArrowLeft className="w-3 h-3 text-zinc-400" />
-            <span>Landing Page</span>
+            <ArrowLeft className="w-3 h-3 text-[#1a1522]/40" />
+            <span>Homepage</span>
           </Link>
         </div>
       </div>

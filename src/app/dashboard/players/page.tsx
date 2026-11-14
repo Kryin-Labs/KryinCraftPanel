@@ -9,16 +9,10 @@ import {
   UserX,
   UserCheck,
   Plus,
-  Compass,
-  Activity,
-  Heart,
-  Zap,
-  Globe,
-  Check,
-  Radio
+  Radio,
+  Check
 } from 'lucide-react';
 import { useServerStore } from '@/lib/serverStore';
-import { MinecraftPlayer } from '@/types';
 
 export default function PlayersManagementPage() {
   const {
@@ -28,9 +22,7 @@ export default function PlayersManagementPage() {
     banPlayer,
     unbanPlayer,
     toggleOp,
-    toggleWhitelist,
-    setGamemode,
-    teleportPlayer
+    setGamemode
   } = useServerStore();
 
   const [search, setSearch] = useState('');
@@ -68,41 +60,41 @@ export default function PlayersManagementPage() {
   };
 
   return (
-    <div className="space-y-6 font-mono">
+    <div className="space-y-6 font-mono text-[#1a1522]">
       {/* Toast Notification */}
       {notice && (
-        <div className="p-3 rounded-lg bg-emerald-950/80 border border-emerald-700/60 text-emerald-300 text-xs flex items-center justify-between animate-fade-in">
+        <div className="p-3.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs font-semibold flex items-center justify-between shadow-xs animate-fade-in">
           <span className="flex items-center gap-2">
-            <Check className="w-4 h-4 text-emerald-400" />
+            <Check className="w-4 h-4 text-blue-600 flex-shrink-0" />
             {notice}
           </span>
-          <button onClick={() => setNotice(null)} className="text-emerald-400 hover:text-emerald-200">
+          <button onClick={() => setNotice(null)} className="text-blue-600 hover:text-blue-800 font-bold">
             ✕
           </button>
         </div>
       )}
 
       {/* Header Bar */}
-      <div className="p-5 rounded-xl bg-[#121019] border border-[#242131] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="p-5 sm:p-6 rounded-2xl bg-white border border-[#1a1522]/10 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-zinc-100 flex items-center gap-2">
-            <Users className="w-5 h-5 text-emerald-400" />
-            Player Fleet & Permissions
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[#1a1522] flex items-center gap-2.5">
+            <Users className="w-6 h-6 text-blue-600" />
+            Player Fleet & Access Control
           </h1>
-          <p className="text-xs text-zinc-400 mt-1">
+          <p className="text-xs text-[#1a1522]/60 mt-1">
             Real-time player monitoring, permission management, live coordinates, and kick/ban controls.
           </p>
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="p-3 rounded-lg bg-[#161420] border border-[#262333] flex items-center gap-3">
+          <div className="p-3 rounded-xl bg-[#f8f9fd] border border-[#1a1522]/10 flex items-center gap-3">
             <div className="text-right">
-              <span className="text-[10px] text-zinc-400 block uppercase">Online Slots</span>
-              <span className="text-sm font-bold text-zinc-100 font-mono">
+              <span className="text-[10px] text-[#1a1522]/50 block uppercase font-bold">Online Slots</span>
+              <span className="text-sm font-bold text-[#1a1522] font-mono">
                 {onlinePlayers.length} / {serverInfo.maxPlayers}
               </span>
             </div>
-            <div className="w-8 h-8 rounded bg-emerald-950/80 border border-emerald-800 text-emerald-400 flex items-center justify-center font-bold text-xs">
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center font-bold text-xs">
               <Radio className="w-4 h-4 animate-pulse" />
             </div>
           </div>
@@ -112,7 +104,7 @@ export default function PlayersManagementPage() {
       {/* Search & Filter Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         {/* Filter Tabs */}
-        <div className="flex items-center rounded-lg bg-[#121019] border border-[#242131] p-1 text-xs">
+        <div className="flex items-center rounded-xl bg-white border border-[#1a1522]/10 p-1 text-xs shadow-xs">
           {[
             { id: 'all', label: `All (${players.length})` },
             { id: 'online', label: `Online (${onlinePlayers.length})` },
@@ -122,10 +114,10 @@ export default function PlayersManagementPage() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
-              className={`px-3 py-1.5 rounded text-xs transition-colors ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 activeTab === tab.id
-                  ? 'bg-[#221f2f] text-emerald-400 font-bold border border-[#38334c]'
-                  : 'text-zinc-400 hover:text-zinc-200'
+                  ? 'bg-blue-600 text-white font-bold shadow-2xs'
+                  : 'text-[#1a1522]/60 hover:text-[#1a1522]'
               }`}
             >
               {tab.label}
@@ -136,13 +128,13 @@ export default function PlayersManagementPage() {
         {/* Search & Add Whitelist Form */}
         <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
           <div className="relative">
-            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400" />
+            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[#1a1522]/40" />
             <input
               type="text"
               placeholder="Search players..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-8 pr-3 py-1.5 bg-[#121019] border border-[#242131] rounded-lg text-xs text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:border-emerald-500 w-44 font-mono"
+              className="pl-8 pr-3 py-2 bg-white border border-[#1a1522]/15 rounded-xl text-xs text-[#1a1522] placeholder:text-[#1a1522]/40 focus:outline-none focus:border-blue-600 w-44 font-mono shadow-2xs"
             />
           </div>
 
@@ -152,12 +144,12 @@ export default function PlayersManagementPage() {
               placeholder="Add username..."
               value={newPlayerName}
               onChange={(e) => setNewPlayerName(e.target.value)}
-              className="px-2.5 py-1.5 bg-[#121019] border border-[#242131] rounded-lg text-xs text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:border-emerald-500 w-36 font-mono"
+              className="px-3 py-2 bg-white border border-[#1a1522]/15 rounded-xl text-xs text-[#1a1522] placeholder:text-[#1a1522]/40 focus:outline-none focus:border-blue-600 w-36 font-mono shadow-2xs"
             />
             <button
               type="submit"
               disabled={!newPlayerName.trim()}
-              className="p-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-zinc-950 font-bold transition-colors"
+              className="p-2 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white font-bold transition-all shadow-xs"
               title="Add to Whitelist"
             >
               <Plus className="w-4 h-4" />
@@ -167,52 +159,52 @@ export default function PlayersManagementPage() {
       </div>
 
       {/* Players List Grid / Table */}
-      <div className="rounded-xl bg-[#121019] border border-[#242131] overflow-hidden">
+      <div className="rounded-2xl bg-white border border-[#1a1522]/10 shadow-xs overflow-hidden">
         {filteredPlayers.length === 0 ? (
-          <div className="p-12 text-center text-zinc-400 text-xs">
+          <div className="p-12 text-center text-[#1a1522]/50 text-xs">
             No players found matching your query or filter.
           </div>
         ) : (
-          <div className="divide-y divide-[#201d2d]">
+          <div className="divide-y divide-[#1a1522]/8">
             {filteredPlayers.map((player) => {
               return (
                 <div
                   key={player.uuid}
-                  className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-[#161421] transition-colors"
+                  className="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-[#f8f9fd] transition-colors"
                 >
                   {/* Left: Avatar & Identity */}
                   <div className="flex items-center gap-3.5 min-w-0">
-                    <div className="w-10 h-10 rounded-lg bg-[#201d2d] border border-[#2d293d] flex items-center justify-center font-bold text-sm text-zinc-100 flex-shrink-0">
+                    <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200 text-blue-800 flex items-center justify-center font-bold text-sm flex-shrink-0">
                       {player.username.slice(0, 2).toUpperCase()}
                     </div>
 
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="font-bold text-sm text-zinc-100 truncate font-mono">
+                        <span className="font-bold text-sm text-[#1a1522] truncate font-mono">
                           {player.username}
                         </span>
 
                         {player.isOp && (
-                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-950 text-amber-300 border border-amber-800 font-bold">
+                          <span className="text-[9px] px-2 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200 font-bold">
                             OP
                           </span>
                         )}
 
                         {player.isWhitelisted && (
-                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-indigo-950 text-indigo-300 border border-indigo-800">
+                          <span className="text-[9px] px-2 py-0.2 rounded bg-blue-50 text-blue-700 border border-blue-200 font-semibold">
                             WHITELIST
                           </span>
                         )}
 
                         {player.isBanned && (
-                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-red-950 text-red-300 border border-red-800 font-bold">
+                          <span className="text-[9px] px-2 py-0.2 rounded bg-red-50 text-red-700 border border-red-200 font-bold">
                             BANNED
                           </span>
                         )}
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-2 mt-1 text-[11px] text-zinc-400 font-mono">
-                        <span className={player.isOnline ? 'text-emerald-400' : 'text-zinc-400'}>
+                      <div className="flex flex-wrap items-center gap-2 mt-1 text-[11px] text-[#1a1522]/50 font-mono">
+                        <span className={player.isOnline ? 'text-emerald-700 font-bold' : 'text-[#1a1522]/40'}>
                           {player.isOnline ? `● Online (${player.pingMs || 18}ms)` : '○ Offline'}
                         </span>
                         <span>•</span>
@@ -220,7 +212,7 @@ export default function PlayersManagementPage() {
                         {player.coordinates && (
                           <>
                             <span>•</span>
-                            <span className="text-zinc-400">
+                            <span>
                               XYZ: {Math.round(player.coordinates.x)}, {Math.round(player.coordinates.y)}, {Math.round(player.coordinates.z)}
                             </span>
                           </>
@@ -238,7 +230,7 @@ export default function PlayersManagementPage() {
                         setGamemode(player.uuid, e.target.value as any);
                         showNotice(`Updated ${player.username}'s gamemode to ${e.target.value}.`);
                       }}
-                      className="px-2.5 py-1.5 rounded-lg bg-[#1c1926] border border-[#2e2a3f] text-xs text-zinc-300 focus:outline-none focus:border-emerald-500 font-mono"
+                      className="px-3 py-1.5 rounded-lg bg-[#f8f9fd] border border-[#1a1522]/15 text-xs text-[#1a1522] font-semibold focus:outline-none focus:border-blue-600 font-mono"
                     >
                       <option value="survival">Survival</option>
                       <option value="creative">Creative</option>
@@ -252,14 +244,14 @@ export default function PlayersManagementPage() {
                         toggleOp(player.uuid);
                         showNotice(`Toggled OP status for ${player.username}.`);
                       }}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors flex items-center gap-1.5 ${
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all flex items-center gap-1.5 ${
                         player.isOp
-                          ? 'bg-amber-950/60 text-amber-300 border-amber-800 hover:bg-amber-900/60'
-                          : 'bg-[#1c1926] text-zinc-300 border-[#2e2a3f] hover:bg-[#252233]'
+                          ? 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
+                          : 'bg-white text-[#1a1522]/70 border-[#1a1522]/15 hover:bg-slate-50'
                       }`}
                       title={player.isOp ? 'Revoke OP permissions' : 'Grant OP permissions'}
                     >
-                      <Shield className="w-3 h-3" />
+                      <Shield className="w-3.5 h-3.5" />
                       <span>{player.isOp ? 'De-OP' : 'OP'}</span>
                     </button>
 
@@ -270,10 +262,10 @@ export default function PlayersManagementPage() {
                           kickPlayer(player.uuid, 'Disconnected by administrator');
                           showNotice(`Kicked ${player.username} from the server.`);
                         }}
-                        className="px-3 py-1.5 rounded-lg bg-[#1c1926] hover:bg-red-950/40 text-zinc-300 hover:text-red-300 border border-[#2e2a3f] hover:border-red-800 text-xs transition-colors flex items-center gap-1.5"
+                        className="px-3 py-1.5 rounded-lg bg-white hover:bg-red-50 text-red-600 border border-red-200 text-xs font-semibold transition-all flex items-center gap-1.5"
                         title="Kick player immediately"
                       >
-                        <UserX className="w-3 h-3" />
+                        <UserX className="w-3.5 h-3.5" />
                         <span>Kick</span>
                       </button>
                     )}
@@ -285,9 +277,9 @@ export default function PlayersManagementPage() {
                           unbanPlayer(player.uuid);
                           showNotice(`Unbanned ${player.username}.`);
                         }}
-                        className="px-3 py-1.5 rounded-lg bg-emerald-950/60 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-800 text-xs font-semibold transition-colors flex items-center gap-1.5"
+                        className="px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-semibold transition-all flex items-center gap-1.5"
                       >
-                        <UserCheck className="w-3 h-3" />
+                        <UserCheck className="w-3.5 h-3.5" />
                         <span>Unban</span>
                       </button>
                     ) : (
@@ -296,9 +288,9 @@ export default function PlayersManagementPage() {
                           banPlayer(player.uuid, 'Banned by operator');
                           showNotice(`Banned ${player.username} from server.`);
                         }}
-                        className="px-3 py-1.5 rounded-lg bg-red-950/50 hover:bg-red-900/60 text-red-300 border border-red-800 text-xs font-semibold transition-colors flex items-center gap-1.5"
+                        className="px-3 py-1.5 rounded-lg bg-white hover:bg-red-50 text-red-600 border border-red-200 text-xs font-semibold transition-all flex items-center gap-1.5"
                       >
-                        <Ban className="w-3 h-3" />
+                        <Ban className="w-3.5 h-3.5" />
                         <span>Ban</span>
                       </button>
                     )}

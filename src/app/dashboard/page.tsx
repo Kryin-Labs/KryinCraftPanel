@@ -20,427 +20,422 @@ import {
   Wifi,
   ChevronRight,
   ArrowUpRight,
-  Send,
-  Zap
+  Zap,
+  CheckCircle2,
+  AlertTriangle,
+  Radio,
+  FileCode,
+  Sliders,
+  FolderTree
 } from 'lucide-react';
 import { useServerStore } from '@/lib/serverStore';
+import { StatusBadge } from '@/components/StatusBadge';
 
 export default function DashboardOverviewPage() {
   const {
     serverInfo,
     metrics,
     players,
-    logs,
     startServer,
     stopServer,
     restartServer,
-    sendConsoleCommand,
     toggleOp,
     kickPlayer
   } = useServerStore();
 
-  const [copied, setCopied] = useState(false);
-  const [commandInput, setCommandInput] = useState('');
-  const [isExecuting, setIsExecuting] = useState(false);
+  const [copiedJava, setCopiedJava] = useState(false);
+  const [copiedBedrock, setCopiedBedrock] = useState(false);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
 
   const onlinePlayers = players.filter((p) => p.isOnline);
-  const serverAddress = 'in.kryin.host:25565';
+  const javaAddress = 'in.kryin.host:25565';
   const bedrockAddress = 'in.kryin.host:19132';
 
-  const handleCopy = (text: string) => {
+  const copyAddress = (type: 'java' | 'bedrock', text: string) => {
     navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleSendCommand = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!commandInput.trim() || isExecuting) return;
-    setIsExecuting(true);
-    try {
-      await sendConsoleCommand(commandInput.trim());
-      setCommandInput('');
-    } finally {
-      setIsExecuting(false);
+    if (type === 'java') {
+      setCopiedJava(true);
+      setTimeout(() => setCopiedJava(false), 2000);
+    } else {
+      setCopiedBedrock(true);
+      setTimeout(() => setCopiedBedrock(false), 2000);
     }
   };
 
-  const handleQuickAction = async (action: 'restart' | 'stop' | 'hibernate') => {
-    if (action === 'restart') {
-      setActionNotice('Restarting server...');
+  const handleQuickAction = async (action: 'start' | 'restart' | 'stop' | 'hibernate') => {
+    if (action === 'start') {
+      setActionNotice('Starting Paper server on Mumbai Node 01...');
+      await startServer();
+    } else if (action === 'restart') {
+      setActionNotice('Gracefully restarting server and flushing chunks...');
       await restartServer();
     } else if (action === 'stop') {
-      setActionNotice('Shutting down server...');
+      setActionNotice('Gracefully stopping server. World chunks safely saved to NVMe.');
       await stopServer();
     } else if (action === 'hibernate') {
-      setActionNotice('Server placed in smart low-power hibernation. Wakes on player join.');
+      setActionNotice('Server placed in smart low-power hibernation. Wakes on player join in <90s.');
     }
     setTimeout(() => setActionNotice(null), 4000);
   };
 
   const ramPercent = Math.min(100, Math.round((metrics.usedRamMb / metrics.totalRamMb) * 100));
+  const capacityPercent = Math.min(100, Math.round((onlinePlayers.length / serverInfo.maxPlayers) * 100));
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 font-mono text-[#1a1522]">
       {/* Action Notification Toast */}
       {actionNotice && (
-        <div className="p-3 rounded-lg bg-emerald-950/80 border border-emerald-700/60 text-emerald-300 text-xs flex items-center justify-between animate-fade-in">
+        <div className="p-3.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs font-medium flex items-center justify-between shadow-xs animate-fade-in">
           <span className="flex items-center gap-2">
-            <Zap className="w-4 h-4 text-emerald-400" />
-            {actionNotice}
+            <Zap className="w-4 h-4 text-blue-600 flex-shrink-0" />
+            <span>{actionNotice}</span>
           </span>
-          <button onClick={() => setActionNotice(null)} className="text-emerald-400 hover:text-emerald-200">
+          <button
+            onClick={() => setActionNotice(null)}
+            className="text-blue-600 hover:text-blue-800 font-bold ml-3"
+          >
             ✕
           </button>
         </div>
       )}
 
-      {/* Server Header Banner */}
-      <div className="p-5 sm:p-6 rounded-xl bg-[#121019] border border-[#242131] flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* Main Server Header Card with Power Controls */}
+      <div className="p-5 sm:p-6 rounded-2xl bg-white border border-[#1a1522]/10 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-5">
         <div>
           <div className="flex flex-wrap items-center gap-2.5 mb-2">
-            <h1 className="text-xl sm:text-2xl font-bold text-zinc-100 tracking-tight">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[#1a1522]">
               {serverInfo.name}
             </h1>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-950/80 text-emerald-400 border border-emerald-800/60">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              ONLINE · 20.0 TPS
-            </span>
-            <span className="px-2 py-0.5 rounded bg-[#1e1b29] text-zinc-400 text-xs border border-[#302c40]">
+            <StatusBadge status={serverInfo.status} size="md" />
+            <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 text-xs font-bold border border-blue-200/80">
               Paper 1.21.4
             </span>
           </div>
-          <p className="text-xs text-zinc-400 flex flex-wrap items-center gap-2">
-            <span>Node: <strong className="text-zinc-300">Mumbai DC-1 (Bare-Metal)</strong></span>
+
+          <p className="text-xs text-[#1a1522]/60 flex flex-wrap items-center gap-2">
+            <span>Node: <strong className="text-[#1a1522]">Mumbai DC-1 (India)</strong></span>
             <span>•</span>
-            <span>Uptime: <strong className="text-zinc-300">{Math.floor(serverInfo.uptimeSeconds / 3600)}h {Math.floor((serverInfo.uptimeSeconds % 3600) / 60)}m</strong></span>
+            <span>Uptime: <strong className="text-[#1a1522]">{Math.floor(serverInfo.uptimeSeconds / 3600)}h {Math.floor((serverInfo.uptimeSeconds % 3600) / 60)}m</strong></span>
             <span>•</span>
-            <span>Geyser Cross-Play: <strong className="text-emerald-400">Active</strong></span>
+            <span>Geyser Crossplay: <strong className="text-emerald-700">Online</strong></span>
           </p>
         </div>
 
-        {/* Server Power Controls */}
+        {/* Server Power Hub: Start, Stop, Restart, Hibernate */}
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => handleQuickAction('restart')}
-            className="px-3.5 py-2 rounded-lg bg-[#1c1926] hover:bg-[#252233] text-zinc-200 hover:text-white border border-[#2e2a3f] text-xs font-semibold flex items-center gap-2 transition-colors"
-            title="Gracefully restart Minecraft server"
-          >
-            <RotateCw className="w-3.5 h-3.5 text-zinc-400" />
-            <span>Restart</span>
-          </button>
+          {serverInfo.status === 'offline' || (serverInfo.status as any) === 'crashed' ? (
+            <button
+              onClick={() => handleQuickAction('start')}
+              className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs"
+              title="Start Minecraft Server"
+            >
+              <Play className="w-3.5 h-3.5 fill-current" />
+              <span>Start Server</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => handleQuickAction('restart')}
+              className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs"
+              title="Gracefully restart Minecraft server"
+            >
+              <RotateCw className="w-3.5 h-3.5" />
+              <span>Restart</span>
+            </button>
+          )}
 
           <button
             onClick={() => handleQuickAction('hibernate')}
-            className="px-3.5 py-2 rounded-lg bg-[#1c1926] hover:bg-[#252233] text-zinc-200 hover:text-white border border-[#2e2a3f] text-xs font-semibold flex items-center gap-2 transition-colors"
-            title="Hibernate when idle, auto-wakes in <90s on player join"
+            className="px-3.5 py-2 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold flex items-center gap-1.5 transition-all"
+            title="Hibernate when idle, auto-wakes on join"
           >
-            <Moon className="w-3.5 h-3.5 text-indigo-400" />
+            <Moon className="w-3.5 h-3.5" />
             <span>Hibernate</span>
           </button>
 
-          <button
-            onClick={() => handleQuickAction('stop')}
-            className="px-3.5 py-2 rounded-lg bg-red-950/40 hover:bg-red-900/50 text-red-300 hover:text-red-200 border border-red-800/40 text-xs font-semibold flex items-center gap-2 transition-colors"
-            title="Stop server"
-          >
-            <Power className="w-3.5 h-3.5 text-red-400" />
-            <span>Stop</span>
-          </button>
+          {serverInfo.status === 'online' && (
+            <button
+              onClick={() => handleQuickAction('stop')}
+              className="px-3.5 py-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-bold flex items-center gap-1.5 transition-all"
+              title="Gracefully shut down server"
+            >
+              <Power className="w-3.5 h-3.5" />
+              <span>Stop</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Telemetry Metric Cards */}
+      {/* 4 Primary White & Blue Metric Cards: IP, TPS, Players Online, RAM */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* TPS Card */}
-        <div className="p-4 rounded-xl bg-[#121019] border border-[#242131] space-y-2">
-          <div className="flex items-center justify-between text-zinc-400 text-xs">
-            <span className="flex items-center gap-1.5">
-              <Activity className="w-3.5 h-3.5 text-emerald-400" />
+        {/* Server IP & Port */}
+        <div className="p-4 sm:p-5 rounded-2xl bg-white border border-[#1a1522]/10 shadow-xs flex flex-col justify-between space-y-3">
+          <div className="flex items-center justify-between text-xs text-[#1a1522]/60">
+            <span className="flex items-center gap-1.5 font-bold uppercase tracking-wider">
+              <Wifi className="w-3.5 h-3.5 text-blue-600" />
+              Server Address
+            </span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 font-bold border border-blue-200">
+              PORT 25565
+            </span>
+          </div>
+
+          <div>
+            <div className="text-sm sm:text-base font-bold text-[#1a1522] truncate">
+              {javaAddress}
+            </div>
+            <p className="text-[11px] text-[#1a1522]/50 mt-0.5">
+              Java Edition · Direct Mumbai Peering
+            </p>
+          </div>
+
+          <button
+            onClick={() => copyAddress('java', javaAddress)}
+            className="w-full py-1.5 px-3 rounded-lg bg-[#f8f9fd] hover:bg-blue-50 text-xs font-semibold text-[#1a1522] border border-[#1a1522]/10 hover:border-blue-300 flex items-center justify-center gap-1.5 transition-all"
+          >
+            {copiedJava ? (
+              <>
+                <Check className="w-3.5 h-3.5 text-emerald-600" />
+                <span className="text-emerald-700 font-bold">Copied Address!</span>
+              </>
+            ) : (
+              <>
+                <Copy className="w-3.5 h-3.5 text-blue-600" />
+                <span>Copy Server IP</span>
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* Real-time TPS */}
+        <div className="p-4 sm:p-5 rounded-2xl bg-white border border-[#1a1522]/10 shadow-xs flex flex-col justify-between space-y-3">
+          <div className="flex items-center justify-between text-xs text-[#1a1522]/60">
+            <span className="flex items-center gap-1.5 font-bold uppercase tracking-wider">
+              <Activity className="w-3.5 h-3.5 text-emerald-600" />
               Engine Health
             </span>
-            <span className="text-[10px] text-emerald-400 font-semibold">100% HEALTH</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 font-bold border border-emerald-200">
+              STABLE
+            </span>
           </div>
+
           <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-bold text-zinc-100 font-mono">20.0</span>
-            <span className="text-xs text-zinc-400">TPS (11.2ms)</span>
+            <span className="text-3xl font-extrabold text-[#1a1522] tracking-tight">
+              {serverInfo.tps.toFixed(1)}
+            </span>
+            <span className="text-xs text-[#1a1522]/60 font-medium">TPS (11.2ms MSPT)</span>
           </div>
-          <div className="w-full bg-[#1b1926] h-1.5 rounded-full overflow-hidden">
-            <div className="bg-emerald-400 h-full rounded-full" style={{ width: '100%' }} />
+
+          <div className="space-y-1">
+            <div className="w-full bg-[#f0f2f8] h-2 rounded-full overflow-hidden">
+              <div className="bg-emerald-500 h-full rounded-full" style={{ width: '100%' }} />
+            </div>
+            <div className="flex items-center justify-between text-[10px] text-[#1a1522]/50">
+              <span>Tick Stability</span>
+              <span className="font-bold text-emerald-700">100% Zero Lag</span>
+            </div>
           </div>
         </div>
 
-        {/* RAM Usage Card */}
-        <div className="p-4 rounded-xl bg-[#121019] border border-[#242131] space-y-2">
-          <div className="flex items-center justify-between text-zinc-400 text-xs">
-            <span className="flex items-center gap-1.5">
-              <HardDrive className="w-3.5 h-3.5 text-blue-400" />
-              Memory Allocation
-            </span>
-            <span className="text-[10px] text-blue-400 font-semibold">{ramPercent}% USED</span>
-          </div>
-          <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-bold text-zinc-100 font-mono">
-              {(metrics.usedRamMb / 1024).toFixed(1)} <span className="text-sm font-normal text-zinc-400">/ {(metrics.totalRamMb / 1024).toFixed(1)} GB</span>
-            </span>
-            <span className="text-xs text-zinc-400">DDR5 High-Speed</span>
-          </div>
-          <div className="w-full bg-[#1b1926] h-1.5 rounded-full overflow-hidden">
-            <div className="bg-blue-400 h-full rounded-full transition-all" style={{ width: `${ramPercent}%` }} />
-          </div>
-        </div>
-
-        {/* CPU Load Card */}
-        <div className="p-4 rounded-xl bg-[#121019] border border-[#242131] space-y-2">
-          <div className="flex items-center justify-between text-zinc-400 text-xs">
-            <span className="flex items-center gap-1.5">
-              <Cpu className="w-3.5 h-3.5 text-purple-400" />
-              Compute Node Load
-            </span>
-            <span className="text-[10px] text-purple-400 font-semibold">4.4 GHz</span>
-          </div>
-          <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-bold text-zinc-100 font-mono">{metrics.cpuUsagePercent.toFixed(1)}%</span>
-            <span className="text-xs text-zinc-400">AMD EPYC</span>
-          </div>
-          <div className="w-full bg-[#1b1926] h-1.5 rounded-full overflow-hidden">
-            <div className="bg-purple-400 h-full rounded-full transition-all" style={{ width: `${metrics.cpuUsagePercent * 2}%` }} />
-          </div>
-        </div>
-
-        {/* Active Players Card */}
-        <div className="p-4 rounded-xl bg-[#121019] border border-[#242131] space-y-2">
-          <div className="flex items-center justify-between text-zinc-400 text-xs">
-            <span className="flex items-center gap-1.5">
-              <Users className="w-3.5 h-3.5 text-emerald-400" />
+        {/* Players Online (like online/out of total) */}
+        <div className="p-4 sm:p-5 rounded-2xl bg-white border border-[#1a1522]/10 shadow-xs flex flex-col justify-between space-y-3">
+          <div className="flex items-center justify-between text-xs text-[#1a1522]/60">
+            <span className="flex items-center gap-1.5 font-bold uppercase tracking-wider">
+              <Users className="w-3.5 h-3.5 text-blue-600" />
               Connected Players
             </span>
-            <span className="text-[10px] text-emerald-400 font-semibold">PAN-INDIA</span>
-          </div>
-          <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-bold text-zinc-100 font-mono">
-              {onlinePlayers.length} <span className="text-sm font-normal text-zinc-400">/ {serverInfo.maxPlayers}</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 font-bold border border-blue-200">
+              PAN-INDIA
             </span>
-            <span className="text-xs text-zinc-400">Slots</span>
           </div>
-          <div className="w-full bg-[#1b1926] h-1.5 rounded-full overflow-hidden">
-            <div
-              className="bg-emerald-400 h-full rounded-full"
-              style={{ width: `${(onlinePlayers.length / serverInfo.maxPlayers) * 100}%` }}
-            />
+
+          <div className="flex items-baseline justify-between">
+            <span className="text-3xl font-extrabold text-[#1a1522] tracking-tight">
+              {onlinePlayers.length}
+              <span className="text-lg font-normal text-[#1a1522]/50"> / {serverInfo.maxPlayers}</span>
+            </span>
+            <span className="text-xs text-[#1a1522]/60 font-medium">Online</span>
+          </div>
+
+          <div className="space-y-1">
+            <div className="w-full bg-[#f0f2f8] h-2 rounded-full overflow-hidden">
+              <div
+                className="bg-blue-600 h-full rounded-full transition-all"
+                style={{ width: `${capacityPercent}%` }}
+              />
+            </div>
+            <div className="flex items-center justify-between text-[10px] text-[#1a1522]/50">
+              <span>Server Capacity</span>
+              <span className="font-bold text-blue-700">{capacityPercent}% Utilized</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Memory (RAM) Allocation */}
+        <div className="p-4 sm:p-5 rounded-2xl bg-white border border-[#1a1522]/10 shadow-xs flex flex-col justify-between space-y-3">
+          <div className="flex items-center justify-between text-xs text-[#1a1522]/60">
+            <span className="flex items-center gap-1.5 font-bold uppercase tracking-wider">
+              <HardDrive className="w-3.5 h-3.5 text-indigo-600" />
+              Memory Allocation
+            </span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 font-bold border border-indigo-200">
+              DDR5 HIGH-SPEED
+            </span>
+          </div>
+
+          <div className="flex items-baseline justify-between">
+            <span className="text-2xl font-bold text-[#1a1522] tracking-tight">
+              {(metrics.usedRamMb / 1024).toFixed(2)}
+              <span className="text-sm font-normal text-[#1a1522]/50"> / {(metrics.totalRamMb / 1024).toFixed(1)} GB</span>
+            </span>
+            <span className="text-xs text-[#1a1522]/60 font-medium">{ramPercent}%</span>
+          </div>
+
+          <div className="space-y-1">
+            <div className="w-full bg-[#f0f2f8] h-2 rounded-full overflow-hidden">
+              <div
+                className="bg-indigo-600 h-full rounded-full transition-all"
+                style={{ width: `${ramPercent}%` }}
+              />
+            </div>
+            <div className="flex items-center justify-between text-[10px] text-[#1a1522]/50">
+              <span>JVM Heap</span>
+              <span className="font-bold text-indigo-700">Low-Latency G1GC</span>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Network Connection Banner */}
-      <div className="p-4 sm:p-5 rounded-xl bg-[#121019] border border-[#242131] grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Java Address */}
-        <div className="flex items-center justify-between p-3 rounded-lg bg-[#161420] border border-[#262333]">
-          <div>
-            <div className="flex items-center gap-2 mb-0.5">
-              <span className="text-xs font-semibold text-zinc-200">Java Edition Server IP</span>
-              <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-950 text-emerald-400 border border-emerald-850">
-                PORT 25565
+      {/* Dual Protocol Box: Java & Bedrock IPs */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Java Connection Details */}
+        <div className="p-4 sm:p-5 rounded-2xl bg-white border border-[#1a1522]/10 shadow-xs flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="font-bold text-sm text-[#1a1522]">Java Edition Endpoint</span>
+              <span className="text-[10px] px-2 py-0.2 rounded bg-emerald-50 text-emerald-700 font-bold border border-emerald-200">
+                TCP : 25565
               </span>
             </div>
-            <p className="text-xs text-zinc-400 font-mono">{serverAddress}</p>
+            <p className="text-xs text-[#1a1522]/60 font-mono truncate">{javaAddress}</p>
           </div>
           <button
-            onClick={() => handleCopy(serverAddress)}
-            className="p-2 rounded-md bg-[#201d2d] hover:bg-[#29253a] text-zinc-300 hover:text-white transition-colors"
+            onClick={() => copyAddress('java', javaAddress)}
+            className="p-2.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition-colors flex-shrink-0"
             title="Copy Java IP"
           >
-            {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+            {copiedJava ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
           </button>
         </div>
 
-        {/* Bedrock Address */}
-        <div className="flex items-center justify-between p-3 rounded-lg bg-[#161420] border border-[#262333]">
-          <div>
-            <div className="flex items-center gap-2 mb-0.5">
-              <span className="text-xs font-semibold text-zinc-200">Bedrock / Mobile IP</span>
-              <span className="text-[9px] px-1.5 py-0.2 rounded bg-blue-950 text-blue-400 border border-blue-850">
-                PORT 19132
+        {/* Bedrock Connection Details */}
+        <div className="p-4 sm:p-5 rounded-2xl bg-white border border-[#1a1522]/10 shadow-xs flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="font-bold text-sm text-[#1a1522]">Bedrock & Mobile Endpoint</span>
+              <span className="text-[10px] px-2 py-0.2 rounded bg-blue-50 text-blue-700 font-bold border border-blue-200">
+                UDP : 19132
               </span>
             </div>
-            <p className="text-xs text-zinc-400 font-mono">{bedrockAddress}</p>
+            <p className="text-xs text-[#1a1522]/60 font-mono truncate">{bedrockAddress}</p>
           </div>
           <button
-            onClick={() => handleCopy(bedrockAddress)}
-            className="p-2 rounded-md bg-[#201d2d] hover:bg-[#29253a] text-zinc-300 hover:text-white transition-colors"
+            onClick={() => copyAddress('bedrock', bedrockAddress)}
+            className="p-2.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition-colors flex-shrink-0"
             title="Copy Bedrock IP"
           >
-            {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+            {copiedBedrock ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
           </button>
         </div>
       </div>
 
-      {/* Main Two-Column Layout: Live Console Preview & Active Players */}
+      {/* Two Column Layout: Connected Players Roster & Node Specifications */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left 2 Cols: Live Console Stream & Command Sender */}
-        <div className="lg:col-span-2 rounded-xl bg-[#121019] border border-[#242131] flex flex-col overflow-hidden">
-          <div className="p-3.5 sm:p-4 border-b border-[#242131] flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Terminal className="w-4 h-4 text-emerald-400" />
-              <span className="text-xs font-bold text-zinc-200 uppercase tracking-wide">Live Console Stream</span>
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            </div>
-            <Link
-              href="/dashboard/console"
-              className="text-xs text-zinc-400 hover:text-zinc-100 flex items-center gap-1 transition-colors"
-            >
-              <span>Full Screen</span>
-              <ArrowUpRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-
-          {/* Console Log Feed */}
-          <div className="p-4 bg-[#0a090e] font-mono text-xs overflow-y-auto max-h-[340px] space-y-1.5 leading-relaxed select-text">
-            {logs.slice(-12).map((log, idx) => {
-              const isError = log.level === 'ERROR';
-              const isWarn = log.level === 'WARN';
-              const isCommand = log.message.startsWith('/') || log.message.includes('executed');
-
-              return (
-                <div key={log.id || idx} className="flex items-start gap-2.5">
-                  <span className="text-zinc-400 select-none flex-shrink-0">[{log.timestamp}]</span>
-                  <span
-                    className={`font-semibold flex-shrink-0 text-[10px] px-1 py-0.2 rounded ${
-                      isError
-                        ? 'bg-red-950 text-red-400 border border-red-800'
-                        : isWarn
-                        ? 'bg-amber-950 text-amber-300 border border-amber-800'
-                        : 'bg-zinc-800/80 text-zinc-400'
-                    }`}
-                  >
-                    {log.level}
-                  </span>
-                  <span
-                    className={`break-all ${
-                      isError
-                        ? 'text-red-300'
-                        : isWarn
-                        ? 'text-amber-200'
-                        : isCommand
-                        ? 'text-indigo-300 font-semibold'
-                        : 'text-zinc-300'
-                    }`}
-                  >
-                    {log.message}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Inline Command Composer */}
-          <form onSubmit={handleSendCommand} className="p-3 bg-[#121019] border-t border-[#242131] flex items-center gap-2">
-            <span className="text-emerald-400 font-bold font-mono pl-1 select-none">&gt;</span>
-            <input
-              type="text"
-              value={commandInput}
-              onChange={(e) => setCommandInput(e.target.value)}
-              placeholder="Execute command (e.g. /tps, /say hello, /op player, /whitelist list)..."
-              className="flex-1 bg-[#181622] border border-[#2b273b] rounded-lg px-3 py-2 text-xs text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:border-emerald-500 font-mono"
-            />
-            <button
-              type="submit"
-              disabled={isExecuting || !commandInput.trim()}
-              className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-zinc-950 font-bold text-xs flex items-center gap-1.5 transition-colors"
-            >
-              <span>Run</span>
-              <Send className="w-3 h-3" />
-            </button>
-          </form>
-
-          {/* Quick Command Suggestions */}
-          <div className="px-4 py-2 bg-[#0e0d13] border-t border-[#1e1b29] flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-400">
-            <span className="text-zinc-400">Quick:</span>
-            {['/tps', '/whitelist list', '/time set day', '/weather clear', '/save-all'].map((cmd) => (
-              <button
-                key={cmd}
-                type="button"
-                onClick={() => setCommandInput(cmd)}
-                className="px-2 py-0.5 rounded bg-[#181622] hover:bg-[#221f30] text-zinc-400 hover:text-zinc-200 border border-[#2b273b] font-mono transition-colors"
-              >
-                {cmd}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Right 1 Col: Live Online Players */}
-        <div className="rounded-xl bg-[#121019] border border-[#242131] flex flex-col overflow-hidden">
-          <div className="p-3.5 sm:p-4 border-b border-[#242131] flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Users className="w-4 h-4 text-emerald-400" />
-              <span className="text-xs font-bold text-zinc-200 uppercase tracking-wide">
-                Live Players ({onlinePlayers.length})
+        {/* Left 2 Cols: Live Connected Players Table */}
+        <div className="lg:col-span-2 rounded-2xl bg-white border border-[#1a1522]/10 shadow-xs flex flex-col overflow-hidden">
+          <div className="p-4 sm:p-5 border-b border-[#1a1522]/10 flex items-center justify-between bg-[#fbfbfe]">
+            <div className="flex items-center gap-2.5">
+              <Users className="w-4 h-4 text-blue-600" />
+              <span className="text-xs font-bold text-[#1a1522] uppercase tracking-wider">
+                Online Players ({onlinePlayers.length} / {serverInfo.maxPlayers})
               </span>
             </div>
             <Link
               href="/dashboard/players"
-              className="text-xs text-zinc-400 hover:text-zinc-100 flex items-center gap-1 transition-colors"
+              className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors"
             >
-              <span>All Players</span>
+              <span>Manage Whitelist & Bans</span>
               <ChevronRight className="w-3.5 h-3.5" />
             </Link>
           </div>
 
-          {/* Player Cards */}
-          <div className="p-3 space-y-2 flex-1 overflow-y-auto">
+          {/* Players Table / List */}
+          <div className="p-4 space-y-2 flex-1">
             {onlinePlayers.length === 0 ? (
-              <div className="p-6 text-center text-zinc-400 text-xs">
-                No players currently online. Server is idling safely.
+              <div className="p-8 text-center text-[#1a1522]/50 text-xs">
+                No players currently connected. The server is idling safely with auto-hibernation armed.
               </div>
             ) : (
               onlinePlayers.map((player) => (
                 <div
                   key={player.uuid}
-                  className="p-3 rounded-lg bg-[#161420] border border-[#262333] flex items-center justify-between gap-3 hover:border-[#38334b] transition-colors"
+                  className="p-3.5 rounded-xl bg-[#f8f9fd] border border-[#1a1522]/8 flex items-center justify-between gap-3 hover:border-blue-300 transition-all"
                 >
-                  <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="flex items-center gap-3 min-w-0">
                     {/* Head Avatar */}
-                    <div className="w-8 h-8 rounded bg-[#201d2d] border border-[#2d293d] flex items-center justify-center font-bold text-xs text-zinc-200 flex-shrink-0">
+                    <div className="w-9 h-9 rounded-lg bg-blue-100 text-blue-800 font-bold text-xs flex items-center justify-center border border-blue-200 flex-shrink-0">
                       {player.username.slice(0, 2).toUpperCase()}
                     </div>
+
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <span className="font-semibold text-xs text-zinc-200 truncate font-mono">
+                        <span className="font-bold text-xs text-[#1a1522] truncate font-mono">
                           {player.username}
                         </span>
                         {player.isOp && (
-                          <span className="text-[9px] px-1 py-0.2 rounded bg-amber-950 text-amber-300 border border-amber-800 font-bold">
+                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200 font-bold">
                             OP
                           </span>
                         )}
+                        {player.isWhitelisted && (
+                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 border border-blue-200 font-medium">
+                            WHITELIST
+                          </span>
+                        )}
                       </div>
-                      <div className="flex items-center gap-2 text-[10px] text-zinc-400 font-mono">
-                        <span className="text-emerald-400">● {player.pingMs || 18}ms</span>
+
+                      <div className="flex items-center gap-2 text-[10px] text-[#1a1522]/50 font-mono mt-0.5">
+                        <span className="text-emerald-700 font-semibold">● {player.pingMs || 18}ms</span>
                         <span>•</span>
                         <span className="capitalize">{player.gamemode}</span>
+                        {player.coordinates && (
+                          <>
+                            <span>•</span>
+                            <span>XYZ: {Math.round(player.coordinates.x)}, {Math.round(player.coordinates.y)}, {Math.round(player.coordinates.z)}</span>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
 
                   {/* Quick Player Actions */}
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
                     <button
                       onClick={() => toggleOp(player.uuid)}
-                      className={`p-1.5 rounded text-[10px] border transition-colors ${
+                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${
                         player.isOp
-                          ? 'bg-amber-950/60 text-amber-300 border-amber-800 hover:bg-amber-900/60'
-                          : 'bg-[#1e1b29] text-zinc-400 border-[#2e2a3f] hover:text-zinc-200'
+                          ? 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
+                          : 'bg-white text-[#1a1522]/70 border-[#1a1522]/15 hover:bg-slate-50'
                       }`}
                       title={player.isOp ? 'Revoke OP operator' : 'Promote to OP'}
                     >
-                      <Shield className="w-3 h-3" />
+                      <Shield className="w-3.5 h-3.5 inline mr-1" />
+                      <span>{player.isOp ? 'De-OP' : 'OP'}</span>
                     </button>
+
                     <button
-                      onClick={() => kickPlayer(player.uuid, 'Admin kicked from web portal')}
-                      className="px-2 py-1 rounded bg-red-950/40 hover:bg-red-900/50 text-red-300 border border-red-800/40 text-[10px] transition-colors"
-                      title="Kick player"
+                      onClick={() => kickPlayer(player.uuid, 'Disconnected by administrator')}
+                      className="px-2.5 py-1 rounded-lg bg-white hover:bg-red-50 text-red-600 border border-red-200 text-xs font-semibold transition-all"
+                      title="Kick player from server"
                     >
                       Kick
                     </button>
@@ -449,16 +444,77 @@ export default function DashboardOverviewPage() {
               ))
             )}
           </div>
+        </div>
 
-          {/* Quick Invite / Whitelist Button */}
-          <div className="p-3 bg-[#0e0d13] border-t border-[#1e1b29]">
+        {/* Right 1 Col: Quick Control Shortcuts & Node Specs */}
+        <div className="space-y-4">
+          {/* Dedicated Terminal Console Fast Link Card */}
+          <div className="p-5 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white shadow-md flex flex-col justify-between space-y-4">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider bg-white/20 px-2 py-0.5 rounded-full">
+                  DEDICATED CONSOLE
+                </span>
+                <Radio className="w-3.5 h-3.5 text-emerald-300 animate-pulse" />
+              </div>
+              <h3 className="text-base font-bold text-white tracking-tight">
+                Live Server Terminal
+              </h3>
+              <p className="text-xs text-blue-100 mt-1 leading-relaxed">
+                Full-screen RCON command executor, log filters, auto-scroll, and live player broadcast.
+              </p>
+            </div>
+
             <Link
-              href="/dashboard/players"
-              className="w-full py-2 px-3 rounded-lg bg-[#181622] hover:bg-[#201d2d] text-zinc-300 hover:text-white border border-[#2b273b] text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors font-mono"
+              href="/dashboard/console"
+              className="py-2.5 px-4 rounded-xl bg-white hover:bg-blue-50 text-blue-900 font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-sm"
             >
-              <span>Manage Whitelist & Bans</span>
-              <ChevronRight className="w-3.5 h-3.5" />
+              <Terminal className="w-4 h-4 text-blue-700" />
+              <span>Open Dedicated Console →</span>
             </Link>
+          </div>
+
+          {/* Node Infrastructure Specifications */}
+          <div className="p-5 rounded-2xl bg-white border border-[#1a1522]/10 shadow-xs space-y-3.5">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-[#1a1522]/60 flex items-center gap-2">
+              <Server className="w-4 h-4 text-blue-600" />
+              Bare-Metal Node Specs
+            </h3>
+
+            <div className="space-y-2.5 text-xs">
+              <div className="flex items-center justify-between py-1.5 border-b border-[#1a1522]/8">
+                <span className="text-[#1a1522]/60">Datacenter</span>
+                <span className="font-bold text-[#1a1522]">Tier-IV Mumbai (IN)</span>
+              </div>
+              <div className="flex items-center justify-between py-1.5 border-b border-[#1a1522]/8">
+                <span className="text-[#1a1522]/60">Compute Core</span>
+                <span className="font-bold text-[#1a1522]">AMD EPYC 9654 (4.4 GHz)</span>
+              </div>
+              <div className="flex items-center justify-between py-1.5 border-b border-[#1a1522]/8">
+                <span className="text-[#1a1522]/60">Network Uplink</span>
+                <span className="font-bold text-emerald-700">10 Gbps Symmetric Peering</span>
+              </div>
+              <div className="flex items-center justify-between py-1.5 border-b border-[#1a1522]/8">
+                <span className="text-[#1a1522]/60">Smart Sleep</span>
+                <span className="font-bold text-blue-700">Armed (Sleep after 10m)</span>
+              </div>
+            </div>
+
+            {/* Quick Actions Links */}
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <Link
+                href="/dashboard/files"
+                className="py-2 px-3 rounded-lg bg-[#f8f9fd] hover:bg-blue-50 text-[#1a1522] border border-[#1a1522]/10 text-xs font-semibold text-center transition-colors"
+              >
+                File Manager
+              </Link>
+              <Link
+                href="/dashboard/settings"
+                className="py-2 px-3 rounded-lg bg-[#f8f9fd] hover:bg-blue-50 text-[#1a1522] border border-[#1a1522]/10 text-xs font-semibold text-center transition-colors"
+              >
+                Settings
+              </Link>
+            </div>
           </div>
         </div>
       </div>
