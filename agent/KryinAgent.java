@@ -501,7 +501,9 @@ public class KryinAgent {
                         String name = extractJsonString(block, "name");
                         String u = extractJsonString(block, "uuid");
                         if (name != null && u != null) {
-                            uuidToName.put(u.toLowerCase(), name);
+                            String clean = u.toLowerCase();
+                            uuidToName.put(clean, name);
+                            uuidToName.put(clean.replace("-", ""), name);
                         }
                     }
                 } catch (Exception ignored) {}
@@ -521,7 +523,11 @@ public class KryinAgent {
                         if (u != null) {
                             String clean = u.toLowerCase();
                             ops.add(clean);
-                            if (name != null && !uuidToName.containsKey(clean)) uuidToName.put(clean, name);
+                            ops.add(clean.replace("-", ""));
+                            if (name != null) {
+                                uuidToName.put(clean, name);
+                                uuidToName.put(clean.replace("-", ""), name);
+                            }
                         }
                     }
                 } catch (Exception ignored) {}
@@ -541,7 +547,11 @@ public class KryinAgent {
                         if (u != null) {
                             String clean = u.toLowerCase();
                             whitelist.add(clean);
-                            if (name != null && !uuidToName.containsKey(clean)) uuidToName.put(clean, name);
+                            whitelist.add(clean.replace("-", ""));
+                            if (name != null) {
+                                uuidToName.put(clean, name);
+                                uuidToName.put(clean.replace("-", ""), name);
+                            }
                         }
                     }
                 } catch (Exception ignored) {}
@@ -561,7 +571,11 @@ public class KryinAgent {
                         if (u != null) {
                             String clean = u.toLowerCase();
                             banned.add(clean);
-                            if (name != null && !uuidToName.containsKey(clean)) uuidToName.put(clean, name);
+                            banned.add(clean.replace("-", ""));
+                            if (name != null) {
+                                uuidToName.put(clean, name);
+                                uuidToName.put(clean.replace("-", ""), name);
+                            }
                         }
                     }
                 } catch (Exception ignored) {}
@@ -618,7 +632,7 @@ public class KryinAgent {
             for (String u : allUuids) {
                 String name = uuidToName.get(u);
                 if (name == null || name.trim().isEmpty()) {
-                    name = "Player_" + (u.length() >= 8 ? u.substring(0, 8) : u);
+                    name = uuidToName.get(u.replace("-", ""));
                 }
 
                 boolean isOnline = onlineNames.contains(name.toLowerCase());
@@ -699,11 +713,24 @@ public class KryinAgent {
                                 if (nbt.containsKey("Dimension")) {
                                     dimension = String.valueOf(nbt.get("Dimension"));
                                 }
+                                if ((name == null || name.startsWith("Player_")) && nbt.containsKey("bukkit") && nbt.get("bukkit") instanceof Map) {
+                                    Map<?, ?> bukkitMap = (Map<?, ?>) nbt.get("bukkit");
+                                    if (bukkitMap.containsKey("lastKnownName") && bukkitMap.get("lastKnownName") != null) {
+                                        String lkn = String.valueOf(bukkitMap.get("lastKnownName")).trim();
+                                        if (!lkn.isEmpty()) {
+                                            name = lkn;
+                                        }
+                                    }
+                                }
                                 inventoryJson = formatInventoryJson(nbt);
                             }
                             break;
                         } catch (Exception ignored) {}
                     }
+                }
+
+                if (name == null || name.trim().isEmpty()) {
+                    name = "Player_" + (u.length() >= 8 ? u.substring(0, 8) : u);
                 }
 
                 if (!first) playersJson.append(",");
