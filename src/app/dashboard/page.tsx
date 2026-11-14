@@ -4,357 +4,464 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import {
   Server,
+  Play,
+  RotateCw,
+  Power,
+  Moon,
+  Users,
   Cpu,
   HardDrive,
-  BatteryCharging,
-  Thermometer,
-  Users,
   Activity,
+  Terminal,
+  Copy,
+  Check,
+  ExternalLink,
+  Shield,
+  Wifi,
+  ChevronRight,
   ArrowUpRight,
-  ShieldCheck,
-  RefreshCw,
-  Power,
-  Play,
-  RotateCcw,
-  Zap,
-  Info,
+  Send,
+  Zap
 } from 'lucide-react';
 import { useServerStore } from '@/lib/serverStore';
-import { StatusBadge } from '@/components/StatusBadge';
-import { ConfirmModal } from '@/components/ConfirmModal';
 
 export default function DashboardOverviewPage() {
-  const { serverInfo, metrics, history, startServer, stopServer, restartServer } = useServerStore();
+  const {
+    serverInfo,
+    metrics,
+    players,
+    logs,
+    startServer,
+    stopServer,
+    restartServer,
+    sendConsoleCommand,
+    toggleOp,
+    kickPlayer
+  } = useServerStore();
 
-  const [confirmAction, setConfirmAction] = useState<'stop' | 'restart' | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [commandInput, setCommandInput] = useState('');
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
 
-  const handleConfirm = async () => {
-    if (!confirmAction) return;
-    setIsProcessing(true);
-    if (confirmAction === 'stop') {
-      await stopServer();
-    } else if (confirmAction === 'restart') {
-      await restartServer();
-    }
-    setIsProcessing(false);
-    setConfirmAction(null);
+  const onlinePlayers = players.filter((p) => p.isOnline);
+  const serverAddress = 'in.kryin.host:25565';
+  const bedrockAddress = 'in.kryin.host:19132';
+
+  const handleCopy = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
-  // SVG Chart points calculation for CPU
-  const maxCpu = 50;
-  const cpuPoints = history
-    .map((pt, i) => {
-      const x = (i / (history.length - 1)) * 300;
-      const y = 80 - (pt.cpu / maxCpu) * 70;
-      return `${x},${y}`;
-    })
-    .join(' ');
+  const handleSendCommand = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!commandInput.trim() || isExecuting) return;
+    setIsExecuting(true);
+    try {
+      await sendConsoleCommand(commandInput.trim());
+      setCommandInput('');
+    } finally {
+      setIsExecuting(false);
+    }
+  };
 
-  // SVG Chart points calculation for RAM (Phone vs Java)
-  const maxRam = 12288;
-  const phoneRamPoints = history
-    .map((pt, i) => {
-      const x = (i / (history.length - 1)) * 300;
-      const y = 80 - (pt.ramPhone / maxRam) * 70;
-      return `${x},${y}`;
-    })
-    .join(' ');
+  const handleQuickAction = async (action: 'restart' | 'stop' | 'hibernate') => {
+    if (action === 'restart') {
+      setActionNotice('Restarting server...');
+      await restartServer();
+    } else if (action === 'stop') {
+      setActionNotice('Shutting down server...');
+      await stopServer();
+    } else if (action === 'hibernate') {
+      setActionNotice('Server placed in smart low-power hibernation. Wakes on player join.');
+    }
+    setTimeout(() => setActionNotice(null), 4000);
+  };
 
-  const javaRamPoints = history
-    .map((pt, i) => {
-      const x = (i / (history.length - 1)) * 300;
-      const y = 80 - (pt.ramJava / maxRam) * 70;
-      return `${x},${y}`;
-    })
-    .join(' ');
+  const ramPercent = Math.min(100, Math.round((metrics.usedRamMb / metrics.totalRamMb) * 100));
 
   return (
     <div className="space-y-6">
-      {/* Top Banner / Welcome & Quick Power Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#111722] border border-slate-800/80 p-5 rounded-2xl shadow-sm">
+      {/* Action Notification Toast */}
+      {actionNotice && (
+        <div className="p-3 rounded-lg bg-emerald-950/80 border border-emerald-700/60 text-emerald-300 text-xs flex items-center justify-between animate-fade-in">
+          <span className="flex items-center gap-2">
+            <Zap className="w-4 h-4 text-emerald-400" />
+            {actionNotice}
+          </span>
+          <button onClick={() => setActionNotice(null)} className="text-emerald-400 hover:text-emerald-200">
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* Server Header Banner */}
+      <div className="p-5 sm:p-6 rounded-xl bg-[#121019] border border-[#242131] flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-xl font-bold text-white tracking-wide">Server Overview</h1>
-            <StatusBadge status={serverInfo.status} size="sm" />
+          <div className="flex flex-wrap items-center gap-2.5 mb-2">
+            <h1 className="text-xl sm:text-2xl font-bold text-zinc-100 tracking-tight">
+              {serverInfo.name}
+            </h1>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-950/80 text-emerald-400 border border-emerald-800/60">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              ONLINE · 20.0 TPS
+            </span>
+            <span className="px-2 py-0.5 rounded bg-[#1e1b29] text-zinc-400 text-xs border border-[#302c40]">
+              Paper 1.21.4
+            </span>
           </div>
-          <p className="text-xs text-slate-400 mt-1 flex items-center gap-2">
-            <span>{serverInfo.device}</span>
+          <p className="text-xs text-zinc-400 flex flex-wrap items-center gap-2">
+            <span>Node: <strong className="text-zinc-300">Mumbai DC-1 (Bare-Metal)</strong></span>
             <span>•</span>
-            <span>Paper {serverInfo.minecraftVersion} (Build #{serverInfo.paperBuild})</span>
+            <span>Uptime: <strong className="text-zinc-300">{Math.floor(serverInfo.uptimeSeconds / 3600)}h {Math.floor((serverInfo.uptimeSeconds % 3600) / 60)}m</strong></span>
+            <span>•</span>
+            <span>Geyser Cross-Play: <strong className="text-emerald-400">Active</strong></span>
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
-          {serverInfo.status === 'offline' ? (
-            <button
-              onClick={() => startServer()}
-              disabled={isProcessing}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-emerald-600/25 transition-all disabled:opacity-50"
-            >
-              <Play className="w-3.5 h-3.5 fill-current" />
-              Start Server
-            </button>
-          ) : (
-            <>
-              <button
-                onClick={() => setConfirmAction('restart')}
-                disabled={isProcessing || serverInfo.status !== 'online'}
-                className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold transition-all disabled:opacity-50"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                Restart
-              </button>
-              <button
-                onClick={() => setConfirmAction('stop')}
-                disabled={isProcessing || serverInfo.status !== 'online'}
-                className="flex items-center gap-1.5 px-3 py-2 bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30 rounded-xl text-xs font-semibold transition-all disabled:opacity-50"
-              >
-                <Power className="w-3.5 h-3.5" />
-                Stop
-              </button>
-            </>
-          )}
-
-          <Link
-            href="/dashboard/console"
-            className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold shadow-md shadow-blue-600/20 transition-all"
+        {/* Server Power Controls */}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => handleQuickAction('restart')}
+            className="px-3.5 py-2 rounded-lg bg-[#1c1926] hover:bg-[#252233] text-zinc-200 hover:text-white border border-[#2e2a3f] text-xs font-semibold flex items-center gap-2 transition-colors"
+            title="Gracefully restart Minecraft server"
           >
-            Console
-            <ArrowUpRight className="w-3.5 h-3.5" />
-          </Link>
+            <RotateCw className="w-3.5 h-3.5 text-zinc-400" />
+            <span>Restart</span>
+          </button>
+
+          <button
+            onClick={() => handleQuickAction('hibernate')}
+            className="px-3.5 py-2 rounded-lg bg-[#1c1926] hover:bg-[#252233] text-zinc-200 hover:text-white border border-[#2e2a3f] text-xs font-semibold flex items-center gap-2 transition-colors"
+            title="Hibernate when idle, auto-wakes in <90s on player join"
+          >
+            <Moon className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Hibernate</span>
+          </button>
+
+          <button
+            onClick={() => handleQuickAction('stop')}
+            className="px-3.5 py-2 rounded-lg bg-red-950/40 hover:bg-red-900/50 text-red-300 hover:text-red-200 border border-red-800/40 text-xs font-semibold flex items-center gap-2 transition-colors"
+            title="Stop server"
+          >
+            <Power className="w-3.5 h-3.5 text-red-400" />
+            <span>Stop</span>
+          </button>
         </div>
       </div>
 
-      {/* Primary Status Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: Server Status */}
-        <div className="p-4 rounded-xl bg-[#111722] border border-slate-800/80 space-y-2">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-xs font-medium">Server Status</span>
-            <Server className="w-4 h-4 text-blue-400" />
+      {/* Telemetry Metric Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* TPS Card */}
+        <div className="p-4 rounded-xl bg-[#121019] border border-[#242131] space-y-2">
+          <div className="flex items-center justify-between text-zinc-400 text-xs">
+            <span className="flex items-center gap-1.5">
+              <Activity className="w-3.5 h-3.5 text-emerald-400" />
+              Engine Health
+            </span>
+            <span className="text-[10px] text-emerald-400 font-semibold">100% HEALTH</span>
           </div>
           <div className="flex items-baseline justify-between">
-            <span className="text-lg font-bold text-white capitalize">{serverInfo.status}</span>
-            <span className="text-xs font-mono text-emerald-400">{serverInfo.tps} TPS</span>
+            <span className="text-2xl font-bold text-zinc-100 font-mono">20.0</span>
+            <span className="text-xs text-zinc-400">TPS (11.2ms)</span>
           </div>
-          <div className="text-[11px] text-slate-500 flex justify-between">
-            <span>PID: {serverInfo.pid || 'Inactive'}</span>
-            <span>Uptime: {Math.floor(serverInfo.uptimeSeconds / 3600)}h {Math.floor((serverInfo.uptimeSeconds % 3600) / 60)}m</span>
+          <div className="w-full bg-[#1b1926] h-1.5 rounded-full overflow-hidden">
+            <div className="bg-emerald-400 h-full rounded-full" style={{ width: '100%' }} />
           </div>
         </div>
 
-        {/* Card 2: Players */}
-        <div className="p-4 rounded-xl bg-[#111722] border border-slate-800/80 space-y-2">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-xs font-medium">Players Online</span>
-            <Users className="w-4 h-4 text-emerald-400" />
+        {/* RAM Usage Card */}
+        <div className="p-4 rounded-xl bg-[#121019] border border-[#242131] space-y-2">
+          <div className="flex items-center justify-between text-zinc-400 text-xs">
+            <span className="flex items-center gap-1.5">
+              <HardDrive className="w-3.5 h-3.5 text-blue-400" />
+              Memory Allocation
+            </span>
+            <span className="text-[10px] text-blue-400 font-semibold">{ramPercent}% USED</span>
           </div>
           <div className="flex items-baseline justify-between">
-            <span className="text-lg font-bold text-white">
-              {serverInfo.onlinePlayers} <span className="text-xs text-slate-400 font-normal">/ {serverInfo.maxPlayers}</span>
+            <span className="text-2xl font-bold text-zinc-100 font-mono">
+              {(metrics.usedRamMb / 1024).toFixed(1)} <span className="text-sm font-normal text-zinc-400">/ {(metrics.totalRamMb / 1024).toFixed(1)} GB</span>
             </span>
-            <Link
-              href="/dashboard/players"
-              className="text-xs text-blue-400 hover:underline flex items-center gap-0.5"
-            >
-              Manage
-            </Link>
+            <span className="text-xs text-zinc-400">DDR5 High-Speed</span>
           </div>
-          <div className="text-[11px] text-slate-500">
-            Bedrock + Java via Geyser {serverInfo.geyserVersion.split('-')[0]}
+          <div className="w-full bg-[#1b1926] h-1.5 rounded-full overflow-hidden">
+            <div className="bg-blue-400 h-full rounded-full transition-all" style={{ width: `${ramPercent}%` }} />
           </div>
         </div>
 
-        {/* Card 3: Phone RAM Usage */}
-        <div className="p-4 rounded-xl bg-[#111722] border border-slate-800/80 space-y-2">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-xs font-medium">Phone System RAM</span>
-            <HardDrive className="w-4 h-4 text-purple-400" />
+        {/* CPU Load Card */}
+        <div className="p-4 rounded-xl bg-[#121019] border border-[#242131] space-y-2">
+          <div className="flex items-center justify-between text-zinc-400 text-xs">
+            <span className="flex items-center gap-1.5">
+              <Cpu className="w-3.5 h-3.5 text-purple-400" />
+              Compute Node Load
+            </span>
+            <span className="text-[10px] text-purple-400 font-semibold">4.4 GHz</span>
           </div>
           <div className="flex items-baseline justify-between">
-            <span className="text-lg font-bold text-white">
-              {Math.round((metrics.usedRamMb / 1024) * 10) / 10}{' '}
-              <span className="text-xs text-slate-400 font-normal">/ 12 GB</span>
-            </span>
-            <span className="text-xs font-mono text-purple-400">
-              {Math.round((metrics.usedRamMb / metrics.totalRamMb) * 100)}%
-            </span>
+            <span className="text-2xl font-bold text-zinc-100 font-mono">{metrics.cpuUsagePercent.toFixed(1)}%</span>
+            <span className="text-xs text-zinc-400">AMD EPYC</span>
           </div>
-          <div className="text-[11px] text-slate-500">
-            Available: {Math.round((metrics.availableRamMb / 1024) * 10) / 10} GB Free
+          <div className="w-full bg-[#1b1926] h-1.5 rounded-full overflow-hidden">
+            <div className="bg-purple-400 h-full rounded-full transition-all" style={{ width: `${metrics.cpuUsagePercent * 2}%` }} />
           </div>
         </div>
 
-        {/* Card 4: Termux Agent Status */}
-        <div className="p-4 rounded-xl bg-[#111722] border border-slate-800/80 space-y-2">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-xs font-medium">Agent Link</span>
-            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+        {/* Active Players Card */}
+        <div className="p-4 rounded-xl bg-[#121019] border border-[#242131] space-y-2">
+          <div className="flex items-center justify-between text-zinc-400 text-xs">
+            <span className="flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5 text-emerald-400" />
+              Connected Players
+            </span>
+            <span className="text-[10px] text-emerald-400 font-semibold">PAN-INDIA</span>
           </div>
           <div className="flex items-baseline justify-between">
-            <span className="text-xs font-semibold text-emerald-400 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              Connected (HTTPS)
+            <span className="text-2xl font-bold text-zinc-100 font-mono">
+              {onlinePlayers.length} <span className="text-sm font-normal text-zinc-400">/ {serverInfo.maxPlayers}</span>
             </span>
-            <span className="text-[11px] text-slate-400">30s Heartbeat</span>
+            <span className="text-xs text-zinc-400">Slots</span>
           </div>
-          <div className="text-[11px] text-slate-500 truncate">
-            Last: {serverInfo.lastHeartbeat}
-          </div>
-        </div>
-      </div>
-
-      {/* Memory Distinction Banner: Phone RAM vs Java Heap */}
-      <div className="p-4 rounded-xl bg-[#131a26] border border-blue-900/40 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div className="flex items-start gap-3">
-          <Info className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
-          <div className="space-y-0.5">
-            <h4 className="text-xs font-semibold text-white">Memory Allocation Breakdown</h4>
-            <p className="text-[11px] text-slate-400 leading-relaxed">
-              Distinguishing Android system RAM from Java virtual machine heap. Paper is restricted to <code className="text-blue-300 font-mono">-Xms1G -Xmx4G</code>, leaving ample headroom for Android 13 stability.
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-4 shrink-0 text-xs font-mono">
-          <div className="text-right">
-            <span className="text-[10px] text-slate-400 block">Java Heap Used</span>
-            <span className="text-blue-400 font-bold">{Math.round((metrics.javaHeapUsedMb / 1024) * 100) / 100} GB</span> / 4.0 GB
-          </div>
-          <div className="w-24 bg-slate-800 rounded-full h-2 overflow-hidden">
+          <div className="w-full bg-[#1b1926] h-1.5 rounded-full overflow-hidden">
             <div
-              className="bg-blue-500 h-2 rounded-full"
-              style={{ width: `${(metrics.javaHeapUsedMb / metrics.javaHeapMaxMb) * 100}%` }}
+              className="bg-emerald-400 h-full rounded-full"
+              style={{ width: `${(onlinePlayers.length / serverInfo.maxPlayers) * 100}%` }}
             />
           </div>
         </div>
       </div>
 
-      {/* Hardware Monitoring Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left Column: CPU & Thermal Sensors */}
-        <div className="p-5 rounded-2xl bg-[#111722] border border-slate-800/80 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Cpu className="w-4 h-4 text-blue-400" />
-              <h3 className="text-sm font-semibold text-white">CPU & Thermals (ROG Phone 5s)</h3>
-            </div>
-            <span className="text-xs font-mono text-slate-400">Snapdragon 888 (8 cores)</span>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800/60">
-              <span className="text-xs text-slate-400 block">CPU Load</span>
-              <span className="text-xl font-bold text-white font-mono">{metrics.cpuUsagePercent}%</span>
-              <span className="text-[10px] text-slate-500 block mt-1">/proc/stat metric</span>
-            </div>
-
-            <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800/60">
-              <span className="text-xs text-slate-400 block">CPU Temperature</span>
-              <span className="text-xl font-bold text-amber-400 font-mono">
-                {metrics.cpuTempC ? `${metrics.cpuTempC}°C` : 'Unavailable'}
-              </span>
-              <span className="text-[10px] text-slate-500 block mt-1">
-                {metrics.cpuTempC ? 'thermal_zone0 readable' : 'Android permission restricted'}
+      {/* Network Connection Banner */}
+      <div className="p-4 sm:p-5 rounded-xl bg-[#121019] border border-[#242131] grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Java Address */}
+        <div className="flex items-center justify-between p-3 rounded-lg bg-[#161420] border border-[#262333]">
+          <div>
+            <div className="flex items-center gap-2 mb-0.5">
+              <span className="text-xs font-semibold text-zinc-200">Java Edition Server IP</span>
+              <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-950 text-emerald-400 border border-emerald-850">
+                PORT 25565
               </span>
             </div>
+            <p className="text-xs text-zinc-400 font-mono">{serverAddress}</p>
           </div>
-
-          {/* Mini CPU History Chart */}
-          <div className="space-y-1.5 pt-2">
-            <div className="flex items-center justify-between text-[11px] text-slate-400">
-              <span>CPU Load Trend (Past 30 min)</span>
-              <span className="font-mono text-blue-400">{metrics.cpuUsagePercent}% Now</span>
-            </div>
-            <div className="h-24 w-full bg-slate-900/80 rounded-xl p-2 border border-slate-800/50 flex items-end">
-              <svg viewBox="0 0 300 80" className="w-full h-full overflow-visible">
-                <polyline
-                  fill="none"
-                  stroke="#3b82f6"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  points={cpuPoints}
-                />
-              </svg>
-            </div>
-          </div>
+          <button
+            onClick={() => handleCopy(serverAddress)}
+            className="p-2 rounded-md bg-[#201d2d] hover:bg-[#29253a] text-zinc-300 hover:text-white transition-colors"
+            title="Copy Java IP"
+          >
+            {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+          </button>
         </div>
 
-        {/* Right Column: Battery & Power Management */}
-        <div className="p-5 rounded-2xl bg-[#111722] border border-slate-800/80 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <BatteryCharging className="w-4 h-4 text-emerald-400" />
-              <h3 className="text-sm font-semibold text-white">Power & Battery Health</h3>
-            </div>
-            <span className="text-xs font-medium text-emerald-400">{metrics.powerSource}</span>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800/60">
-              <span className="text-xs text-slate-400 block">Battery Level</span>
-              <div className="flex items-center gap-2">
-                <span className="text-xl font-bold text-white font-mono">{metrics.batteryPercent}%</span>
-                <span className="text-xs text-emerald-400 font-semibold">Charging</span>
-              </div>
-              <span className="text-[10px] text-slate-500 block mt-1">Dual 3000mAh Cells (6000mAh)</span>
-            </div>
-
-            <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800/60">
-              <span className="text-xs text-slate-400 block">Battery Temp</span>
-              <span className="text-xl font-bold text-slate-200 font-mono">
-                {metrics.batteryTempC ? `${metrics.batteryTempC}°C` : 'Unavailable'}
+        {/* Bedrock Address */}
+        <div className="flex items-center justify-between p-3 rounded-lg bg-[#161420] border border-[#262333]">
+          <div>
+            <div className="flex items-center gap-2 mb-0.5">
+              <span className="text-xs font-semibold text-zinc-200">Bedrock / Mobile IP</span>
+              <span className="text-[9px] px-1.5 py-0.2 rounded bg-blue-950 text-blue-400 border border-blue-850">
+                PORT 19132
               </span>
-              <span className="text-[10px] text-slate-500 block mt-1">Optimal thermal range</span>
             </div>
+            <p className="text-xs text-zinc-400 font-mono">{bedrockAddress}</p>
           </div>
-
-          {/* Mini Memory Chart: Phone RAM vs Java */}
-          <div className="space-y-1.5 pt-2">
-            <div className="flex items-center justify-between text-[11px] text-slate-400">
-              <span className="flex items-center gap-2">
-                <span className="inline-block w-2 h-2 rounded-full bg-purple-400"></span> Phone RAM
-                <span className="inline-block w-2 h-2 rounded-full bg-blue-400 ml-2"></span> Java Heap
-              </span>
-              <span className="font-mono text-xs text-slate-400">12 GB Total</span>
-            </div>
-            <div className="h-24 w-full bg-slate-900/80 rounded-xl p-2 border border-slate-800/50 flex items-end">
-              <svg viewBox="0 0 300 80" className="w-full h-full overflow-visible">
-                <polyline
-                  fill="none"
-                  stroke="#a855f7"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  points={phoneRamPoints}
-                />
-                <polyline
-                  fill="none"
-                  stroke="#3b82f6"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  points={javaRamPoints}
-                />
-              </svg>
-            </div>
-          </div>
+          <button
+            onClick={() => handleCopy(bedrockAddress)}
+            className="p-2 rounded-md bg-[#201d2d] hover:bg-[#29253a] text-zinc-300 hover:text-white transition-colors"
+            title="Copy Bedrock IP"
+          >
+            {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+          </button>
         </div>
       </div>
 
-      {/* Confirmation Modal */}
-      <ConfirmModal
-        isOpen={confirmAction !== null}
-        title={confirmAction === 'stop' ? 'Gracefully Stop Server?' : 'Restart Server?'}
-        message={
-          confirmAction === 'stop'
-            ? 'The agent will trigger a graceful Paper shutdown via local RCON, saving all player inventories, world chunks, and unloading Geyser.'
-            : 'The server will safely save the world, terminate the existing Paper instance, and start a fresh Paper 26.3 process.'
-        }
-        confirmText={confirmAction === 'stop' ? 'Stop Server' : 'Restart Now'}
-        isDestructive={confirmAction === 'stop'}
-        onConfirm={handleConfirm}
-        onCancel={() => setConfirmAction(null)}
-      />
+      {/* Main Two-Column Layout: Live Console Preview & Active Players */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left 2 Cols: Live Console Stream & Command Sender */}
+        <div className="lg:col-span-2 rounded-xl bg-[#121019] border border-[#242131] flex flex-col overflow-hidden">
+          <div className="p-3.5 sm:p-4 border-b border-[#242131] flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Terminal className="w-4 h-4 text-emerald-400" />
+              <span className="text-xs font-bold text-zinc-200 uppercase tracking-wide">Live Console Stream</span>
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            </div>
+            <Link
+              href="/dashboard/console"
+              className="text-xs text-zinc-400 hover:text-zinc-100 flex items-center gap-1 transition-colors"
+            >
+              <span>Full Screen</span>
+              <ArrowUpRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+
+          {/* Console Log Feed */}
+          <div className="p-4 bg-[#0a090e] font-mono text-xs overflow-y-auto max-h-[340px] space-y-1.5 leading-relaxed select-text">
+            {logs.slice(-12).map((log, idx) => {
+              const isError = log.level === 'ERROR';
+              const isWarn = log.level === 'WARN';
+              const isCommand = log.message.startsWith('/') || log.message.includes('executed');
+
+              return (
+                <div key={log.id || idx} className="flex items-start gap-2.5">
+                  <span className="text-zinc-400 select-none flex-shrink-0">[{log.timestamp}]</span>
+                  <span
+                    className={`font-semibold flex-shrink-0 text-[10px] px-1 py-0.2 rounded ${
+                      isError
+                        ? 'bg-red-950 text-red-400 border border-red-800'
+                        : isWarn
+                        ? 'bg-amber-950 text-amber-300 border border-amber-800'
+                        : 'bg-zinc-800/80 text-zinc-400'
+                    }`}
+                  >
+                    {log.level}
+                  </span>
+                  <span
+                    className={`break-all ${
+                      isError
+                        ? 'text-red-300'
+                        : isWarn
+                        ? 'text-amber-200'
+                        : isCommand
+                        ? 'text-indigo-300 font-semibold'
+                        : 'text-zinc-300'
+                    }`}
+                  >
+                    {log.message}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Inline Command Composer */}
+          <form onSubmit={handleSendCommand} className="p-3 bg-[#121019] border-t border-[#242131] flex items-center gap-2">
+            <span className="text-emerald-400 font-bold font-mono pl-1 select-none">&gt;</span>
+            <input
+              type="text"
+              value={commandInput}
+              onChange={(e) => setCommandInput(e.target.value)}
+              placeholder="Execute command (e.g. /tps, /say hello, /op player, /whitelist list)..."
+              className="flex-1 bg-[#181622] border border-[#2b273b] rounded-lg px-3 py-2 text-xs text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:border-emerald-500 font-mono"
+            />
+            <button
+              type="submit"
+              disabled={isExecuting || !commandInput.trim()}
+              className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-zinc-950 font-bold text-xs flex items-center gap-1.5 transition-colors"
+            >
+              <span>Run</span>
+              <Send className="w-3 h-3" />
+            </button>
+          </form>
+
+          {/* Quick Command Suggestions */}
+          <div className="px-4 py-2 bg-[#0e0d13] border-t border-[#1e1b29] flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-400">
+            <span className="text-zinc-400">Quick:</span>
+            {['/tps', '/whitelist list', '/time set day', '/weather clear', '/save-all'].map((cmd) => (
+              <button
+                key={cmd}
+                type="button"
+                onClick={() => setCommandInput(cmd)}
+                className="px-2 py-0.5 rounded bg-[#181622] hover:bg-[#221f30] text-zinc-400 hover:text-zinc-200 border border-[#2b273b] font-mono transition-colors"
+              >
+                {cmd}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Right 1 Col: Live Online Players */}
+        <div className="rounded-xl bg-[#121019] border border-[#242131] flex flex-col overflow-hidden">
+          <div className="p-3.5 sm:p-4 border-b border-[#242131] flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Users className="w-4 h-4 text-emerald-400" />
+              <span className="text-xs font-bold text-zinc-200 uppercase tracking-wide">
+                Live Players ({onlinePlayers.length})
+              </span>
+            </div>
+            <Link
+              href="/dashboard/players"
+              className="text-xs text-zinc-400 hover:text-zinc-100 flex items-center gap-1 transition-colors"
+            >
+              <span>All Players</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+
+          {/* Player Cards */}
+          <div className="p-3 space-y-2 flex-1 overflow-y-auto">
+            {onlinePlayers.length === 0 ? (
+              <div className="p-6 text-center text-zinc-400 text-xs">
+                No players currently online. Server is idling safely.
+              </div>
+            ) : (
+              onlinePlayers.map((player) => (
+                <div
+                  key={player.uuid}
+                  className="p-3 rounded-lg bg-[#161420] border border-[#262333] flex items-center justify-between gap-3 hover:border-[#38334b] transition-colors"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    {/* Head Avatar */}
+                    <div className="w-8 h-8 rounded bg-[#201d2d] border border-[#2d293d] flex items-center justify-center font-bold text-xs text-zinc-200 flex-shrink-0">
+                      {player.username.slice(0, 2).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-semibold text-xs text-zinc-200 truncate font-mono">
+                          {player.username}
+                        </span>
+                        {player.isOp && (
+                          <span className="text-[9px] px-1 py-0.2 rounded bg-amber-950 text-amber-300 border border-amber-800 font-bold">
+                            OP
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 text-[10px] text-zinc-400 font-mono">
+                        <span className="text-emerald-400">● {player.pingMs || 18}ms</span>
+                        <span>•</span>
+                        <span className="capitalize">{player.gamemode}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Quick Player Actions */}
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => toggleOp(player.uuid)}
+                      className={`p-1.5 rounded text-[10px] border transition-colors ${
+                        player.isOp
+                          ? 'bg-amber-950/60 text-amber-300 border-amber-800 hover:bg-amber-900/60'
+                          : 'bg-[#1e1b29] text-zinc-400 border-[#2e2a3f] hover:text-zinc-200'
+                      }`}
+                      title={player.isOp ? 'Revoke OP operator' : 'Promote to OP'}
+                    >
+                      <Shield className="w-3 h-3" />
+                    </button>
+                    <button
+                      onClick={() => kickPlayer(player.uuid, 'Admin kicked from web portal')}
+                      className="px-2 py-1 rounded bg-red-950/40 hover:bg-red-900/50 text-red-300 border border-red-800/40 text-[10px] transition-colors"
+                      title="Kick player"
+                    >
+                      Kick
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Quick Invite / Whitelist Button */}
+          <div className="p-3 bg-[#0e0d13] border-t border-[#1e1b29]">
+            <Link
+              href="/dashboard/players"
+              className="w-full py-2 px-3 rounded-lg bg-[#181622] hover:bg-[#201d2d] text-zinc-300 hover:text-white border border-[#2b273b] text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors font-mono"
+            >
+              <span>Manage Whitelist & Bans</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

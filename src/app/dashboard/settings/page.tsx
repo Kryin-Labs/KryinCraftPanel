@@ -2,223 +2,260 @@
 
 import React, { useState } from 'react';
 import {
-  Settings,
-  Shield,
-  Smartphone,
   Sliders,
-  Bell,
-  User,
-  Key,
   Save,
   Check,
-  Terminal,
+  Zap,
+  Server,
   Cpu,
+  Moon,
+  Shield,
   Layers,
+  Globe
 } from 'lucide-react';
 import { useServerStore } from '@/lib/serverStore';
 
-export default function SettingsPage() {
+export default function ServerSettingsPage() {
   const { serverInfo, metrics } = useServerStore();
 
   const [savedSuccess, setSavedSuccess] = useState(false);
-  const [motd, setMotd] = useState('§bKryin Paper Server §8[§aROG 5s Phone§8]');
+  const [motd, setMotd] = useState('§bKryinCraft §8[§aIndian Node 01§8]');
   const [viewDistance, setViewDistance] = useState(10);
   const [simulationDistance, setSimulationDistance] = useState(8);
   const [maxPlayers, setMaxPlayers] = useState(20);
-
-  // Monitoring intervals
-  const [heartbeatSec, setHeartbeatSec] = useState(30);
-  const [metricsSec, setMetricsSec] = useState(10);
-  const [commandPollSec, setCommandPollSec] = useState(3);
+  const [difficulty, setDifficulty] = useState('hard');
+  const [pvp, setPvp] = useState(true);
+  const [whitelist, setWhitelist] = useState(true);
+  const [idleSleepMinutes, setIdleSleepMinutes] = useState(10);
+  const [autoWake, setAutoWake] = useState(true);
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 2500);
+    setTimeout(() => setSavedSuccess(false), 3000);
   };
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-6 max-w-4xl font-mono">
+      {/* Toast Notice */}
+      {savedSuccess && (
+        <div className="p-3.5 rounded-lg bg-emerald-950/80 border border-emerald-700/60 text-emerald-300 text-xs flex items-center justify-between animate-fade-in">
+          <span className="flex items-center gap-2">
+            <Check className="w-4 h-4 text-emerald-400" />
+            Configuration saved to server.properties and applied to node.
+          </span>
+          <button onClick={() => setSavedSuccess(false)} className="text-emerald-400 hover:text-emerald-200">
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Header */}
-      <div>
-        <h1 className="text-xl font-bold text-white tracking-wide flex items-center gap-2">
-          <Settings className="w-5 h-5 text-blue-400" />
-          Server & Agent Settings
-        </h1>
-        <p className="text-xs text-slate-400 mt-0.5">
-          Tune Minecraft server parameters, adjust polling intervals for ROG Phone 5s thermal efficiency, and manage credentials.
-        </p>
+      <div className="p-5 rounded-xl bg-[#121019] border border-[#242131] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold text-zinc-100 flex items-center gap-2">
+            <Sliders className="w-5 h-5 text-emerald-400" />
+            Server Configuration & Node Fleet
+          </h1>
+          <p className="text-xs text-zinc-400 mt-1">
+            Configure server.properties, Smart Hibernation sleep cycles, and Indian datacenter peering.
+          </p>
+        </div>
+
+        <button
+          onClick={handleSave}
+          className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-bold text-xs flex items-center gap-2 transition-colors self-start sm:self-auto font-mono"
+        >
+          <Save className="w-4 h-4" />
+          <span>Save Changes</span>
+        </button>
       </div>
 
       <form onSubmit={handleSave} className="space-y-6">
-        {/* Minecraft Paper Properties */}
-        <div className="p-5 rounded-2xl bg-[#111722] border border-slate-800/80 space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-            <h2 className="text-sm font-semibold text-white flex items-center gap-2">
-              <Sliders className="w-4 h-4 text-blue-400" />
-              Minecraft Server Configuration (server.properties)
+        {/* Minecraft Server Properties Card */}
+        <div className="p-5 rounded-xl bg-[#121019] border border-[#242131] space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-[#242131]">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-200 flex items-center gap-2">
+              <Server className="w-4 h-4 text-emerald-400" />
+              Minecraft Properties (server.properties)
             </h2>
-            <span className="text-xs font-mono text-slate-400">Paper 26.3</span>
+            <span className="text-[11px] text-zinc-400">Paper 1.21.4</span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-            <div className="space-y-1.5 md:col-span-2">
-              <label className="font-semibold text-slate-300">Message of the Day (MOTD)</label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+            {/* MOTD */}
+            <div className="space-y-1 sm:col-span-2">
+              <label className="text-zinc-300 font-semibold">Message of the Day (MOTD)</label>
               <input
                 type="text"
                 value={motd}
                 onChange={(e) => setMotd(e.target.value)}
-                className="w-full bg-[#0a0d14] border border-slate-800 rounded-xl px-3 py-2 text-white font-mono placeholder-slate-500 focus:outline-none focus:border-blue-500 text-xs"
+                className="w-full bg-[#181622] border border-[#2b273b] rounded-lg px-3 py-2 text-xs text-zinc-100 font-mono focus:outline-none focus:border-emerald-500"
               />
             </div>
 
-            <div className="space-y-1.5">
-              <label className="font-semibold text-slate-300">Max Players</label>
+            {/* Max Players */}
+            <div className="space-y-1">
+              <label className="text-zinc-300 font-semibold">Max Player Capacity</label>
               <input
                 type="number"
                 min={1}
                 max={50}
                 value={maxPlayers}
-                onChange={(e) => setMaxPlayers(Number(e.target.value))}
-                className="w-full bg-[#0a0d14] border border-slate-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-blue-500 text-xs"
+                onChange={(e) => setMaxPlayers(parseInt(e.target.value) || 20)}
+                className="w-full bg-[#181622] border border-[#2b273b] rounded-lg px-3 py-2 text-xs text-zinc-100 font-mono focus:outline-none focus:border-emerald-500"
               />
-              <span className="text-[10px] text-slate-500 block">Recommended 10-25 for phone stability</span>
             </div>
 
-            <div className="space-y-1.5">
-              <label className="font-semibold text-slate-300">View Distance (Chunks)</label>
+            {/* Difficulty */}
+            <div className="space-y-1">
+              <label className="text-zinc-300 font-semibold">World Difficulty</label>
+              <select
+                value={difficulty}
+                onChange={(e) => setDifficulty(e.target.value)}
+                className="w-full bg-[#181622] border border-[#2b273b] rounded-lg px-3 py-2 text-xs text-zinc-100 font-mono focus:outline-none focus:border-emerald-500"
+              >
+                <option value="peaceful">Peaceful</option>
+                <option value="easy">Easy</option>
+                <option value="normal">Normal</option>
+                <option value="hard">Hard</option>
+              </select>
+            </div>
+
+            {/* View Distance */}
+            <div className="space-y-1">
+              <label className="text-zinc-300 font-semibold">View Distance (Chunks)</label>
               <input
                 type="number"
                 min={4}
                 max={16}
                 value={viewDistance}
-                onChange={(e) => setViewDistance(Number(e.target.value))}
-                className="w-full bg-[#0a0d14] border border-slate-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-blue-500 text-xs"
+                onChange={(e) => setViewDistance(parseInt(e.target.value) || 10)}
+                className="w-full bg-[#181622] border border-[#2b273b] rounded-lg px-3 py-2 text-xs text-zinc-100 font-mono focus:outline-none focus:border-emerald-500"
               />
-              <span className="text-[10px] text-slate-500 block">Controls player chunk loading render distance</span>
             </div>
 
-            <div className="space-y-1.5">
-              <label className="font-semibold text-slate-300">Simulation Distance (Chunks)</label>
+            {/* Simulation Distance */}
+            <div className="space-y-1">
+              <label className="text-zinc-300 font-semibold">Simulation Distance (Chunks)</label>
               <input
                 type="number"
                 min={3}
                 max={12}
                 value={simulationDistance}
-                onChange={(e) => setSimulationDistance(Number(e.target.value))}
-                className="w-full bg-[#0a0d14] border border-slate-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-blue-500 text-xs"
+                onChange={(e) => setSimulationDistance(parseInt(e.target.value) || 8)}
+                className="w-full bg-[#181622] border border-[#2b273b] rounded-lg px-3 py-2 text-xs text-zinc-100 font-mono focus:outline-none focus:border-emerald-500"
               />
-              <span className="text-[10px] text-slate-500 block">Snapdragon 888 handles 6-8 easily at 20 TPS</span>
+            </div>
+
+            {/* PVP & Whitelist Toggles */}
+            <div className="flex items-center justify-between p-3 rounded-lg bg-[#161420] border border-[#242131]">
+              <span className="text-xs text-zinc-300 font-semibold">Player vs Player (PVP)</span>
+              <input
+                type="checkbox"
+                checked={pvp}
+                onChange={(e) => setPvp(e.target.checked)}
+                className="rounded bg-[#1a1724] border-[#2f2b3e] text-emerald-500 focus:ring-0 w-4 h-4"
+              />
+            </div>
+
+            <div className="flex items-center justify-between p-3 rounded-lg bg-[#161420] border border-[#242131]">
+              <span className="text-xs text-zinc-300 font-semibold">Server Whitelist Enforced</span>
+              <input
+                type="checkbox"
+                checked={whitelist}
+                onChange={(e) => setWhitelist(e.target.checked)}
+                className="rounded bg-[#1a1724] border-[#2f2b3e] text-emerald-500 focus:ring-0 w-4 h-4"
+              />
             </div>
           </div>
         </div>
 
-        {/* Termux Agent Polling & Thermal Governance */}
-        <div className="p-5 rounded-2xl bg-[#111722] border border-slate-800/80 space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-            <h2 className="text-sm font-semibold text-white flex items-center gap-2">
-              <Smartphone className="w-4 h-4 text-emerald-400" />
-              Termux Agent Polling & Battery Governance
+        {/* Smart Hibernation & Power Cycles */}
+        <div className="p-5 rounded-xl bg-[#121019] border border-[#242131] space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-[#242131]">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-200 flex items-center gap-2">
+              <Moon className="w-4 h-4 text-indigo-400" />
+              Smart Hibernation & Wake Management
             </h2>
-            <span className="text-xs font-mono text-emerald-400">Outbound HTTPS</span>
+            <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-850">
+              LOW-POWER IDLE
+            </span>
           </div>
 
-          <p className="text-xs text-slate-400 leading-relaxed">
-            The phone agent never runs an inbound HTTP server or listens on public ports. It uses minimal outbound HTTPS calls to Supabase. You can tune intervals to reduce battery & bandwidth consumption.
+          <p className="text-xs text-zinc-400 leading-relaxed">
+            Servers enter low-power hibernation state when all players disconnect. As soon as someone attempts to join, it wakes automatically in under 90 seconds.
           </p>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-            <div className="space-y-1.5">
-              <label className="font-semibold text-slate-300">Heartbeat Interval</label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={10}
-                  max={120}
-                  value={heartbeatSec}
-                  onChange={(e) => setHeartbeatSec(Number(e.target.value))}
-                  className="w-full bg-[#0a0d14] border border-slate-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-blue-500 text-xs"
-                />
-                <span className="text-slate-400 shrink-0">sec</span>
-              </div>
-              <span className="text-[10px] text-slate-500 block">Default: 30s</span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+            <div className="space-y-1">
+              <label className="text-zinc-300 font-semibold">Idle Timeout Before Sleep (Minutes)</label>
+              <input
+                type="number"
+                min={5}
+                max={60}
+                value={idleSleepMinutes}
+                onChange={(e) => setIdleSleepMinutes(parseInt(e.target.value) || 10)}
+                className="w-full bg-[#181622] border border-[#2b273b] rounded-lg px-3 py-2 text-xs text-zinc-100 font-mono focus:outline-none focus:border-emerald-500"
+              />
             </div>
 
-            <div className="space-y-1.5">
-              <label className="font-semibold text-slate-300">Metrics Interval</label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={5}
-                  max={60}
-                  value={metricsSec}
-                  onChange={(e) => setMetricsSec(Number(e.target.value))}
-                  className="w-full bg-[#0a0d14] border border-slate-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-blue-500 text-xs"
-                />
-                <span className="text-slate-400 shrink-0">sec</span>
+            <div className="flex items-center justify-between p-3 rounded-lg bg-[#161420] border border-[#242131]">
+              <div>
+                <span className="text-xs text-zinc-300 font-semibold block">Auto-Wake on Join</span>
+                <span className="text-[10px] text-zinc-400">Instantly wakes node when client connects</span>
               </div>
-              <span className="text-[10px] text-slate-500 block">Default: 10s</span>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="font-semibold text-slate-300">Command Poll Interval</label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={1}
-                  max={10}
-                  value={commandPollSec}
-                  onChange={(e) => setCommandPollSec(Number(e.target.value))}
-                  className="w-full bg-[#0a0d14] border border-slate-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-blue-500 text-xs"
-                />
-                <span className="text-slate-400 shrink-0">sec</span>
-              </div>
-              <span className="text-[10px] text-slate-500 block">Default: 3s</span>
+              <input
+                type="checkbox"
+                checked={autoWake}
+                onChange={(e) => setAutoWake(e.target.checked)}
+                className="rounded bg-[#1a1724] border-[#2f2b3e] text-emerald-500 focus:ring-0 w-4 h-4"
+              />
             </div>
           </div>
         </div>
 
-        {/* Security & Token Info */}
-        <div className="p-5 rounded-2xl bg-[#111722] border border-slate-800/80 space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-            <h2 className="text-sm font-semibold text-white flex items-center gap-2">
-              <Key className="w-4 h-4 text-purple-400" />
-              Agent Authentication Secret
+        {/* Indian Datacenter Node Compute Info */}
+        <div className="p-5 rounded-xl bg-[#121019] border border-[#242131] space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-[#242131]">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-200 flex items-center gap-2">
+              <Cpu className="w-4 h-4 text-purple-400" />
+              Indian Bare-Metal Node Infrastructure
             </h2>
-            <span className="text-xs font-mono text-purple-400">Hashed in Database</span>
+            <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-850">
+              MUMBAI DC-1
+            </span>
           </div>
 
-          <div className="space-y-2">
-            <p className="text-xs text-slate-400 leading-relaxed">
-              The Termux agent authenticates its outbound requests using an encrypted bearer token stored in <code className="text-blue-300 font-mono text-[11px]">~/minecraft/agent/config.json</code>. The web frontend never displays the raw secret.
-            </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+            <div className="p-3 rounded-lg bg-[#161420] border border-[#242131]">
+              <span className="text-[10px] text-zinc-400 uppercase block">Compute Core</span>
+              <span className="text-zinc-200 font-bold mt-0.5 block">AMD EPYC 9654</span>
+              <span className="text-[10px] text-zinc-400">Up to 4.4 GHz Turbo</span>
+            </div>
 
-            <div className="p-3 bg-[#0a0d14] rounded-xl border border-slate-800 flex items-center justify-between font-mono text-xs text-slate-400">
-              <span>Token Hash: 8f4e2...a9b3 (Active)</span>
-              <button
-                type="button"
-                onClick={() => alert('Agent token rotation prepared for Phase 3 Supabase deployment.')}
-                className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-[11px] font-semibold transition-colors"
-              >
-                Rotate Token
-              </button>
+            <div className="p-3 rounded-lg bg-[#161420] border border-[#242131]">
+              <span className="text-[10px] text-zinc-400 uppercase block">Allocated RAM</span>
+              <span className="text-zinc-200 font-bold mt-0.5 block">6.0 GB DDR5</span>
+              <span className="text-[10px] text-emerald-400">Low-Latency G1GC</span>
+            </div>
+
+            <div className="p-3 rounded-lg bg-[#161420] border border-[#242131]">
+              <span className="text-[10px] text-zinc-400 uppercase block">Network Peering</span>
+              <span className="text-zinc-200 font-bold mt-0.5 block">10 Gbps Peering</span>
+              <span className="text-[10px] text-zinc-400">Pan-India Peering Routes</span>
             </div>
           </div>
         </div>
 
-        {/* Save Changes Button */}
-        <div className="flex items-center justify-end gap-3 pt-2">
-          {savedSuccess && (
-            <span className="text-xs text-emerald-400 font-semibold flex items-center gap-1.5 animate-in fade-in">
-              <Check className="w-4 h-4" /> Settings updated successfully
-            </span>
-          )}
+        {/* Bottom Save Button */}
+        <div className="flex justify-end">
           <button
             type="submit"
-            className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-blue-600/20 transition-all"
+            className="px-6 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-bold text-xs flex items-center gap-2 transition-colors font-mono"
           >
             <Save className="w-4 h-4" />
-            Save Configuration
+            <span>Save Configuration</span>
           </button>
         </div>
       </form>

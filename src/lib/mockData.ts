@@ -15,47 +15,192 @@ export const initialServerInfo: ServerInfo = {
   name: 'Kryin Paper Server',
   status: 'online',
   pid: 18492,
-  minecraftVersion: '26.3',
+  minecraftVersion: '1.21.4',
   paperBuild: 249,
   geyserVersion: '2.12.1-b1302',
-  device: 'Indian High-Frequency Dedicated Node (Mumbai)',
-  androidVersion: 'OpenJDK 25 (Linux aarch64)',
+  device: 'Dedicated Bare-Metal Node (Mumbai DC-1)',
+  androidVersion: 'Linux 6.8.0-generic (x86_64)',
   uptimeSeconds: 84320, // ~23.4 hours
   lastStartup: '2026-11-13T08:00:00Z',
   lastShutdown: null,
   agentConnected: true,
-  lastHeartbeat: 'Just now (4s ago)',
-  onlinePlayers: 2,
+  lastHeartbeat: 'Just now (2s ago)',
+  onlinePlayers: 3,
   maxPlayers: 20,
-  tps: 19.98,
+  tps: 20.0,
 };
 
 export const initialMetrics: HardwareMetrics = {
-  totalRamMb: 12288, // 12 GB
-  usedRamMb: 4915,   // ~40% phone RAM used
-  availableRamMb: 7373,
-  javaHeapUsedMb: 1433, // 1.4 GB used
-  javaHeapMaxMb: 4096,  // 4.0 GB allocated max (-Xmx4G)
-  cpuUsagePercent: 14.8,
-  cpuTempC: 43.5, // From /sys/class/thermal/thermal_zoneX where readable
-  batteryPercent: 82,
-  batteryTempC: 34.6,
+  totalRamMb: 6144, // 6 GB Plan
+  usedRamMb: 2450,  // 2.45 GB allocated
+  availableRamMb: 3694,
+  javaHeapUsedMb: 2150,
+  javaHeapMaxMb: 4096,
+  cpuUsagePercent: 12.4,
+  cpuTempC: 41.2,
+  batteryPercent: 100,
+  batteryTempC: null,
   isCharging: true,
-  powerSource: 'Bypass Charging (USB-PD)',
+  powerSource: 'Redundant High-Efficiency PSU (Grid/UPS)',
   timestamp: new Date().toISOString(),
 };
 
 export const metricHistory: MetricHistoryPoint[] = [
-  { time: '14:00', cpu: 12, ramPhone: 4720, ramJava: 1310 },
-  { time: '14:05', cpu: 18, ramPhone: 4850, ramJava: 1380 },
-  { time: '14:10', cpu: 24, ramPhone: 4920, ramJava: 1420 },
-  { time: '14:15', cpu: 15, ramPhone: 4890, ramJava: 1390 },
-  { time: '14:20', cpu: 29, ramPhone: 5120, ramJava: 1510 },
-  { time: '14:25', cpu: 19, ramPhone: 4960, ramJava: 1450 },
-  { time: '14:30', cpu: 14, ramPhone: 4915, ramJava: 1433 },
+  { time: '14:00', cpu: 11, ramPhone: 2310, ramJava: 1980 },
+  { time: '14:05', cpu: 14, ramPhone: 2380, ramJava: 2040 },
+  { time: '14:10', cpu: 22, ramPhone: 2450, ramJava: 2110 },
+  { time: '14:15', cpu: 13, ramPhone: 2410, ramJava: 2080 },
+  { time: '14:20', cpu: 18, ramPhone: 2490, ramJava: 2180 },
+  { time: '14:25', cpu: 15, ramPhone: 2460, ramJava: 2140 },
+  { time: '14:30', cpu: 12, ramPhone: 2450, ramJava: 2150 },
 ];
 
-export const initialPlayers: MinecraftPlayer[] = [];
+export const initialPlayers: MinecraftPlayer[] = [
+  {
+    uuid: '7c19cd5f-5e95-3cb4-a898-81c67755680e',
+    username: 'NarcoGam3X',
+    isOnline: true,
+    pingMs: 18,
+    health: 20,
+    maxHealth: 20,
+    foodLevel: 20,
+    xpLevel: 42,
+    xpProgress: 0.65,
+    gamemode: 'survival',
+    isOp: true,
+    isWhitelisted: true,
+    isBanned: false,
+    coordinates: { x: -1908.5, y: 63.0, z: 1179.4, world: 'world', dimension: 'minecraft:overworld' },
+    inventory: {
+      armor: {
+        helmet: { id: 'netherite_helmet', name: 'Netherite Helmet', displayName: 'Netherite Helmet', count: 1, slot: 39 },
+        chestplate: { id: 'netherite_chestplate', name: 'Netherite Chestplate', displayName: 'Netherite Chestplate', count: 1, slot: 38 },
+        leggings: { id: 'netherite_leggings', name: 'Netherite Leggings', displayName: 'Netherite Leggings', count: 1, slot: 37 },
+        boots: { id: 'netherite_boots', name: 'Netherite Boots', displayName: 'Netherite Boots', count: 1, slot: 36 },
+      },
+      offhand: { id: 'totem_of_undying', name: 'Totem of Undying', displayName: 'Totem of Undying', count: 1, slot: 40 },
+      main: [],
+      hotbar: [
+        { id: 'netherite_sword', name: 'Netherite Sword', displayName: 'Blade of Mumbai', count: 1, slot: 0 },
+        { id: 'netherite_pickaxe', name: 'Netherite Pickaxe', displayName: 'Deepslate Breaker', count: 1, slot: 1 },
+        { id: 'golden_apple', name: 'Golden Apple', displayName: 'Golden Apple', count: 64, slot: 2 },
+      ]
+    },
+    statistics: {
+      playtimeHours: 54.2,
+      playerKills: 8,
+      deaths: 2,
+      kdr: 4.0,
+      distanceTraveledKm: 142.8,
+      blocksBroken: 24500,
+      itemsUsed: 31200,
+      entitiesKilled: 420
+    },
+    ipAddress: '192.168.1.105'
+  },
+  {
+    uuid: '8667ba71-b85a-4004-af54-457a9734eed7',
+    username: 'Steve',
+    isOnline: true,
+    pingMs: 24,
+    health: 18,
+    maxHealth: 20,
+    foodLevel: 16,
+    xpLevel: 19,
+    xpProgress: 0.3,
+    gamemode: 'survival',
+    isOp: false,
+    isWhitelisted: true,
+    isBanned: false,
+    coordinates: { x: 142.4, y: 70.0, z: -312.8, world: 'world', dimension: 'minecraft:overworld' },
+    inventory: {
+      armor: { helmet: null, chestplate: null, leggings: null, boots: null },
+      offhand: null,
+      main: [],
+      hotbar: [
+        { id: 'iron_pickaxe', name: 'Iron Pickaxe', displayName: 'Iron Pickaxe', count: 1, slot: 0 },
+        { id: 'bread', name: 'Bread', displayName: 'Bread', count: 16, slot: 1 }
+      ]
+    },
+    statistics: {
+      playtimeHours: 12.5,
+      playerKills: 1,
+      deaths: 5,
+      kdr: 0.2,
+      distanceTraveledKm: 42.1,
+      blocksBroken: 4500,
+      itemsUsed: 6200,
+      entitiesKilled: 64
+    },
+    ipAddress: '192.168.1.110'
+  },
+  {
+    uuid: 'ec561538-f3fd-461d-aff5-086e22154bce',
+    username: 'Alex',
+    isOnline: true,
+    pingMs: 31,
+    health: 20,
+    maxHealth: 20,
+    foodLevel: 20,
+    xpLevel: 30,
+    xpProgress: 0.0,
+    gamemode: 'creative',
+    isOp: false,
+    isWhitelisted: true,
+    isBanned: false,
+    coordinates: { x: 88.0, y: 65.0, z: 12.5, world: 'world', dimension: 'minecraft:overworld' },
+    inventory: {
+      armor: { helmet: null, chestplate: null, leggings: null, boots: null },
+      offhand: null,
+      main: [],
+      hotbar: []
+    },
+    statistics: {
+      playtimeHours: 28.1,
+      playerKills: 0,
+      deaths: 0,
+      kdr: 0,
+      distanceTraveledKm: 88.4,
+      blocksBroken: 12000,
+      itemsUsed: 19800,
+      entitiesKilled: 12
+    },
+    ipAddress: '192.168.1.115'
+  },
+  {
+    uuid: '069a79f4-44e9-4726-a5be-fca90e38aaf5',
+    username: 'Griefer_01',
+    isOnline: false,
+    pingMs: 0,
+    health: 0,
+    maxHealth: 20,
+    foodLevel: 0,
+    xpLevel: 0,
+    xpProgress: 0,
+    gamemode: 'survival',
+    isOp: false,
+    isWhitelisted: false,
+    isBanned: true,
+    coordinates: { x: 0, y: 60.0, z: 0, world: 'world', dimension: 'minecraft:overworld' },
+    inventory: {
+      armor: { helmet: null, chestplate: null, leggings: null, boots: null },
+      offhand: null,
+      main: [],
+      hotbar: []
+    },
+    statistics: {
+      playtimeHours: 0.4,
+      playerKills: 0,
+      deaths: 1,
+      kdr: 0,
+      distanceTraveledKm: 1.2,
+      blocksBroken: 50,
+      itemsUsed: 30,
+      entitiesKilled: 0
+    },
+    ipAddress: '10.0.0.88'
+  }
+];
 
 export const initialLogs: ConsoleLogEntry[] = [
   { id: '1', timestamp: '14:28:10', level: 'INFO', message: '[Server] Loading Paper version git-Paper-249 (MC: 26.3) (Implementing API version 26.3-R0.1-SNAPSHOT)' },
@@ -240,16 +385,16 @@ export const initialAuditLogs: AuditLog[] = [
 
 export const tunnelInfo: TunnelConfig = {
   java: {
-    publicHost: 'rog-kryin.playit.gg',
-    publicPort: 38240,
-    localIp: '192.168.0.164',
+    publicHost: 'in.kryin.host',
+    publicPort: 25565,
+    localIp: '127.0.0.1',
     localPort: 25565,
     protocol: 'TCP',
   },
   bedrock: {
-    publicHost: 'rog-kryin.playit.gg',
+    publicHost: 'in.kryin.host',
     publicPort: 19132,
-    localIp: '192.168.0.164',
+    localIp: '127.0.0.1',
     localPort: 19132,
     protocol: 'UDP',
   },
