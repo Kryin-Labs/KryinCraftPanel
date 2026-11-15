@@ -29,23 +29,24 @@ export async function GET(req: Request) {
 
     const supabase = getAdminClient();
 
-    // 1. Resolve active server
-    let targetServerId = requestedServerId;
-    if (!targetServerId) {
-      const { data: servers } = await supabase
-        .from('servers')
-        .select('id, status, last_heartbeat')
-        .order('created_at', { ascending: false });
+    // 1. Resolve active server safely (validate against live servers)
+    const { data: servers } = await supabase
+      .from('servers')
+      .select('id, status, last_heartbeat')
+      .order('created_at', { ascending: false });
 
-      if (servers && servers.length > 0) {
-        // Prioritize server with freshest heartbeat
-        const now = Date.now();
-        const activeServer = servers.find((s) => {
-          const hb = s.last_heartbeat ? new Date(s.last_heartbeat).getTime() : 0;
-          return now - hb < 45000;
-        });
-        targetServerId = activeServer ? activeServer.id : servers[0].id;
-      }
+    let targetServerId: string | null = null;
+    const now = Date.now();
+
+    if (requestedServerId && servers?.some((s) => s.id === requestedServerId)) {
+      targetServerId = requestedServerId;
+    } else if (servers && servers.length > 0) {
+      // Prioritize live server with active heartbeat
+      const activeServer = servers.find((s) => {
+        const hb = s.last_heartbeat ? new Date(s.last_heartbeat).getTime() : 0;
+        return now - hb < 45000;
+      });
+      targetServerId = activeServer ? activeServer.id : servers[0].id;
     }
 
     if (!targetServerId) {

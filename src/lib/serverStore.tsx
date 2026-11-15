@@ -106,14 +106,14 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
   const [tunnel] = useState<TunnelConfig>(tunnelInfo);
   const [isLiveDbConnected, setIsLiveDbConnected] = useState<boolean>(false);
   const pendingTransitionRef = useRef<{
-    type: 'starting' | 'stopping';
+    type: 'starting' | 'stopping' | 'restarting';
     startedAt: number;
   } | null>(null);
 
   const computeServerStatus = (
     rawStatus: string | undefined,
     isFresh: boolean,
-    pending: { type: 'starting' | 'stopping'; startedAt: number } | null
+    pending: { type: 'starting' | 'stopping' | 'restarting'; startedAt: number } | null
   ): { status: ServerStatus; clearPending: boolean } => {
     const norm = (rawStatus || 'offline').toLowerCase();
     let current: ServerStatus =
@@ -128,6 +128,23 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
     }
 
     const elapsed = Date.now() - pending.startedAt;
+
+    if (pending.type === 'restarting') {
+      // For the first 5 seconds, ignore previous 'online' status to prevent flickering
+      if (elapsed > 5000) {
+        if (current === 'online') {
+          return { status: 'online', clearPending: true };
+        }
+        if (current === 'starting') {
+          return { status: 'starting', clearPending: false };
+        }
+      }
+      if (current === 'stopping' || current === 'starting') {
+        return { status: current, clearPending: false };
+      }
+      return { status: 'stopping', clearPending: false };
+    }
+
     if (pending.type === 'starting') {
       if (current === 'online') {
         return { status: 'online', clearPending: true };
@@ -197,6 +214,12 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
 
         if (Array.isArray(data.servers) && data.servers.length > 0) {
           setServersList(data.servers);
+          // If activeServerId points to a deleted or unknown server, auto-heal to data.server.id
+          if (data.server?.id && (!activeServerId || !data.servers.some((s: any) => s.id === activeServerId))) {
+            setActiveServerId(data.server.id);
+          }
+        } else if (data.server?.id && !activeServerId) {
+          setActiveServerId(data.server.id);
         }
 
         if (data.server) {
@@ -604,7 +627,7 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
   };
 
   const restartServer = async () => {
-    pendingTransitionRef.current = { type: 'starting', startedAt: Date.now() };
+    pendingTransitionRef.current = { type: 'restarting', startedAt: Date.now() };
     setServerInfo((prev) => ({ ...prev, status: 'stopping' }));
     setLogs([]); // Immediately clear console for fresh running Minecraft instance
     await dispatchServerCommand('RESTART');
