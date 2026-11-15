@@ -52,7 +52,7 @@ export const MobileNav: React.FC = () => {
             <span className="font-bold text-[#1a1522] text-sm tracking-tight font-mono hidden sm:inline">KryinHost</span>
           </Link>
           <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-bold border border-blue-200 truncate max-w-[120px]">
-            {serverInfo.name}
+            {serverInfo.name || 'Server'}
           </span>
         </div>
 

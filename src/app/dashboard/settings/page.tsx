@@ -15,7 +15,7 @@ export default function ServerSettingsPage() {
   const { serverInfo, metrics } = useServerStore();
 
   const [savedSuccess, setSavedSuccess] = useState(false);
-  const [motd, setMotd] = useState('§bKryinCraft §8[§aIndian Node 01§8]');
+  const [motd, setMotd] = useState(serverInfo.name ? `§b${serverInfo.name} §8[§aNode§8]` : '§bMinecraft Server §8[§aNode§8]');
   const [viewDistance, setViewDistance] = useState(10);
   const [simulationDistance, setSimulationDistance] = useState(8);
   const [maxPlayers, setMaxPlayers] = useState(20);

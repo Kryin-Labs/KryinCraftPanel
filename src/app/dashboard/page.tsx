@@ -26,7 +26,9 @@ import {
   Radio,
   FileCode,
   Sliders,
-  FolderTree
+  FolderTree,
+  Pencil,
+  X
 } from 'lucide-react';
 import { useServerStore } from '@/lib/serverStore';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -41,19 +43,28 @@ export default function DashboardOverviewPage() {
     stopServer,
     restartServer,
     toggleOp,
-    kickPlayer
+    kickPlayer,
+    isDeviceConnected,
+    isLoading,
+    updateServerSettings,
   } = useServerStore();
 
   const [copiedJava, setCopiedJava] = useState(false);
   const [copiedBedrock, setCopiedBedrock] = useState(false);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
 
+  // IP Editing State
+  const [isEditingIp, setIsEditingIp] = useState(false);
+  const [ipInput, setIpInput] = useState('');
+  const [isSavingIp, setIsSavingIp] = useState(false);
+
   const onlinePlayers = players.filter((p) => p.isOnline);
   const hasTunnel = Boolean(serverInfo.publicTunnelJava);
-  const javaAddress = serverInfo.publicTunnelJava || (serverInfo.localIp ? `${serverInfo.localIp}:25565` : '192.168.0.164:25565');
-  const bedrockAddress = serverInfo.publicTunnelBedrock || (serverInfo.localIp ? `${serverInfo.localIp}:19132` : '192.168.0.164:19132');
+  const javaAddress = serverInfo.publicTunnelJava || (serverInfo.localIp ? `${serverInfo.localIp}:25565` : '');
+  const bedrockAddress = serverInfo.publicTunnelBedrock || (serverInfo.localIp ? `${serverInfo.localIp}:19132` : '');
 
   const copyAddress = (type: 'java' | 'bedrock', text: string) => {
+    if (!text) return;
     navigator.clipboard.writeText(text);
     if (type === 'java') {
       setCopiedJava(true);
@@ -64,7 +75,29 @@ export default function DashboardOverviewPage() {
     }
   };
 
+  const handleSaveIp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingIp(true);
+    const res = await updateServerSettings({
+      publicTunnelJava: ipInput.trim() || undefined,
+    });
+    setIsSavingIp(false);
+    if (res.success) {
+      setIsEditingIp(false);
+      setActionNotice('Playit.gg server IP saved directly to database!');
+      setTimeout(() => setActionNotice(null), 3500);
+    } else {
+      setActionNotice(`Failed to save IP: ${res.error}`);
+    }
+  };
+
   const handleQuickAction = async (action: 'start' | 'restart' | 'stop' | 'hibernate') => {
+    if (!isDeviceConnected) {
+      setActionNotice('Cannot execute: Device daemon is not connected. Launch the agent on your device first.');
+      setTimeout(() => setActionNotice(null), 4000);
+      return;
+    }
+
     if (action === 'start') {
       setActionNotice(`Starting Paper server ${serverInfo.name}...`);
       await startServer();
@@ -80,8 +113,14 @@ export default function DashboardOverviewPage() {
     setTimeout(() => setActionNotice(null), 4000);
   };
 
-  const ramPercent = Math.min(100, Math.round((metrics.usedRamMb / metrics.totalRamMb) * 100));
-  const capacityPercent = Math.min(100, Math.round((onlinePlayers.length / serverInfo.maxPlayers) * 100));
+  const ramPercent =
+    metrics.totalRamMb > 0
+      ? Math.min(100, Math.round((metrics.usedRamMb / metrics.totalRamMb) * 100))
+      : 0;
+  const capacityPercent =
+    serverInfo.maxPlayers > 0
+      ? Math.min(100, Math.round((onlinePlayers.length / serverInfo.maxPlayers) * 100))
+      : 0;
 
   return (
     <div className="flex flex-col xl:flex-row items-start gap-6 font-mono text-[#1a1522]">
@@ -103,69 +142,168 @@ export default function DashboardOverviewPage() {
         </div>
       )}
 
-      {/* Main Server Header Card with Power Controls */}
-      <div className="p-5 sm:p-6 rounded-2xl bg-white border border-[#1a1522]/10 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-5">
-        <div>
-          <div className="flex flex-wrap items-center gap-2.5 mb-2">
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[#1a1522]">
-              {serverInfo.name}
-            </h1>
-            <StatusBadge status={serverInfo.status} size="md" />
-            <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 text-xs font-bold border border-blue-200/80">
-              Paper 1.21.4
-            </span>
-          </div>
-
-          <p className="text-xs text-[#1a1522]/60 flex flex-wrap items-center gap-2">
-            <span>Node: <strong className="text-[#1a1522]">{serverInfo.device || 'Indian Node (Termux ARM64)'}</strong></span>
-            <span>•</span>
-            <span>Uptime: <strong className="text-[#1a1522]">{serverInfo.status === 'online' ? `${Math.floor(serverInfo.uptimeSeconds / 3600)}h ${Math.floor((serverInfo.uptimeSeconds % 3600) / 60)}m` : 'Offline'}</strong></span>
-            <span>•</span>
-            <span>Geyser Crossplay: <strong className={serverInfo.status === 'online' ? 'text-emerald-700' : 'text-[#1a1522]/50'}>{serverInfo.status === 'online' ? 'Online' : 'Offline'}</strong></span>
+      {/* Centered Main Server Card with IP & Connection Indicator */}
+      <div className="p-6 sm:p-8 rounded-2xl bg-white border border-[#1a1522]/10 shadow-xs flex flex-col items-center text-center space-y-4">
+        {/* 1. Server Name in Center */}
+        <div className="flex flex-col items-center space-y-1">
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#1a1522]">
+            {serverInfo.name || (isLoading ? 'Loading Server...' : 'No Server Found')}
+          </h1>
+          <p className="text-xs text-[#1a1522]/50 font-medium">
+            Node: <strong className="text-[#1a1522]">{serverInfo.device || 'Minecraft Node'}</strong>
           </p>
         </div>
 
-        {/* Server Power Hub: Start, Stop, Restart, Hibernate */}
-        <div className="flex flex-wrap items-center gap-2">
-          {serverInfo.status === 'offline' || (serverInfo.status as any) === 'crashed' ? (
+        {/* 2. Below it its IP with small Edit button in front & Copy button, and right near it the Device Connection Indicator */}
+        <div className="flex flex-wrap items-center justify-center gap-3 pt-1 w-full max-w-2xl">
+          {/* IP Address Pill with Edit & Copy */}
+          <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-[#f8f9fd] border border-[#1a1522]/15 shadow-2xs">
+            {/* Small Edit button in front of IP */}
             <button
-              onClick={() => handleQuickAction('start')}
-              className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs"
-              title="Start Minecraft Server"
+              onClick={() => {
+                setIsEditingIp(!isEditingIp);
+                setIpInput(serverInfo.publicTunnelJava || '');
+              }}
+              title="Edit Playit.gg IP address"
+              className="p-1 rounded-md text-[#1a1522]/60 hover:text-blue-600 hover:bg-blue-50 transition-colors"
             >
-              <Play className="w-3.5 h-3.5 fill-current" />
-              <span>Start Server</span>
+              <Pencil className="w-3.5 h-3.5" />
             </button>
-          ) : (
-            <button
-              onClick={() => handleQuickAction('restart')}
-              className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs"
-              title="Gracefully restart Minecraft server"
-            >
-              <RotateCw className="w-3.5 h-3.5" />
-              <span>Restart</span>
-            </button>
-          )}
 
-          <button
-            onClick={() => handleQuickAction('hibernate')}
-            className="px-3.5 py-2 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold flex items-center gap-1.5 transition-all"
-            title="Hibernate when idle, auto-wakes on join"
+            {/* IP Display or Inline Edit Form */}
+            {isEditingIp ? (
+              <form onSubmit={handleSaveIp} className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  placeholder="e.g. scooter-stuffing.tun.ply.gg"
+                  value={ipInput}
+                  onChange={(e) => setIpInput(e.target.value)}
+                  className="px-2.5 py-1 text-xs font-mono border border-blue-400 rounded-lg bg-white focus:outline-hidden"
+                  autoFocus
+                />
+                <button
+                  type="submit"
+                  disabled={isSavingIp}
+                  className="px-2.5 py-1 rounded-lg bg-blue-600 text-white text-[11px] font-bold hover:bg-blue-700"
+                >
+                  {isSavingIp ? '...' : 'Save'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsEditingIp(false)}
+                  className="p-1 rounded-lg bg-slate-200 text-slate-700 text-[11px] hover:bg-slate-300"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </form>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="text-xs sm:text-sm font-bold font-mono text-[#1a1522]">
+                  {serverInfo.publicTunnelJava || 'No IP set (click ✎ to set Playit IP)'}
+                </span>
+                {serverInfo.publicTunnelJava && (
+                  <button
+                    onClick={() => copyAddress('java', serverInfo.publicTunnelJava!)}
+                    className="p-1 text-[#1a1522]/50 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                    title="Copy IP address"
+                  >
+                    {copiedJava ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Device Connection Indicator (Right near the IP) */}
+          <div
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl border text-xs font-bold transition-all ${
+              isDeviceConnected
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                : 'bg-amber-50 text-amber-800 border-amber-200'
+            }`}
+            title={
+              isDeviceConnected
+                ? 'Device daemon is online and connected. Ready to start game!'
+                : 'Device daemon is offline. Website cannot start game until device connects.'
+            }
           >
-            <Moon className="w-3.5 h-3.5" />
-            <span>Hibernate</span>
-          </button>
+            <span
+              className={`w-2.5 h-2.5 rounded-full ${
+                isDeviceConnected
+                  ? 'bg-emerald-500 animate-pulse'
+                  : 'bg-amber-500'
+              }`}
+            />
+            <span>
+              {isDeviceConnected ? 'Device: Connected' : 'Device: Not Connected'}
+            </span>
+          </div>
+        </div>
 
-          {serverInfo.status === 'online' && (
+        {/* If Device is not connected, alert that game cannot start */}
+        {!isDeviceConnected && (
+          <div className="text-[11px] text-amber-800 bg-amber-50/70 border border-amber-200/80 px-3.5 py-1.5 rounded-xl max-w-lg">
+            Device daemon is not running on your device. Run the agent command so the website can communicate with your node and start the game.
+          </div>
+        )}
+
+        {/* 3. Minecraft Server Status & Power Controls */}
+        <div className="flex flex-wrap items-center justify-center gap-4 pt-1">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-[#1a1522]/60 font-semibold">Minecraft Status:</span>
+            <StatusBadge status={serverInfo.status} size="md" />
+          </div>
+
+          {/* Power Controls Hub */}
+          <div className="flex items-center gap-2">
+            {serverInfo.status === 'offline' || (serverInfo.status as any) === 'crashed' ? (
+              <button
+                onClick={() => handleQuickAction('start')}
+                disabled={!isDeviceConnected}
+                className={`px-4 py-2 rounded-lg text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs ${
+                  isDeviceConnected
+                    ? 'bg-emerald-600 hover:bg-emerald-700 cursor-pointer'
+                    : 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                }`}
+                title={isDeviceConnected ? 'Start Minecraft Server' : 'Device not connected: Cannot start game'}
+              >
+                <Play className="w-3.5 h-3.5 fill-current" />
+                <span>Start Game</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => handleQuickAction('restart')}
+                disabled={!isDeviceConnected}
+                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs"
+                title="Restart Minecraft server"
+              >
+                <RotateCw className="w-3.5 h-3.5" />
+                <span>Restart</span>
+              </button>
+            )}
+
             <button
-              onClick={() => handleQuickAction('stop')}
-              className="px-3.5 py-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-bold flex items-center gap-1.5 transition-all"
-              title="Gracefully shut down server"
+              onClick={() => handleQuickAction('hibernate')}
+              disabled={!isDeviceConnected || serverInfo.status === 'offline'}
+              className="px-3.5 py-2 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold flex items-center gap-1.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Hibernate when idle"
             >
-              <Power className="w-3.5 h-3.5" />
-              <span>Stop</span>
+              <Moon className="w-3.5 h-3.5" />
+              <span>Hibernate</span>
             </button>
-          )}
+
+            {serverInfo.status === 'online' && (
+              <button
+                onClick={() => handleQuickAction('stop')}
+                disabled={!isDeviceConnected}
+                className="px-3.5 py-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-bold flex items-center gap-1.5 transition-all"
+                title="Shut down server"
+              >
+                <Power className="w-3.5 h-3.5" />
+                <span>Stop</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -298,12 +436,14 @@ export default function DashboardOverviewPage() {
           </div>
 
           <div className="flex items-baseline justify-between">
-            <span className={`text-2xl font-bold tracking-tight ${serverInfo.status === 'online' ? 'text-[#1a1522]' : 'text-[#1a1522]/40'}`}>
-              {(serverInfo.status === 'online' ? metrics.usedRamMb / 1024 : 0).toFixed(2)}
-              <span className="text-sm font-normal text-[#1a1522]/50"> / {(metrics.totalRamMb / 1024).toFixed(1)} GB</span>
+            <span className={`text-2xl font-bold tracking-tight ${serverInfo.status === 'online' && metrics.usedRamMb > 0 ? 'text-[#1a1522]' : 'text-[#1a1522]/40'}`}>
+              {serverInfo.status === 'online' && metrics.usedRamMb > 0 ? `${(metrics.usedRamMb / 1024).toFixed(2)} GB` : '--'}
+              {serverInfo.status === 'online' && metrics.totalRamMb > 0 && (
+                <span className="text-sm font-normal text-[#1a1522]/50"> / {(metrics.totalRamMb / 1024).toFixed(1)} GB</span>
+              )}
             </span>
             <span className="text-xs text-[#1a1522]/60 font-medium">
-              {serverInfo.status === 'online' ? `${ramPercent}%` : '0%'}
+              {serverInfo.status === 'online' && metrics.totalRamMb > 0 ? `${ramPercent}%` : 'Offline'}
             </span>
           </div>
 

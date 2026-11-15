@@ -58,12 +58,13 @@ export async function GET(req: Request) {
     // Format server list with live freshness check
     const formattedServers = (allServers || []).map((s: any) => {
       const hbTime = s.last_heartbeat ? new Date(s.last_heartbeat).getTime() : 0;
-      const isFresh = Date.now() - hbTime < 90 * 1000;
+      const isFresh = Date.now() - hbTime < 45 * 1000;
       return {
         id: s.id,
         name: s.name,
         status: isFresh && s.status === 'online' ? 'online' : (isFresh ? s.status : 'offline'),
-        device: s.device_name || 'Termux ARM64 Node',
+        device: s.device_name || 'Device Node',
+        deviceConnected: isFresh,
         localIp: s.local_ip,
         publicTunnelJava: s.public_tunnel_java,
         lastHeartbeat: s.last_heartbeat,
@@ -73,6 +74,7 @@ export async function GET(req: Request) {
     if (!server) {
       return NextResponse.json({
         online: false,
+        device_connected: false,
         status: 'offline',
         servers: formattedServers,
         server: null,
@@ -82,9 +84,9 @@ export async function GET(req: Request) {
       });
     }
 
-    // Check if agent heartbeat is alive (within last 90 seconds)
+    // Check if agent heartbeat is alive (within last 45 seconds)
     const lastHeartbeatTime = server.last_heartbeat ? new Date(server.last_heartbeat).getTime() : 0;
-    const isHeartbeatFresh = Date.now() - lastHeartbeatTime < 90 * 1000;
+    const isHeartbeatFresh = Date.now() - lastHeartbeatTime < 45 * 1000;
     const isOnline = isHeartbeatFresh && server.status === 'online';
 
     // 2. Fetch latest metrics
@@ -114,34 +116,46 @@ export async function GET(req: Request) {
 
     return NextResponse.json({
       online: isOnline,
+      device_connected: isHeartbeatFresh,
       status: isOnline ? 'online' : (isHeartbeatFresh ? server.status : 'offline'),
       servers: formattedServers,
       server: {
         id: server.id,
         name: server.name,
-        device: server.device_name || 'Termux ARM64 Node',
+        device: server.device_name || 'Device Node',
+        device_connected: isHeartbeatFresh,
         status: isOnline ? 'online' : (isHeartbeatFresh ? server.status : 'offline'),
         pid: isOnline ? server.pid : null,
         tps: isOnline ? Number(server.tps || 20.0) : 0,
         uptime_seconds: isOnline ? (server.uptime_seconds || 0) : 0,
         online_players: isOnline ? (server.online_players || 0) : 0,
         max_players: server.max_players || 20,
-        local_ip: server.local_ip || '192.168.0.164',
+        local_ip: server.local_ip || null,
         public_tunnel_java: server.public_tunnel_java || null,
         public_tunnel_bedrock: server.public_tunnel_bedrock || null,
         last_heartbeat: server.last_heartbeat,
       },
-      metrics: latestMetrics ? {
-        totalRamMb: latestMetrics.total_ram_mb || 6144,
-        usedRamMb: isOnline ? (latestMetrics.used_ram_mb || 0) : 0,
-        javaHeapUsedMb: isOnline ? (latestMetrics.java_heap_used_mb || 0) : 0,
-        javaHeapMaxMb: latestMetrics.java_heap_max_mb || 4096,
-        cpuUsagePercent: isOnline ? Number(latestMetrics.cpu_usage_percent || 0) : 0,
-        cpuTempC: isOnline ? Number(latestMetrics.cpu_temp_c || 0) : null,
-        batteryPercent: latestMetrics.battery_percent,
-        isCharging: latestMetrics.is_charging,
-        powerSource: latestMetrics.power_source,
-      } : null,
+      metrics: (latestMetrics && isOnline) ? {
+        totalRamMb: latestMetrics.total_ram_mb || 0,
+        usedRamMb: latestMetrics.used_ram_mb || 0,
+        javaHeapUsedMb: latestMetrics.java_heap_used_mb || 0,
+        javaHeapMaxMb: latestMetrics.java_heap_max_mb || 0,
+        cpuUsagePercent: Number(latestMetrics.cpu_usage_percent || 0),
+        cpuTempC: latestMetrics.cpu_temp_c ? Number(latestMetrics.cpu_temp_c) : null,
+        batteryPercent: latestMetrics.battery_percent ?? 0,
+        isCharging: Boolean(latestMetrics.is_charging),
+        powerSource: latestMetrics.power_source || 'Standby',
+      } : {
+        totalRamMb: 0,
+        usedRamMb: 0,
+        javaHeapUsedMb: 0,
+        javaHeapMaxMb: 0,
+        cpuUsagePercent: 0,
+        cpuTempC: null,
+        batteryPercent: 0,
+        isCharging: false,
+        powerSource: 'Offline',
+      },
       logs,
       players: dbPlayers || [],
     });

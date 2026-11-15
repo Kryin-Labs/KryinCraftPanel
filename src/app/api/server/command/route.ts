@@ -28,18 +28,34 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing command_type' }, { status: 400 });
     }
 
-    // Determine target server
+    // Determine target server ID
     let targetServerId = server_id;
     if (!targetServerId || targetServerId === 'in-mumbai-01') {
-      const { data: firstServer } = await admin.from('servers').select('id, owner_id').order('created_at', { ascending: false }).limit(1).single();
+      const { data: firstServer } = await admin
+        .from('servers')
+        .select('id, owner_id')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
       if (firstServer) {
         targetServerId = firstServer.id;
       }
     }
 
-    // Attempt user auth if available
-    let userId = '083e0435-e2c2-4f23-b410-8fd834ab0d28';
-    let userEmail = 'operator@kryin.host';
+    // Fetch target server to ensure it exists and get default owner ID if needed
+    const { data: targetServer } = await admin
+      .from('servers')
+      .select('id, owner_id')
+      .eq('id', targetServerId)
+      .single();
+
+    if (!targetServer) {
+      return NextResponse.json({ error: 'Server not found' }, { status: 404 });
+    }
+
+    // Determine user auth dynamically from session
+    let userId = targetServer.owner_id || null;
+    let userEmail = 'operator';
     try {
       const supabaseUser = await createServerClient();
       const { data: { user } } = await supabaseUser.auth.getUser();

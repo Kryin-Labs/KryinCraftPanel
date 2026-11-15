@@ -35,6 +35,9 @@ interface ServerStoreContextType {
   setActiveServerId: (id: string) => void;
   refreshServers: () => Promise<void>;
   addServer: (name: string, deviceName?: string) => Promise<{ success: boolean; agentToken?: string; server?: any; error?: string }>;
+  updateServerSettings: (data: { publicTunnelJava?: string; publicTunnelBedrock?: string; name?: string }) => Promise<{ success: boolean; error?: string }>;
+  isLoading: boolean;
+  isDeviceConnected: boolean;
   metrics: HardwareMetrics;
   history: MetricHistoryPoint[];
   players: MinecraftPlayer[];
@@ -74,17 +77,11 @@ const ServerStoreContext = createContext<ServerStoreContextType | null>(null);
 export function ServerStoreProvider({ children }: { children: React.ReactNode }) {
   const supabase = createClient();
 
-  const [serversList, setServersList] = useState<ServerSummary[]>([
-    {
-      id: initialServerInfo.id,
-      name: initialServerInfo.name,
-      status: initialServerInfo.status,
-      device: initialServerInfo.device,
-      localIp: initialServerInfo.localIp,
-      publicTunnelJava: initialServerInfo.publicTunnelJava,
-    }
-  ]);
+  const [serversList, setServersList] = useState<ServerSummary[]>([]);
   const [activeServerId, setActiveServerId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isDeviceConnected, setIsDeviceConnected] = useState<boolean>(false);
+  const [currentUserEmail, setCurrentUserEmail] = useState<string>('operator');
 
   const [serverInfo, setServerInfo] = useState<ServerInfo>(initialServerInfo);
   const [metrics, setMetrics] = useState<HardwareMetrics>(initialMetrics);
@@ -97,6 +94,14 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(initialAuditLogs);
   const [tunnel] = useState<TunnelConfig>(tunnelInfo);
   const [isLiveDbConnected, setIsLiveDbConnected] = useState<boolean>(false);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user?.email) {
+        setCurrentUserEmail(user.email);
+      }
+    });
+  }, [supabase]);
 
   // Sync with live server API and database
   useEffect(() => {
@@ -116,18 +121,21 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
 
         if (data.server) {
           setIsLiveDbConnected(true);
+          const devConn = Boolean(data.device_connected ?? data.server.device_connected);
+          setIsDeviceConnected(devConn);
           if (!activeServerId) {
             setActiveServerId(data.server.id);
           }
           setServerInfo((prev) => ({
             ...prev,
             id: data.server.id,
-            name: data.server.name,
+            name: data.server.name || '',
             status: data.server.status,
             pid: data.server.pid,
             device: data.server.device,
+            deviceConnected: devConn,
             uptimeSeconds: data.server.uptime_seconds,
-            agentConnected: data.online,
+            agentConnected: devConn,
             lastHeartbeat: data.server.last_heartbeat ? new Date(data.server.last_heartbeat).toLocaleTimeString() : 'Standby',
             onlinePlayers: data.server.online_players,
             maxPlayers: data.server.max_players,
@@ -218,6 +226,10 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
         }
       } catch (err) {
         console.warn('Live server sync warning:', err);
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     }
 
@@ -273,11 +285,53 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
     }
   };
 
+  const updateServerSettings = async (data: { publicTunnelJava?: string; publicTunnelBedrock?: string; name?: string }) => {
+    try {
+      const targetId = activeServerId || serverInfo.id;
+      if (!targetId) return { success: false, error: 'No active server selected' };
+
+      const res = await fetch('/api/server/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          serverId: targetId,
+          ...data,
+        }),
+      });
+      const resData = await res.json();
+      if (!res.ok) {
+        return { success: false, error: resData.error || 'Failed to update server' };
+      }
+      if (resData.server) {
+        setServerInfo((prev) => ({
+          ...prev,
+          name: resData.server.name ?? prev.name,
+          publicTunnelJava: resData.server.public_tunnel_java !== undefined ? resData.server.public_tunnel_java : prev.publicTunnelJava,
+          publicTunnelBedrock: resData.server.public_tunnel_bedrock !== undefined ? resData.server.public_tunnel_bedrock : prev.publicTunnelBedrock,
+        }));
+        setServersList((prev) =>
+          prev.map((s) =>
+            s.id === targetId
+              ? {
+                  ...s,
+                  name: resData.server.name ?? s.name,
+                  publicTunnelJava: resData.server.public_tunnel_java !== undefined ? resData.server.public_tunnel_java : s.publicTunnelJava,
+                }
+              : s
+          )
+        );
+      }
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  };
+
   const addAudit = (action: string, target: string, details: string) => {
     const newAudit: AuditLog = {
       id: 'audit-' + Date.now(),
       userId: 'current-user',
-      userEmail: 'purohitarthbkn@gmail.com',
+      userEmail: currentUserEmail,
       action,
       target,
       timestamp: new Date().toLocaleTimeString(),
@@ -581,6 +635,9 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
         setActiveServerId,
         addServer,
         refreshServers,
+        updateServerSettings,
+        isLoading,
+        isDeviceConnected,
         metrics,
         history,
         players,

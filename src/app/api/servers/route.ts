@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createHash, randomBytes } from 'crypto';
 
 function getAdminClient() {
@@ -50,12 +51,22 @@ export async function POST(req: Request) {
     const rawToken = `kryin_node_${randomBytes(16).toString('hex')}`;
     const tokenHash = createHash('sha256').update(rawToken).digest('hex');
 
-    const defaultOwnerId = '083e0435-e2c2-4f23-b410-8fd834ab0d28';
+    let ownerId: string | null = null;
+    try {
+      const supabaseUser = await createServerClient();
+      const { data: { user } } = await supabaseUser.auth.getUser();
+      if (user) ownerId = user.id;
+    } catch (e) {}
+
+    if (!ownerId) {
+      const { data: existing } = await supabase.from('servers').select('owner_id').limit(1).single();
+      ownerId = existing?.owner_id || null;
+    }
 
     const { data: newServer, error: insertError } = await supabase
       .from('servers')
       .insert({
-        owner_id: defaultOwnerId,
+        owner_id: ownerId,
         name: name.trim(),
         device_name: (device_name || 'Secondary Node').trim(),
         android_version: 'Termux / Linux ARM64',

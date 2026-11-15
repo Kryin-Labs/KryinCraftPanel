@@ -54,9 +54,10 @@ export const Sidebar: React.FC = () => {
   };
 
   const onlineCount = players.filter((p) => p.isOnline).length;
-  const serverIp = serverInfo.publicTunnelJava || (serverInfo.localIp ? `${serverInfo.localIp}:25565` : '192.168.0.164:25565');
+  const serverIp = serverInfo.publicTunnelJava || (serverInfo.localIp ? `${serverInfo.localIp}:25565` : '');
 
   const copyIp = () => {
+    if (!serverIp) return;
     navigator.clipboard.writeText(serverIp);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -92,8 +93,8 @@ export const Sidebar: React.FC = () => {
         <div className="p-3.5 rounded-xl bg-[#f8f9fd] border border-[#1a1522]/10 space-y-2.5">
           <div className="flex items-center justify-between">
             <div className="min-w-0 pr-2">
-              <span className="text-[11px] font-bold text-[#1a1522] block truncate">{serverInfo.name}</span>
-              <span className="text-[9px] text-[#1a1522]/50 block truncate">{serverInfo.device || 'Termux Node'}</span>
+              <span className="text-[11px] font-bold text-[#1a1522] block truncate">{serverInfo.name || 'Loading Server...'}</span>
+              <span className="text-[9px] text-[#1a1522]/50 block truncate">{serverInfo.device || 'Cloud Node'}</span>
             </div>
             <StatusBadge status={serverInfo.status} size="sm" />
           </div>

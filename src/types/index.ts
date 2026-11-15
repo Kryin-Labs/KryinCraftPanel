@@ -164,6 +164,7 @@ export interface ServerSummary {
   name: string;
   status: ServerStatus;
   device?: string;
+  deviceConnected?: boolean;
   localIp?: string;
   publicTunnelJava?: string | null;
   lastHeartbeat?: string | null;
@@ -178,6 +179,7 @@ export interface ServerInfo {
   paperBuild: number;
   geyserVersion: string;
   device: string;
+  deviceConnected?: boolean;
   androidVersion: string;
   uptimeSeconds: number;
   lastStartup: string | null;

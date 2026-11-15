@@ -24,7 +24,7 @@ const QUICK_COMMANDS = [
 ];
 
 export default function DedicatedConsolePage() {
-  const { logs, sendConsoleCommand, clearLogs } = useServerStore();
+  const { logs, serverInfo, sendConsoleCommand, clearLogs } = useServerStore();
   const [commandInput, setCommandInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [logFilter, setLogFilter] = useState<'ALL' | 'INFO' | 'WARN' | 'ERROR'>('ALL');
@@ -172,9 +172,13 @@ export default function DedicatedConsolePage() {
               />
               <span>Auto-Scroll</span>
             </label>
-            <span className="text-emerald-700 font-bold flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-              <Radio className="w-3 h-3 text-emerald-600 animate-pulse" />
-              20.0 TPS
+            <span className={`font-bold flex items-center gap-1 px-2 py-0.5 rounded border text-[11px] ${
+              serverInfo.status === 'online'
+                ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                : 'text-slate-600 bg-slate-100 border-slate-200'
+            }`}>
+              <Radio className={`w-3 h-3 ${serverInfo.status === 'online' ? 'text-emerald-600 animate-pulse' : 'text-slate-400'}`} />
+              {serverInfo.status === 'online' ? `${serverInfo.tps.toFixed(1)} TPS` : 'Offline'}
             </span>
           </div>
         </div>

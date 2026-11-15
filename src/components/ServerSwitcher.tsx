@@ -70,7 +70,7 @@ export const ServerSwitcher: React.FC = () => {
     }
   };
 
-  const currentServerName = serverInfo.name || 'ECB Bache';
+  const currentServerName = serverInfo.name || (serversList[0]?.name ?? 'Loading Server...');
 
   return (
     <div className="relative font-mono">
@@ -210,7 +210,7 @@ export const ServerSwitcher: React.FC = () => {
                   <input
                     type="text"
                     required
-                    placeholder="e.g. ECB Bache 2, Survival SMP, Bedwars"
+                    placeholder="e.g. Survival SMP, Modded Realm, Bedwars"
                     value={newServerName}
                     onChange={(e) => setNewServerName(e.target.value)}
                     className="w-full px-3 py-2 rounded-lg border border-[#1a1522]/20 focus:border-blue-600 focus:outline-hidden text-xs bg-[#f8f9fd]"
