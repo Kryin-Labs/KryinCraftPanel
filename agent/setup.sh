@@ -30,7 +30,8 @@ curl -sSL "https://raw.githubusercontent.com/Kryin-Labs/KryinCraftPanel/main/age
 curl -sSL "https://raw.githubusercontent.com/Kryin-Labs/KryinCraftPanel/main/agent/start-agent.sh" -o start-agent.sh
 curl -sSL "https://raw.githubusercontent.com/Kryin-Labs/KryinCraftPanel/main/agent/stop-agent.sh" -o stop-agent.sh
 curl -sSL "https://raw.githubusercontent.com/Kryin-Labs/KryinCraftPanel/main/agent/status.sh" -o status.sh
-chmod +x start-agent.sh stop-agent.sh status.sh agent.py
+curl -sSL "https://raw.githubusercontent.com/Kryin-Labs/KryinCraftPanel/main/agent/start-tunnel.sh" -o start-tunnel.sh
+chmod +x start-agent.sh stop-agent.sh status.sh start-tunnel.sh agent.py
 
 # 5. Start the agent in the background
 echo "[+] Starting KryinAgent daemon..."
