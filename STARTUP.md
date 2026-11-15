@@ -54,6 +54,10 @@ The moment `fullstart` starts the Agent (`agent.py`):
 | **`status mc`** | `minecraft status mc` | Streams live Minecraft server console |
 | **`status agent`** | `minecraft status agent` | Streams live Agent logs |
 | **`status bedrock`** | `minecraft status bedrock`| Shows Bedrock tunnel & Windows daemon status |
+| **`update agent`** | `minecraft update agent` | Pulls latest agent from GitHub and restarts it |
+| **`update server`** | `minecraft update server`| Pulls latest Paper startup configs from GitHub |
+| **`update scripts`**| `minecraft update scripts`| Pulls latest CLI and lifecycle scripts from GitHub |
+| **`update all`** | `minecraft update all` | Pulls and updates everything from GitHub |
 | **`minecraft`** | `minecraft help` | Shows the full command reference menu |
 
 *(Both styles work identically — use whichever feels faster for you!)*
@@ -79,6 +83,11 @@ status mc                'status mc'               Live Minecraft Server Console
 status agent             'status agent'            Live Portal Agent Log Stream (tail agent.log)     
 status bedrock           'status bedrock'          Bedrock Playit EXE & Tunnel Status                
 status                   'status all'              Display Overview Table for All 3 Services & Ports 
+--------------------------------------------------------------------------------------------------------
+update agent             'update agent'            Pull Latest Agent from GitHub & Auto-Restart      
+update server            'update server'           Pull Latest Server Configs & Shims from GitHub    
+update scripts           'update scripts'          Pull Latest Shell & CLI Scripts from GitHub       
+update all               'update all'              Update Everything from GitHub Repository          
 --------------------------------------------------------------------------------------------------------
 help                     'minecraft help'          Display this command reference guide              
 ========================================================================================================
@@ -148,7 +157,24 @@ When you type `minecraft fullstart` or `minecraft bedrockstart` on your phone, I
 | Platform | Address | Port | Notes |
 | :--- | :--- | :--- | :--- |
 | **Java Edition** (PC / Mac / Linux / Pojav) | `molecule-two.tun.ply.gg` | `25565` (Default) | Built into Paper plugin (`playit.jar`) with auto-SRV lookup |
-| **Bedrock Edition** (Mobile / Win10/11 / Console) | `molecule-edition.tun.ply.gg` | `41715` | Routed via Windows Playit daemon to Geyser UDP `19132` |
-| **Local Wi-Fi (Java)** | `192.168.0.164` | `25565` | Direct LAN connection |
-| **Local Wi-Fi (Bedrock)** | `192.168.0.164` | `19132` | Direct LAN connection |
+| **Bedrock Edition (Internet Players)** | `molecule-edition.tun.ply.gg` | `41715` | Playit public tunnel port. **Do not use 19132 here!** |
+| **Local Wi-Fi (Java)** | `192.168.0.164` | `25565` | Direct LAN connection for devices on home Wi-Fi |
+| **Local Wi-Fi (Bedrock)** | `192.168.0.164` | `19132` | Direct LAN connection for devices on home Wi-Fi |
 | **Web Dashboard** | `https://kryincraftpanel.vercel.app` | - | Real-time Pterodactyl-parity control panel |
+
+### ⚠️ Important Note on Bedrock Ports & Local IP:
+- **Local IP (`192.168.0.164`):** In Playit's dashboard, `192.168.0.164` is the Indian Node's actual LAN IP on your home Wi-Fi. (Never use `192.168.0.1` because that is your home router, not your phone!).
+- **Bedrock Port in Minecraft Client:**
+  - When playing from **outside your house (friends/mobile data)**: Enter Server Address `molecule-edition.tun.ply.gg` and Port `41715`.
+  - When playing from **inside your house (same Wi-Fi)**: Enter Server Address `192.168.0.164` and Port `19132`.
+- **NetherNet Token Configuration:**  
+  Geyser is pre-configured with Playit's NXS signaling:
+  ```yaml
+  signaling:
+    mode: nxs
+    nxs:
+      endpoint: "https://nethernet.playit.gg"
+      token: "pnx1.5125431.4QRi-m5aMzsMCdmgxqWwQF6oYjes4SbqhuVg1g6unHY"
+      assisted-joins: true
+  ```
+  Native Android compatibility is provided via our optimized Bionic-Musl ABI shim (`libc.musl-aarch64.so.1`).
