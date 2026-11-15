@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -13,10 +13,13 @@ import {
   Check,
   ExternalLink,
   ArrowLeft,
-  Server
+  Server,
+  LogOut,
+  User as UserIcon,
 } from 'lucide-react';
 import { useServerStore } from '@/lib/serverStore';
 import { StatusBadge } from './StatusBadge';
+import { createClient } from '@/lib/supabase/client';
 
 const navItems = [
   { name: 'Overview', href: '/dashboard', icon: LayoutDashboard },
@@ -30,6 +33,24 @@ export const Sidebar: React.FC = () => {
   const pathname = usePathname();
   const { serverInfo, players } = useServerStore();
   const [copied, setCopied] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user?.email) {
+        setUserEmail(user.email);
+      }
+    });
+  }, []);
+
+  const handleSignOut = async () => {
+    setIsLoggingOut(true);
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    window.location.href = '/login';
+  };
 
   const onlineCount = players.filter((p) => p.isOnline).length;
   const serverIp = serverInfo.publicTunnelJava || (serverInfo.localIp ? `${serverInfo.localIp}:25565` : '192.168.0.164:25565');
@@ -160,6 +181,31 @@ export const Sidebar: React.FC = () => {
             <ArrowLeft className="w-3 h-3 text-[#1a1522]/40" />
             <span>Homepage</span>
           </Link>
+        </div>
+
+        {/* User Account & Logout */}
+        <div className="pt-2.5 border-t border-[#1a1522]/10 flex items-center justify-between gap-2 px-1">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[11px] font-bold shrink-0">
+              {userEmail ? userEmail.charAt(0).toUpperCase() : 'U'}
+            </div>
+            <div className="min-w-0">
+              <span className="text-[11px] font-bold text-[#1a1522] truncate block" title={userEmail || 'Operator'}>
+                {userEmail ? userEmail.split('@')[0] : 'Operator'}
+              </span>
+              <span className="text-[9px] text-[#1a1522]/50 truncate block" title={userEmail || ''}>
+                {userEmail || 'Active Session'}
+              </span>
+            </div>
+          </div>
+          <button
+            onClick={handleSignOut}
+            disabled={isLoggingOut}
+            title="Log Out"
+            className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 transition-colors flex items-center gap-1 cursor-pointer shrink-0"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
         </div>
       </div>
     </aside>

@@ -47,6 +47,15 @@ export default function LoginPage() {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [resetSent, setResetSent] = useState(false);
 
+  // If user already has an active persistent session, redirect straight to /dashboard
+  React.useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        window.location.href = '/dashboard';
+      }
+    });
+  }, [supabase]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -69,36 +78,44 @@ export default function LoginPage() {
           return;
         }
 
-        const { data, error } = await supabase.auth.signUp({
-          email: cleanEmail,
-          password,
-          options: {
-            data: {
-              full_name: fullName.trim() || cleanEmail.split('@')[0],
-            },
-          },
+        // Create user through our server-side endpoint with email auto-confirmed
+        const res = await fetch('/api/auth/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: cleanEmail,
+            password,
+            fullName: fullName.trim(),
+          }),
         });
 
-        if (error) {
-          const lower = error.message.toLowerCase();
-          if (
-            lower.includes('already registered') ||
-            lower.includes('user already exists') ||
-            lower.includes('database error saving new user')
-          ) {
-            setErrorMsg('An account with this email already exists. Please sign in below.');
+        const signupData = await res.json();
+
+        if (!res.ok) {
+          setErrorMsg(signupData.error || 'Failed to create account.');
+          if (res.status === 409) {
             setActiveTab('signin');
-            return;
           }
-          throw error;
+          setIsSubmitting(false);
+          return;
         }
 
-        if (data.session) {
-          router.push('/dashboard');
-        } else {
-          setSuccessMsg('Account created successfully! You can now sign in.');
+        // Automatically sign in immediately so session cookies are stored permanently
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+          email: cleanEmail,
+          password,
+        });
+
+        if (signInError) {
+          setSuccessMsg('Account created successfully! Please sign in below.');
           setActiveTab('signin');
+          setIsSubmitting(false);
+          return;
         }
+
+        // Hard navigate so layout and cookies initialize fresh
+        window.location.href = '/dashboard';
+        return;
       } else {
         // Sign In
         const { data, error } = await supabase.auth.signInWithPassword({
@@ -116,7 +133,9 @@ export default function LoginPage() {
           return;
         }
 
-        router.push('/dashboard');
+        // Hard navigate to ensure cookies are sent with all headers
+        window.location.href = '/dashboard';
+        return;
       }
     } catch (err: any) {
       setErrorMsg(err.message || 'Authentication error. Please try again.');
@@ -335,7 +354,7 @@ export default function LoginPage() {
                 className="w-4 h-4 rounded border-[#1a1522]/30 text-[#1a1522] focus:ring-0 cursor-pointer"
               />
               <label htmlFor="remember" className="cursor-pointer select-none">
-                Remember this device for 30 days
+                Stay signed in on this device (until manually logged out)
               </label>
             </div>
 

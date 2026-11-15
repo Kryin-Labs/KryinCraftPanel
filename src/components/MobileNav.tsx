@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -9,9 +9,11 @@ import {
   Users,
   FolderTree,
   Sliders,
-  ArrowLeft
+  ArrowLeft,
+  LogOut,
 } from 'lucide-react';
 import { useServerStore } from '@/lib/serverStore';
+import { createClient } from '@/lib/supabase/client';
 
 const navItems = [
   { name: 'Overview', href: '/dashboard', icon: LayoutDashboard },
@@ -25,6 +27,14 @@ export const MobileNav: React.FC = () => {
   const pathname = usePathname();
   const { serverInfo, players } = useServerStore();
   const onlineCount = players.filter((p) => p.isOnline).length;
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const handleSignOut = async () => {
+    setIsLoggingOut(true);
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    window.location.href = '/login';
+  };
 
   return (
     <div className="lg:hidden flex flex-col font-mono text-[#1a1522]">
@@ -46,6 +56,15 @@ export const MobileNav: React.FC = () => {
             <span className={`w-1.5 h-1.5 rounded-full ${serverInfo.status === 'online' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
             {serverInfo.status === 'online' ? `${serverInfo.tps.toFixed(1)} TPS` : 'Offline'}
           </span>
+
+          <button
+            onClick={handleSignOut}
+            disabled={isLoggingOut}
+            title="Log Out"
+            className="p-1.5 rounded-lg bg-red-50 border border-red-200 text-red-600 hover:bg-red-100"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+          </button>
 
           <Link
             href="/"

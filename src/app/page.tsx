@@ -43,6 +43,7 @@ import {
   Wrench,
   ShieldCheck,
 } from 'lucide-react';
+import { createClient } from '@/lib/supabase/client';
 
 /* ------------------------------------------------------------------ */
 /* File Structure Data for "Your software factory, defined in code"    */
@@ -653,6 +654,18 @@ export default function HomePage() {
   /* Navigation dropdown / mobile state */
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeNavDropdown, setActiveNavDropdown] = useState<string | null>(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setIsLoggedIn(Boolean(session));
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsLoggedIn(Boolean(session));
+    });
+    return () => subscription.unsubscribe();
+  }, []);
 
   /* Dynamic Animated Cluster Matrix Cell Tones */
   const [cellTones, setCellTones] = useState<string[]>(() =>
@@ -816,9 +829,18 @@ export default function HomePage() {
 
                 {/* Right: Console Panel & Sign In */}
                 <div className="w-topnav-actions flex items-center gap-2">
-                  <Link href="/login" className="w-btn w-btn-solid text-[12px] sm:text-[13px] px-3 sm:px-4 py-1.5">
-                    Sign In
-                  </Link>
+                  {isLoggedIn ? (
+                    <Link
+                      href="/dashboard"
+                      className="w-btn w-btn-solid text-[12px] sm:text-[13px] px-3 sm:px-4 py-1.5 bg-blue-600 text-white hover:bg-blue-700 font-bold"
+                    >
+                      Dashboard →
+                    </Link>
+                  ) : (
+                    <Link href="/login" className="w-btn w-btn-solid text-[12px] sm:text-[13px] px-3 sm:px-4 py-1.5">
+                      Sign In
+                    </Link>
+                  )}
 
                   {/* Mobile Burger Toggle */}
                   <button
@@ -868,12 +890,21 @@ export default function HomePage() {
                   >
                     ConsolePanel
                   </Link>
-                  <Link
-                    href="/login"
-                    className="w-btn w-btn-solid text-center py-2.5 w-full flex items-center justify-center font-bold"
-                  >
-                    Sign In
-                  </Link>
+                  {isLoggedIn ? (
+                    <Link
+                      href="/dashboard"
+                      className="w-btn w-btn-solid text-center py-2.5 w-full flex items-center justify-center font-bold bg-blue-600 text-white hover:bg-blue-700"
+                    >
+                      Go to Dashboard →
+                    </Link>
+                  ) : (
+                    <Link
+                      href="/login"
+                      className="w-btn w-btn-solid text-center py-2.5 w-full flex items-center justify-center font-bold"
+                    >
+                      Sign In
+                    </Link>
+                  )}
                 </div>
               </div>
             )}

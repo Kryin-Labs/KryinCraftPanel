@@ -12,6 +12,11 @@ export async function createClient() {
     'sb_publishable_cE7Y4PbKxeYfQ5sj_-vQuA_P-417JY1';
 
   return createServerClient(url, anonKey, {
+    cookieOptions: {
+      maxAge: 60 * 60 * 24 * 365, // 1 year
+      sameSite: 'lax',
+      path: '/',
+    },
     cookies: {
       getAll() {
         return cookieStore.getAll();
@@ -19,7 +24,12 @@ export async function createClient() {
       setAll(cookiesToSet) {
         try {
           cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
+            cookieStore.set(name, value, {
+              ...options,
+              maxAge: 60 * 60 * 24 * 365,
+              sameSite: 'lax',
+              path: '/',
+            })
           );
         } catch {
           // The `setAll` method was called from a Server Component.
