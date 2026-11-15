@@ -83,6 +83,18 @@ export default function DashboardOverviewPage() {
           },
         ];
 
+  const primaryEndpoint =
+    endpoints.find((e) => (e.type === 'java' || e.type === 'bedrock') && e.isPrimary) ||
+    endpoints.find((e) => e.type !== 'lan') ||
+    endpoints[0];
+
+  const officialPublicAddress =
+    primaryEndpoint && primaryEndpoint.host
+      ? primaryEndpoint.port && primaryEndpoint.port !== 25565 && !primaryEndpoint.host.includes(':')
+        ? `${primaryEndpoint.host}:${primaryEndpoint.port}`
+        : primaryEndpoint.host
+      : serverInfo.publicTunnelJava || 'scooter-stuffing.tun.ply.gg';
+
   const copyEndpointAddress = (id: string, text: string) => {
     if (!text) return;
     navigator.clipboard.writeText(text);
@@ -281,6 +293,45 @@ export default function DashboardOverviewPage() {
               <p className="text-xs text-[#1a1522]/60 font-medium">
                 Node: <strong className="text-[#1a1522]">Indian Node</strong>
               </p>
+            </div>
+
+            {/* Primary Official Public Server IP (Join from Anywhere in the World) */}
+            <div className="w-full max-w-lg p-3 sm:p-3.5 rounded-2xl bg-blue-50/70 border border-blue-200/90 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0 text-left w-full sm:w-auto">
+                <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center flex-shrink-0 shadow-xs">
+                  <Globe className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-blue-800 bg-blue-100 px-2 py-0.5 rounded-full">
+                      Official Server Address
+                    </span>
+                    <span className="text-[10px] text-emerald-800 font-bold bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-300">
+                      ● Join From Anywhere
+                    </span>
+                  </div>
+                  <div className="text-xs sm:text-sm font-bold text-slate-900 font-mono truncate mt-0.5 select-all">
+                    {officialPublicAddress}
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => copyEndpointAddress('main-official-address', officialPublicAddress)}
+                className="w-full sm:w-auto px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer flex-shrink-0"
+              >
+                {copiedId === 'main-official-address' ? (
+                  <>
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>Copy IP</span>
+                  </>
+                )}
+              </button>
             </div>
 
             {/* Dual Status Bar: Device Connection & Minecraft Server State */}
