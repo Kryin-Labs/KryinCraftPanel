@@ -14,11 +14,17 @@ export default function RootLayout({
   return (
     <html lang="en" data-color-mode="light">
       <head>
-        {/* Monetag Verification & Ad Tag */}
+        {/* Monetag Tag Zone 12266260 */}
         <script
           src="https://5gvci.com/act/files/tag.min.js?z=12266260"
           data-cfasync="false"
           async
+        />
+        {/* Monetag In-Page Push Zone 12266230 */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(s){s.dataset.zone='12266230',s.src='https://nap5k.com/tag.min.js'})([document.documentElement, document.body].filter(Boolean).pop().appendChild(document.createElement('script')))`,
+          }}
         />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />

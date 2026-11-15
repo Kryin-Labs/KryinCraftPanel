@@ -253,6 +253,9 @@ body {
 }
 
 /* Monetag In-Page Push Bottom-Right Positioning (Smooth slide up from bottom-right) */
+body > div[style*="fixed"][style*="top:"],
+body > div[style*="fixed"][style*="top :"],
+body > div[style*="fixed"][style*="top;"],
 div[id*="monetag"],
 div[class*="monetag"],
 div[class*="ipp-"],
