@@ -14,6 +14,13 @@ export default function RootLayout({
   return (
     <html lang="en" data-color-mode="light">
       <head>
+        {/* Monetag MultiTag Monetization Script */}
+        <script
+          src="https://quge5.com/88/tag.min.js"
+          data-zone="310356"
+          async
+          data-cfasync="false"
+        />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
