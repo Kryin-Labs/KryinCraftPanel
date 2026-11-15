@@ -14,6 +14,12 @@ export default function RootLayout({
   return (
     <html lang="en" data-color-mode="light">
       <head>
+        {/* Monetag Verification & Ad Tag */}
+        <script
+          src="https://5gvci.com/act/files/tag.min.js?z=12266260"
+          data-cfasync="false"
+          async
+        />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
