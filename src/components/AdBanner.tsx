@@ -18,19 +18,6 @@ export const AdBanner: React.FC<AdBannerProps> = ({
   className = '',
 }) => {
   useEffect(() => {
-    // Load Monetag In-Page Push Banner (Zone 12266230)
-    if (typeof window !== 'undefined' && !document.querySelector('script[data-zone="12266230"]')) {
-      try {
-        const s = document.createElement('script');
-        s.dataset.zone = '12266230';
-        s.src = 'https://nap5k.com/tag.min.js';
-        s.async = true;
-        document.body.appendChild(s);
-      } catch (err) {
-        console.error('Monetag In-Page Push script error:', err);
-      }
-    }
-
     // If Google AdSense is also configured
     try {
       if (typeof window !== 'undefined' && client && slotId) {

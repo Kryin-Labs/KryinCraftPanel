@@ -14,16 +14,33 @@ export default function RootLayout({
   return (
     <html lang="en" data-color-mode="light">
       <head>
-        {/* Monetag Tag Zone 12266260 */}
-        <script
-          src="https://5gvci.com/act/files/tag.min.js?z=12266260"
-          data-cfasync="false"
-          async
-        />
-        {/* Monetag In-Page Push Zone 12266230 */}
+        {/* Monetag In-Page Push (Pretty) Zone 12266297 */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(s){s.dataset.zone='12266230',s.src='https://nap5k.com/tag.min.js'})([document.documentElement, document.body].filter(Boolean).pop().appendChild(document.createElement('script')))`,
+            __html: `(function(s){s.dataset.zone='12266297',s.src='https://al5sm.com/tag.min.js'})([document.documentElement, document.body].filter(Boolean).pop().appendChild(document.createElement('script')))`,
+          }}
+        />
+        {/* Enforce In-Page Push anchor to Bottom-Right */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              if (typeof window !== 'undefined') {
+                const repositionAds = () => {
+                  document.querySelectorAll('body > div, body div').forEach(el => {
+                    const style = el.getAttribute('style') || '';
+                    if (style.includes('fixed') && (style.includes('top:') || style.includes('top :'))) {
+                      if (el.offsetWidth > 160 && el.offsetHeight > 40 && el.offsetWidth < 550) {
+                        el.style.setProperty('top', 'auto', 'important');
+                        el.style.setProperty('bottom', '24px', 'important');
+                        el.style.setProperty('right', '24px', 'important');
+                      }
+                    }
+                  });
+                };
+                setInterval(repositionAds, 500);
+                window.addEventListener('load', repositionAds);
+              }
+            `,
           }}
         />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
