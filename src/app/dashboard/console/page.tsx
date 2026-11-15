@@ -102,7 +102,10 @@ export default function DedicatedConsolePage() {
         if (!term) return;
 
         const serverParam = serverInfo.id ? `&serverId=${encodeURIComponent(serverInfo.id)}` : '';
-        const sinceParam = lastTimestampRef.current ? `&since=${encodeURIComponent(lastTimestampRef.current)}` : '';
+        const sinceParam =
+          lastTimestampRef.current && writtenLogIdsRef.current.size > 0
+            ? `&since=${encodeURIComponent(lastTimestampRef.current)}`
+            : '';
         const res = await fetch(`/api/server/console?limit=150${serverParam}${sinceParam}`);
         if (!res.ok) return;
 
@@ -159,6 +162,7 @@ export default function DedicatedConsolePage() {
       if (current === 'starting') {
         term.clear();
         writtenLogIdsRef.current.clear();
+        lastTimestampRef.current = null;
         term.writeln(`${TERMINAL_PRELUDE}\u001b[1m\u001b[33mServer marked as starting...\u001b[0m`);
       } else if (current === 'online') {
         term.writeln(`${TERMINAL_PRELUDE}\u001b[1m\u001b[32mServer marked as running...\u001b[0m`);
@@ -287,34 +291,6 @@ export default function DedicatedConsolePage() {
     };
   }, []);
 
-  // Stream new logs to xterm without clearing history
-  useEffect(() => {
-    const term = terminalInstanceRef.current;
-    if (!term || !isTerminalReady) return;
-
-    if (!logs || logs.length === 0) {
-      if (serverInfo.status === 'offline') {
-        term.clear();
-        writtenLogIdsRef.current.clear();
-        term.writeln(`${TERMINAL_PRELUDE}\u001b[90mServer marked as offline. Console ready for fresh startup.\u001b[0m\r\n`);
-      }
-      return;
-    }
-
-    let wroteAny = false;
-    for (const log of logs) {
-      const logKey = log.id || `${log.timestamp}-${log.message}`;
-      if (!writtenLogIdsRef.current.has(logKey)) {
-        writtenLogIdsRef.current.add(logKey);
-        term.writeln(formatMinecraftLog(log.message));
-        wroteAny = true;
-      }
-    }
-
-    if (wroteAny) {
-      term.scrollToBottom();
-    }
-  }, [logs, isTerminalReady, serverInfo.status]);
 
   // Fit terminal when container layout changes or toggles fullscreen
   useEffect(() => {
@@ -439,6 +415,7 @@ export default function DedicatedConsolePage() {
   const handleClearLogs = () => {
     clearLogs();
     writtenLogIdsRef.current.clear();
+    lastTimestampRef.current = null;
     if (terminalInstanceRef.current) {
       terminalInstanceRef.current.clear();
       terminalInstanceRef.current.writeln(

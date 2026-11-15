@@ -13,6 +13,7 @@ import struct
 import subprocess
 import urllib.request
 import urllib.error
+import threading
 
 # Default Configuration
 CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "agent.json")
@@ -25,9 +26,11 @@ config = {
     "rconPort": 25575,
     "rconPassword": "334001",
     "heartbeatInterval": 3,
-    "commandPollInterval": 0.5,
-    "logPollInterval": 0.8,
+    "commandPollInterval": 0.25,
+    "logPollInterval": 0.5,
 }
+
+log_lock = threading.Lock()
 
 if os.path.exists(CONFIG_FILE):
     try:
@@ -176,7 +179,7 @@ def ensure_rcon_configured():
         "enable-rcon": "true",
         "rcon.port": rcon_port,
         "rcon.password": rcon_pwd,
-        "broadcast-rcon-to-ops": "true"
+        "broadcast-rcon-to-ops": "false"
     }
 
     try:
@@ -339,58 +342,59 @@ def sync_logs():
     if not os.path.exists(log_file):
         return
 
-    try:
-        file_size = os.path.getsize(log_file)
-        if log_file_pos > file_size:
-            log_file_pos = 0
+    with log_lock:
+        try:
+            file_size = os.path.getsize(log_file)
+            if log_file_pos > file_size:
+                log_file_pos = 0
 
-        with open(log_file, "r", encoding="utf-8", errors="ignore") as f:
-            f.seek(log_file_pos)
-            new_lines = f.readlines()
-            log_file_pos = f.tell()
+            with open(log_file, "r", encoding="utf-8", errors="ignore") as f:
+                f.seek(log_file_pos)
+                new_lines = f.readlines()
+                log_file_pos = f.tell()
 
-        if new_lines:
-            # Instant boot & shutdown detection (Pterodactyl-style responsiveness)
-            for line in new_lines:
-                raw_check = line.strip()
-                if "Done (" in raw_check or "For help, type \"help\"" in raw_check or "playit.gg: tunnel setup" in raw_check:
-                    current_status = "online"
-                    transition_start_time = 0
-                    send_heartbeat(forced_status="online")
-                    break
-                elif "Stopping server" in raw_check or "Closing Server" in raw_check:
-                    current_status = "stopping"
-                    transition_start_time = time.time()
-                    send_heartbeat(forced_status="stopping")
-                    break
+            if new_lines:
+                # Instant boot & shutdown detection (Pterodactyl-style responsiveness)
+                for line in new_lines:
+                    raw_check = line.strip()
+                    if "Done (" in raw_check or "For help, type \"help\"" in raw_check or "playit.gg: tunnel setup" in raw_check:
+                        current_status = "online"
+                        transition_start_time = 0
+                        send_heartbeat(forced_status="online")
+                        break
+                    elif "Stopping server" in raw_check or "Closing Server" in raw_check:
+                        current_status = "stopping"
+                        transition_start_time = time.time()
+                        send_heartbeat(forced_status="stopping")
+                        break
 
-            batch = []
-            for line in new_lines[-200:]:
-                raw = line.strip()
-                if not raw:
-                    continue
-                level = "INFO"
-                if "/WARN" in raw or "WARN" in raw:
-                    level = "WARN"
-                elif "/ERROR" in raw or "ERROR" in raw:
-                    level = "ERROR"
+                batch = []
+                for line in new_lines[-200:]:
+                    raw = line.strip()
+                    if not raw:
+                        continue
+                    level = "INFO"
+                    if "/WARN" in raw or "WARN" in raw:
+                        level = "WARN"
+                    elif "/ERROR" in raw or "ERROR" in raw:
+                        level = "ERROR"
 
-                ts = time.strftime("%H:%M:%S")
-                if raw.startswith("[") and "]" in raw:
-                    ts_cand = raw[1:raw.index("]")]
-                    if len(ts_cand) in (8, 12):
-                        ts = ts_cand
+                    ts = time.strftime("%H:%M:%S")
+                    if raw.startswith("[") and "]" in raw:
+                        ts_cand = raw[1:raw.index("]")]
+                        if len(ts_cand) in (8, 12):
+                            ts = ts_cand
 
-                batch.append({
-                    "timestamp": ts,
-                    "level": level,
-                    "message": raw[:1000],
-                })
+                    batch.append({
+                        "timestamp": ts,
+                        "level": level,
+                        "message": raw[:1000],
+                    })
 
-            if batch:
-                api_post("/api/agent/logs", {"logs": batch})
-    except Exception:
-        pass
+                if batch:
+                    api_post("/api/agent/logs", {"logs": batch})
+        except Exception:
+            pass
 
 def sync_players():
     """Syncs real player cache matching opanel approach (usercache, ops, whitelist, bans, playerdata, live RCON)."""
@@ -682,6 +686,10 @@ def poll_and_execute_commands():
                         }]
                     })
 
+            # Instantly flush Paper's output from latest.log so web terminal updates in real-time
+            time.sleep(0.08)
+            sync_logs()
+
         elif cmd_type == "WHITELIST":
             raw_target = payload.get("player") or payload.get("command", "").replace("whitelist add ", "").replace("whitelist remove ", "").strip()
             sub_action = payload.get("action", "add")
@@ -906,6 +914,16 @@ def poll_and_execute_commands():
         })
         print(f"[✓] Command {cmd_id} finished: {output[:120]}")
 
+def command_worker_loop():
+    print("[Agent] Fast-poll command worker thread active (sub-300ms latency).", flush=True)
+    poll_interval = max(0.2, min(float(config.get("commandPollInterval", 0.25)), 1.0))
+    while True:
+        try:
+            poll_and_execute_commands()
+        except Exception as e:
+            print(f"[!] Command poll error: {e}", flush=True)
+        time.sleep(poll_interval)
+
 def main():
     try:
         subprocess.run(["termux-wake-lock"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -914,7 +932,11 @@ def main():
 
     ensure_rcon_configured()
 
-    print("[Agent] Polling loop running. Press Ctrl+C to stop.")
+    # Launch dedicated command worker thread IMMEDIATELY on boot
+    cmd_thread = threading.Thread(target=command_worker_loop, daemon=True, name="KryinCommandWorker")
+    cmd_thread.start()
+
+    print("[Agent] Polling loop running. Press Ctrl+C to stop.", flush=True)
     send_heartbeat()
     sync_logs()
     sync_players()
@@ -928,7 +950,7 @@ def main():
             send_heartbeat()
             last_hb = now
 
-        if now - last_log_sync >= config.get("logPollInterval", 0.6):
+        if now - last_log_sync >= config.get("logPollInterval", 0.5):
             sync_logs()
             last_log_sync = now
 
@@ -936,8 +958,7 @@ def main():
             sync_players()
             last_player_time = now
 
-        poll_and_execute_commands()
-        time.sleep(config.get("commandPollInterval", 0.5))
+        time.sleep(0.15)
 
 if __name__ == "__main__":
     try:
