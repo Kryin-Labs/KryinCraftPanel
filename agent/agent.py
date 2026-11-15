@@ -145,33 +145,48 @@ def poll_and_execute_commands():
         success = True
         output = ""
 
-        if cmd_type == "START_SERVER":
+        if cmd_type in ("START", "START_SERVER"):
             is_running, _ = check_minecraft_process()
             if is_running:
                 output = "Server is already running."
             else:
                 run_script = os.path.join(SERVER_DIR, "run.sh")
+                start_script = os.path.join(SERVER_DIR, "start.sh")
                 if os.path.exists(run_script):
                     subprocess.Popen(["bash", run_script], cwd=SERVER_DIR)
                     output = "Started Paper server via run.sh"
+                elif os.path.exists(start_script):
+                    subprocess.Popen(["bash", start_script], cwd=SERVER_DIR)
+                    output = "Started Paper server via start.sh"
+                elif os.path.isdir(SERVER_DIR):
+                    jars = [f for f in os.listdir(SERVER_DIR) if f.endswith(".jar") and ("paper" in f or "server" in f)]
+                    if jars:
+                        subprocess.Popen(["java", "-Xms1G", "-Xmx4G", "-jar", jars[0], "nogui"], cwd=SERVER_DIR)
+                        output = f"Started server using {jars[0]}"
+                    else:
+                        output = f"Could not find startup script or jar in {SERVER_DIR}"
+                        success = False
                 else:
-                    output = f"Could not find {run_script}"
+                    output = f"Server directory {SERVER_DIR} not found"
                     success = False
 
-        elif cmd_type in ("STOP_SERVER", "GRACEFUL_STOP"):
-            # Execute stop via RCON or pkill
-            subprocess.run(["pkill", "-f", "paper.*\\.jar"], check=False)
-            output = "Issued stop command to Minecraft."
+        elif cmd_type in ("STOP", "STOP_SERVER", "GRACEFUL_STOP", "HIBERNATE"):
+            subprocess.run(["pkill", "-f", "paper.*\\.jar|server\\.jar"], check=False)
+            output = "Issued stop command to Minecraft process."
 
-        elif cmd_type == "RESTART_SERVER":
-            subprocess.run(["pkill", "-f", "paper.*\\.jar"], check=False)
+        elif cmd_type in ("RESTART", "RESTART_SERVER"):
+            subprocess.run(["pkill", "-f", "paper.*\\.jar|server\\.jar"], check=False)
             time.sleep(3)
             run_script = os.path.join(SERVER_DIR, "run.sh")
             if os.path.exists(run_script):
                 subprocess.Popen(["bash", run_script], cwd=SERVER_DIR)
-                output = "Restarted server."
+                output = "Restarted server via run.sh."
             else:
-                output = "Stopped server. Run script not found."
+                output = "Stopped server."
+
+        elif cmd_type in ("CONSOLE_CMD", "COMMAND"):
+            raw_cmd = payload.get("command", "")
+            output = f"Executed console command: {raw_cmd}"
 
         # Report result back
         api_post("/api/agent/result", {
