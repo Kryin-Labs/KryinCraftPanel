@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import {
   ServerInfo,
+  ServerStatus,
   ServerSummary,
   ServerIpEndpoint,
   HardwareMetrics,
@@ -99,6 +100,10 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(initialAuditLogs);
   const [tunnel] = useState<TunnelConfig>(tunnelInfo);
   const [isLiveDbConnected, setIsLiveDbConnected] = useState<boolean>(false);
+  const [pendingTransition, setPendingTransition] = useState<{
+    type: 'starting' | 'stopping';
+    startedAt: number;
+  } | null>(null);
 
   // Fast hydrate from localStorage cache immediately on mount (0ms instant render)
   useEffect(() => {
@@ -155,11 +160,34 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
           if (!activeServerId) {
             setActiveServerId(data.server.id);
           }
+
+          let currentStatus = (data.server.status as ServerStatus) || 'offline';
+          if (pendingTransition) {
+            const elapsed = Date.now() - pendingTransition.startedAt;
+            if (pendingTransition.type === 'starting') {
+              if (currentStatus === 'online') {
+                setPendingTransition(null);
+              } else if (elapsed < 90000) {
+                currentStatus = 'starting';
+              } else {
+                setPendingTransition(null);
+              }
+            } else if (pendingTransition.type === 'stopping') {
+              if (currentStatus === 'offline') {
+                setPendingTransition(null);
+              } else if (elapsed < 60000) {
+                currentStatus = 'stopping';
+              } else {
+                setPendingTransition(null);
+              }
+            }
+          }
+
           const updatedServerInfo: ServerInfo = {
             ...serverInfo,
             id: data.server.id,
             name: data.server.name || '',
-            status: data.server.status,
+            status: currentStatus,
             pid: data.server.pid,
             device: data.server.device || 'Indian Node',
             deviceConnected: devConn,
@@ -455,18 +483,21 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
   };
 
   const startServer = async () => {
+    setPendingTransition({ type: 'starting', startedAt: Date.now() });
     setServerInfo((prev) => ({ ...prev, status: 'starting' }));
     await dispatchServerCommand('START');
     addAudit('SERVER_START', serverInfo.name || 'Paper Server', 'Dispatched START signal to node agent');
   };
 
   const stopServer = async () => {
+    setPendingTransition({ type: 'stopping', startedAt: Date.now() });
     setServerInfo((prev) => ({ ...prev, status: 'stopping' }));
     await dispatchServerCommand('STOP');
     addAudit('SERVER_STOP', serverInfo.name || 'Paper Server', 'Dispatched STOP signal to node agent');
   };
 
   const restartServer = async () => {
+    setPendingTransition({ type: 'starting', startedAt: Date.now() });
     setServerInfo((prev) => ({ ...prev, status: 'stopping' }));
     await dispatchServerCommand('RESTART');
     addAudit('SERVER_RESTART', serverInfo.name || 'Paper Server', 'Dispatched RESTART signal to node agent');
@@ -606,6 +637,7 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
 
   const saveFileContent = async (path: string, content: string) => {
     setFileContents((prev) => ({ ...prev, [path]: content }));
+    await dispatchServerCommand('SAVE_FILE', { path, content });
     addAudit('FILE_SAVE', path, `Saved file (${content.length} characters)`);
   };
 

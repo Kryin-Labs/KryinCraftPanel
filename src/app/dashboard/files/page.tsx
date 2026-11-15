@@ -50,12 +50,17 @@ export default function FileManagerPage() {
   };
 
   const handleSaveEditor = async () => {
-    if (!editingFile) return;
+    if (!editingFile || isSaving) return;
     setIsSaving(true);
-    await saveFileContent(editingFile.path, editingFile.content);
-    setIsSaving(false);
-    showNotice(`Successfully saved ${editingFile.name}.`);
-    setEditingFile(null);
+    try {
+      await saveFileContent(editingFile.path, editingFile.content);
+      showNotice(`Successfully saved ${editingFile.name} to server disk.`);
+      setEditingFile(null);
+    } catch (err: any) {
+      showNotice(`Failed to save ${editingFile.name}: ${err?.message || 'Error'}`);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleCreateFolder = (e: React.FormEvent) => {

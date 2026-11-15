@@ -162,15 +162,36 @@ def read_server_properties():
             print(f"[!] Warning reading server.properties: {e}")
     return props
 
-def send_heartbeat():
+def check_port_open(port=25565):
+    """Test if Minecraft server port is actively listening and accepting connections."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(0.6)
+        res = s.connect_ex(('127.0.0.1', port))
+        s.close()
+        return res == 0
+    except Exception:
+        return False
+
+def send_heartbeat(forced_status=None):
     is_mc_running, pid = check_minecraft_process()
     total_ram, used_ram = get_ram_usage()
     props = read_server_properties()
+    server_port = props.get("server-port", 25565)
+
+    if forced_status:
+        status = forced_status
+    elif is_mc_running:
+        # If process is running, verify if port is actively open and ready
+        is_ready = check_port_open(server_port)
+        status = "online" if is_ready else "starting"
+    else:
+        status = "offline"
 
     data = {
-        "status": "online" if is_mc_running else "offline",
+        "status": status,
         "pid": pid,
-        "tps": 20.0 if is_mc_running else 0.0,
+        "tps": 20.0 if status == "online" else (10.0 if status == "starting" else 0.0),
         "uptime_seconds": 0,
         "local_ip": get_local_ip(),
         "online_players": 0,
@@ -180,7 +201,7 @@ def send_heartbeat():
     if "error" in res:
         print(f"[!] Heartbeat error: {res['error']}")
     else:
-        status_str = f"ONLINE (PID {pid}, Max Players: {props.get('max-players', 20)})" if is_mc_running else "OFFLINE (Standby)"
+        status_str = f"{status.upper()} (PID {pid}, Port: {server_port}, Max Players: {props.get('max-players', 20)})"
         print(f"[✓] Heartbeat sent: Minecraft is {status_str}")
 
 def sync_logs():
@@ -195,8 +216,9 @@ def sync_logs():
         if log_file_pos > file_size:
             log_file_pos = 0
 
-        if log_file_pos == 0 and file_size > 15000:
-            log_file_pos = max(0, file_size - 8000)
+        # Load recent logs on startup so console has startup context
+        if log_file_pos == 0 and file_size > 35000:
+            log_file_pos = max(0, file_size - 35000)
 
         with open(log_file, "r", encoding="utf-8", errors="ignore") as f:
             f.seek(log_file_pos)
@@ -205,14 +227,14 @@ def sync_logs():
 
         if new_lines:
             batch = []
-            for line in new_lines[-50:]:
+            for line in new_lines[-200:]:
                 raw = line.strip()
                 if not raw:
                     continue
                 level = "INFO"
-                if "/WARN" in raw:
+                if "/WARN" in raw or "WARN" in raw:
                     level = "WARN"
-                elif "/ERROR" in raw:
+                elif "/ERROR" in raw or "ERROR" in raw:
                     level = "ERROR"
 
                 ts = time.strftime("%H:%M:%S")
@@ -306,6 +328,7 @@ def poll_and_execute_commands():
             if is_running:
                 output = "Server is already running."
             else:
+                send_heartbeat(forced_status="starting")
                 run_script = os.path.join(SERVER_DIR, "run.sh")
                 start_script = os.path.join(SERVER_DIR, "start.sh")
                 if os.path.exists(run_script):
@@ -327,16 +350,25 @@ def poll_and_execute_commands():
                     success = False
 
         elif cmd_type in ("STOP", "STOP_SERVER", "GRACEFUL_STOP", "HIBERNATE"):
+            send_heartbeat(forced_status="stopping")
             subprocess.run(["pkill", "-f", "paper.*\\.jar|server\\.jar"], check=False)
+            time.sleep(1.5)
+            send_heartbeat(forced_status="offline")
             output = "Issued stop command to Minecraft process."
 
         elif cmd_type in ("RESTART", "RESTART_SERVER"):
+            send_heartbeat(forced_status="stopping")
             subprocess.run(["pkill", "-f", "paper.*\\.jar|server\\.jar"], check=False)
-            time.sleep(3)
+            time.sleep(2.5)
+            send_heartbeat(forced_status="starting")
             run_script = os.path.join(SERVER_DIR, "run.sh")
+            start_script = os.path.join(SERVER_DIR, "start.sh")
             if os.path.exists(run_script):
                 subprocess.Popen(["bash", run_script], cwd=SERVER_DIR)
                 output = "Restarted server via run.sh."
+            elif os.path.exists(start_script):
+                subprocess.Popen(["bash", start_script], cwd=SERVER_DIR)
+                output = "Restarted server via start.sh."
             else:
                 output = "Stopped server."
 
@@ -372,6 +404,26 @@ def poll_and_execute_commands():
                 except Exception as e:
                     output = f"Failed to save server.properties: {e}"
                     success = False
+
+        elif cmd_type == "SAVE_FILE":
+            rel_path = payload.get("path", "").lstrip("/\\")
+            content = payload.get("content", "")
+            target_path = os.path.abspath(os.path.join(SERVER_DIR, rel_path))
+            server_root = os.path.abspath(SERVER_DIR)
+            if target_path.startswith(server_root):
+                try:
+                    os.makedirs(os.path.dirname(target_path), exist_ok=True)
+                    temp_path = f"{target_path}.tmp.{int(time.time())}"
+                    with open(temp_path, "w", encoding="utf-8") as f:
+                        f.write(content)
+                    os.replace(temp_path, target_path)
+                    output = f"Safely wrote {len(content)} characters to {rel_path}"
+                except Exception as e:
+                    output = f"Failed to save file: {e}"
+                    success = False
+            else:
+                output = "Security error: File path outside server directory."
+                success = False
 
         # Report result back
         api_post("/api/agent/result", {

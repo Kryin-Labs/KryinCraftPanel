@@ -33,13 +33,24 @@ export default function DedicatedConsolePage() {
   const [isSending, setIsSending] = useState(false);
   const [activeTab, setActiveTab] = useState<'paper' | 'world' | 'players' | 'network'>('paper');
 
-  const consoleEndRef = useRef<HTMLDivElement>(null);
+  const terminalContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (autoScroll) {
-      consoleEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (autoScroll && terminalContainerRef.current) {
+      terminalContainerRef.current.scrollTop = terminalContainerRef.current.scrollHeight;
     }
   }, [logs, autoScroll]);
+
+  const handleContainerScroll = () => {
+    if (!terminalContainerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = terminalContainerRef.current;
+    const isAtBottom = scrollHeight - scrollTop - clientHeight < 60;
+    if (!isAtBottom && autoScroll) {
+      setAutoScroll(false);
+    } else if (isAtBottom && !autoScroll) {
+      setAutoScroll(true);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -185,7 +196,11 @@ export default function DedicatedConsolePage() {
         </div>
 
         {/* Scrollable Terminal Output Window (high contrast terminal interior) */}
-        <div className="p-4 sm:p-5 bg-[#0e1117] font-mono text-xs overflow-y-auto h-[540px] space-y-1.5 leading-relaxed select-text">
+        <div
+          ref={terminalContainerRef}
+          onScroll={handleContainerScroll}
+          className="p-4 sm:p-5 bg-[#0e1117] font-mono text-xs overflow-y-auto max-h-[70vh] min-h-[520px] space-y-1.5 leading-relaxed select-text"
+        >
           {serverInfo.status === 'offline' ? (
             <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-3">
               <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-500">
@@ -238,7 +253,6 @@ export default function DedicatedConsolePage() {
               );
             })
           )}
-          <div ref={consoleEndRef} />
         </div>
 
         {/* Bottom Command Composer Form */}

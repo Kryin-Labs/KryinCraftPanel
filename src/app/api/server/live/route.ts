@@ -129,7 +129,7 @@ export async function GET(req: Request) {
         .select('id, timestamp, level, message, created_at')
         .eq('server_id', server.id)
         .order('created_at', { ascending: false })
-        .limit(80);
+        .limit(400);
 
       logs = (recentLogs || []).reverse();
     }

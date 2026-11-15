@@ -39,6 +39,7 @@ const ALLOWED_COMMANDS = new Set([
   'GAMEMODE',
   'SAVE_PROPERTIES',
   'SAVE_SETTINGS',
+  'SAVE_FILE',
 ]);
 
 export async function POST(req: Request) {

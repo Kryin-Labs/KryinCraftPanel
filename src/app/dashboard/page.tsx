@@ -83,18 +83,6 @@ export default function DashboardOverviewPage() {
           },
         ];
 
-  const primaryEndpoint =
-    endpoints.find((e) => (e.type === 'java' || e.type === 'bedrock') && e.isPrimary) ||
-    endpoints.find((e) => e.type !== 'lan') ||
-    endpoints[0];
-
-  const officialPublicAddress =
-    primaryEndpoint && primaryEndpoint.host
-      ? primaryEndpoint.port && primaryEndpoint.port !== 25565 && !primaryEndpoint.host.includes(':')
-        ? `${primaryEndpoint.host}:${primaryEndpoint.port}`
-        : primaryEndpoint.host
-      : serverInfo.publicTunnelJava || 'scooter-stuffing.tun.ply.gg';
-
   const copyEndpointAddress = (id: string, text: string) => {
     if (!text) return;
     navigator.clipboard.writeText(text);
@@ -205,40 +193,64 @@ export default function DashboardOverviewPage() {
     (metrics && metrics.totalRamMb > 0 && metrics.usedRamMb >= metrics.totalRamMb * 0.98);
   const isHibernate = serverInfo.status === 'hibernating';
   const isServerOnline = serverInfo.status === 'online';
-  const isStopped = !isServerOnline && !isHibernate && !isCrashed;
+  const isStarting = serverInfo.status === 'starting';
+  const isStopping = serverInfo.status === 'stopping';
+  const isStopped = !isServerOnline && !isHibernate && !isCrashed && !isStarting && !isStopping;
 
   // Banner color configuration according to server status:
-  // Green Online | Red Stopped | Yellow Hibernate | Red with Broken Heart for Crashed/RAM
+  // Green Online | Red Stopped | Yellow Hibernate | Red with Broken Heart for Crashed/RAM | Grey with moving animation for Starting/Stopping
   const bannerConfig = isCrashed
     ? {
         cardBorder: 'border-red-500 shadow-xl shadow-red-500/10',
-        bannerBg: 'bg-gradient-to-r from-red-600 via-rose-600 to-red-700 text-white',
-        badgeBg: 'bg-red-950/80 text-red-100 border-red-400',
-        statusLabel: 'CRITICAL CRASH / RAM OOM DETECTED',
+        bannerBg: 'bg-gradient-to-b from-red-600 via-rose-600 to-red-700 text-white',
+        statusLabel: 'CRITICAL CRASH / RAM OOM',
         icon: <HeartCrack className="w-4 h-4 text-red-200 animate-bounce" />,
+        subtext: 'Server process halted unexpectedly or out of memory',
+        isMoving: false,
+      }
+    : isStarting
+    ? {
+        cardBorder: 'border-slate-500 shadow-xl shadow-slate-500/10',
+        bannerBg: 'bg-gradient-to-b from-slate-700 via-zinc-700 to-slate-800 text-white',
+        statusLabel: 'STARTING UP...',
+        icon: <Loader2 className="w-4 h-4 animate-spin text-blue-200" />,
+        subtext: 'Launching Paper engine, loading world & waiting for server port...',
+        isMoving: true,
+      }
+    : isStopping
+    ? {
+        cardBorder: 'border-slate-600 shadow-xl shadow-slate-600/10',
+        bannerBg: 'bg-gradient-to-b from-slate-800 via-zinc-800 to-gray-900 text-white',
+        statusLabel: 'STOPPING...',
+        icon: <Loader2 className="w-4 h-4 animate-spin text-amber-200" />,
+        subtext: 'Saving world data and stopping Paper process...',
+        isMoving: true,
       }
     : isServerOnline
     ? {
         cardBorder: 'border-emerald-400 shadow-xl shadow-emerald-500/5',
-        bannerBg: 'bg-gradient-to-r from-emerald-600 via-green-600 to-teal-600 text-white',
-        badgeBg: 'bg-emerald-950/80 text-emerald-100 border-emerald-400',
+        bannerBg: 'bg-gradient-to-b from-emerald-600 via-green-600 to-emerald-700 text-white',
         statusLabel: 'SYSTEM ONLINE & RUNNING',
         icon: <span className="w-2.5 h-2.5 rounded-full bg-emerald-300 animate-pulse" />,
+        subtext: `Online ${serverInfo.onlinePlayers}/${serverInfo.maxPlayers} Players • Indian Node`,
+        isMoving: false,
       }
     : isHibernate
     ? {
         cardBorder: 'border-amber-400 shadow-xl shadow-amber-500/5',
-        bannerBg: 'bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 text-slate-950',
-        badgeBg: 'bg-amber-950/80 text-amber-200 border-amber-400',
+        bannerBg: 'bg-gradient-to-b from-amber-500 via-yellow-500 to-amber-600 text-slate-950',
         statusLabel: 'SMART HIBERNATION ACTIVE',
-        icon: <Moon className="w-3.5 h-3.5 text-amber-200" />,
+        icon: <Moon className="w-3.5 h-3.5 text-amber-950" />,
+        subtext: 'Standby mode • Server wakes instantly on join',
+        isMoving: false,
       }
     : {
         cardBorder: 'border-rose-400 shadow-xl shadow-rose-500/5',
-        bannerBg: 'bg-gradient-to-r from-rose-600 via-red-600 to-rose-700 text-white',
-        badgeBg: 'bg-rose-950/80 text-rose-100 border-rose-400',
+        bannerBg: 'bg-gradient-to-b from-rose-600 via-red-600 to-rose-700 text-white',
         statusLabel: 'SERVER STOPPED',
         icon: <span className="w-2.5 h-2.5 rounded-full bg-rose-300" />,
+        subtext: 'Server is currently offline • Ready to launch',
+        isMoving: false,
       };
 
   return (
@@ -265,74 +277,54 @@ export default function DashboardOverviewPage() {
         {/* 1. MAIN SERVER CARD: Behind Banner, Server Name, Status & Controls */}
         {/* ================================================================ */}
         <div className={`rounded-3xl bg-white border ${bannerConfig.cardBorder} shadow-sm overflow-hidden flex flex-col items-center text-center transition-all duration-300`}>
-          {/* BEHIND STATUS BANNER */}
-          <div className={`w-full py-2.5 px-4 sm:px-6 ${bannerConfig.bannerBg} flex items-center justify-between text-xs font-bold font-mono tracking-wider shadow-inner`}>
-            <div className="flex items-center gap-2">
-              {bannerConfig.icon}
-              <span className="uppercase text-[11px] tracking-widest">{bannerConfig.statusLabel}</span>
-            </div>
-            <span className="text-[10px] opacity-90 uppercase font-semibold">Indian Node</span>
-          </div>
+          {/* TOP HALF: STATUS COLOR COVERING ECB BACHE */}
+          <div className={`w-full ${bannerConfig.bannerBg} px-6 pt-5 pb-8 relative overflow-hidden flex flex-col items-center text-center transition-all duration-300`}>
+            {/* Animated moving shimmer when starting or stopping */}
+            {bannerConfig.isMoving && (
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-pulse pointer-events-none" />
+            )}
 
-          <div className="p-6 sm:p-8 w-full flex flex-col items-center text-center space-y-5">
-            {/* Centered Server Name & Node Tag */}
-            <div className="space-y-1">
+            {/* Top row with status badge & node tag */}
+            <div className="w-full flex items-center justify-between text-xs font-bold font-mono tracking-wider mb-4 opacity-95">
+              <div className="flex items-center gap-2 bg-black/25 backdrop-blur-xs px-3 py-1 rounded-full border border-white/20 text-white shadow-xs">
+                {bannerConfig.icon}
+                <span className="uppercase text-[11px] tracking-widest">{bannerConfig.statusLabel}</span>
+              </div>
+              <span className="text-[10px] uppercase font-bold tracking-wider bg-black/25 backdrop-blur-xs px-2.5 py-1 rounded-full border border-white/20 text-white">
+                Indian Node
+              </span>
+            </div>
+
+            {/* Centered Server Name & Dynamic Subtitle */}
+            <div className="space-y-1.5 z-10 py-1">
               <div className="flex items-center justify-center gap-2">
-                <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#1a1522]">
-                  {serverInfo.name || (isLoading ? 'Loading Server...' : 'Minecraft Server')}
+                <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white drop-shadow-md">
+                  {serverInfo.name || (isLoading ? 'Loading Server...' : 'ECB Bache')}
                 </h1>
                 <button
                   onClick={refreshStatus}
                   disabled={isRefreshing}
                   title="Instant live status sync"
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
+                  className="p-1.5 rounded-lg text-white/80 hover:text-white hover:bg-white/20 transition-colors cursor-pointer"
                 >
-                  <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-blue-600' : ''}`} />
+                  <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-white' : ''}`} />
                 </button>
               </div>
-              <p className="text-xs text-[#1a1522]/60 font-medium">
-                Node: <strong className="text-[#1a1522]">Indian Node</strong>
+              <p className="text-xs sm:text-sm text-white/90 font-medium">
+                {bannerConfig.subtext}
               </p>
-            </div>
 
-            {/* Primary Official Public Server IP (Join from Anywhere in the World) */}
-            <div className="w-full max-w-lg p-3 sm:p-3.5 rounded-2xl bg-blue-50/70 border border-blue-200/90 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5 min-w-0 text-left w-full sm:w-auto">
-                <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center flex-shrink-0 shadow-xs">
-                  <Globe className="w-4 h-4" />
+              {/* Moving progress indicator when starting/stopping */}
+              {bannerConfig.isMoving && (
+                <div className="w-48 h-1.5 bg-black/30 rounded-full mx-auto mt-3 overflow-hidden">
+                  <div className="h-full bg-blue-300 rounded-full animate-pulse w-3/4" />
                 </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-blue-800 bg-blue-100 px-2 py-0.5 rounded-full">
-                      Official Server Address
-                    </span>
-                    <span className="text-[10px] text-emerald-800 font-bold bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-300">
-                      ● Join From Anywhere
-                    </span>
-                  </div>
-                  <div className="text-xs sm:text-sm font-bold text-slate-900 font-mono truncate mt-0.5 select-all">
-                    {officialPublicAddress}
-                  </div>
-                </div>
-              </div>
-
-              <button
-                onClick={() => copyEndpointAddress('main-official-address', officialPublicAddress)}
-                className="w-full sm:w-auto px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer flex-shrink-0"
-              >
-                {copiedId === 'main-official-address' ? (
-                  <>
-                    <Check className="w-3.5 h-3.5" />
-                    <span>Copied!</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-3.5 h-3.5" />
-                    <span>Copy IP</span>
-                  </>
-                )}
-              </button>
+              )}
             </div>
+          </div>
+
+          {/* BOTTOM HALF: CLEAN WHITE BACKGROUND WITH CONTROLS & STATUS BADGES */}
+          <div className="p-6 sm:p-7 w-full flex flex-col items-center text-center space-y-5 bg-white">
 
             {/* Dual Status Bar: Device Connection & Minecraft Server State */}
             <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
@@ -417,7 +409,23 @@ export default function DashboardOverviewPage() {
 
           {/* Power Actions Hub */}
           <div className="flex flex-wrap items-center justify-center gap-2.5 pt-2">
-            {!isServerOnline ? (
+            {isStarting ? (
+              <button
+                disabled
+                className="px-5 py-2.5 rounded-xl bg-slate-700 text-white text-xs font-bold flex items-center gap-2 cursor-wait shadow-xs"
+              >
+                <Loader2 className="w-4 h-4 animate-spin text-blue-200" />
+                <span>Starting...</span>
+              </button>
+            ) : isStopping ? (
+              <button
+                disabled
+                className="px-5 py-2.5 rounded-xl bg-slate-700 text-white text-xs font-bold flex items-center gap-2 cursor-wait shadow-xs"
+              >
+                <Loader2 className="w-4 h-4 animate-spin text-amber-200" />
+                <span>Stopping...</span>
+              </button>
+            ) : !isServerOnline ? (
               <button
                 onClick={() => handleQuickAction('start')}
                 disabled={!isDeviceConnected}
@@ -443,20 +451,10 @@ export default function DashboardOverviewPage() {
               </button>
             )}
 
-            <button
-              onClick={() => handleQuickAction('hibernate')}
-              disabled={!isDeviceConnected || !isServerOnline}
-              className="px-4 py-2.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold flex items-center gap-1.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-              title="Hibernate server when idle"
-            >
-              <Moon className="w-4 h-4" />
-              <span>Hibernate</span>
-            </button>
-
             {isServerOnline && (
               <button
                 onClick={() => handleQuickAction('stop')}
-                disabled={!isDeviceConnected}
+                disabled={!isDeviceConnected || isStopping || isStarting}
                 className="px-4 py-2.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-bold flex items-center gap-1.5 transition-all"
                 title="Gracefully stop server"
               >
@@ -464,6 +462,16 @@ export default function DashboardOverviewPage() {
                 <span>Stop Server</span>
               </button>
             )}
+
+            <button
+              onClick={() => handleQuickAction('hibernate')}
+              disabled={!isDeviceConnected || !isServerOnline || isStopping || isStarting}
+              className="px-4 py-2.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold flex items-center gap-1.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Hibernate server when idle"
+            >
+              <Moon className="w-3.5 h-3.5" />
+              <span>Hibernate</span>
+            </button>
           </div>
         </div>
       </div>
