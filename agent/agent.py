@@ -458,7 +458,7 @@ def main():
 
         sync_players()
         poll_and_execute_commands()
-        time.sleep(config["commandPollInterval"])
+        time.sleep(config.get("commandPollInterval", 1.2))
 
 if __name__ == "__main__":
     try:

@@ -176,6 +176,13 @@ export async function POST(req: Request) {
       );
     }
 
+    // Instant state synchronization: update server status in DB so live polling never flashes stale state
+    if (normalizedCmd === 'START') {
+      await admin.from('servers').update({ status: 'starting' }).eq('id', targetServer.id);
+    } else if (normalizedCmd === 'STOP' || normalizedCmd === 'RESTART' || normalizedCmd === 'HIBERNATE') {
+      await admin.from('servers').update({ status: 'stopping' }).eq('id', targetServer.id);
+    }
+
     // 8. Log into audit_logs (fail-safe)
     try {
       await admin.from('audit_logs').insert({

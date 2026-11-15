@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import {
   ServerInfo,
   ServerStatus,
@@ -100,7 +100,7 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(initialAuditLogs);
   const [tunnel] = useState<TunnelConfig>(tunnelInfo);
   const [isLiveDbConnected, setIsLiveDbConnected] = useState<boolean>(false);
-  const [pendingTransition, setPendingTransition] = useState<{
+  const pendingTransitionRef = useRef<{
     type: 'starting' | 'stopping';
     startedAt: number;
   } | null>(null);
@@ -162,23 +162,24 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
           }
 
           let currentStatus = (data.server.status as ServerStatus) || 'offline';
-          if (pendingTransition) {
-            const elapsed = Date.now() - pendingTransition.startedAt;
-            if (pendingTransition.type === 'starting') {
+          const pending = pendingTransitionRef.current;
+          if (pending) {
+            const elapsed = Date.now() - pending.startedAt;
+            if (pending.type === 'starting') {
               if (currentStatus === 'online') {
-                setPendingTransition(null);
+                pendingTransitionRef.current = null;
               } else if (elapsed < 90000) {
                 currentStatus = 'starting';
               } else {
-                setPendingTransition(null);
+                pendingTransitionRef.current = null;
               }
-            } else if (pendingTransition.type === 'stopping') {
+            } else if (pending.type === 'stopping') {
               if (currentStatus === 'offline') {
-                setPendingTransition(null);
+                pendingTransitionRef.current = null;
               } else if (elapsed < 60000) {
                 currentStatus = 'stopping';
               } else {
-                setPendingTransition(null);
+                pendingTransitionRef.current = null;
               }
             }
           }
@@ -483,21 +484,21 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
   };
 
   const startServer = async () => {
-    setPendingTransition({ type: 'starting', startedAt: Date.now() });
+    pendingTransitionRef.current = { type: 'starting', startedAt: Date.now() };
     setServerInfo((prev) => ({ ...prev, status: 'starting' }));
     await dispatchServerCommand('START');
     addAudit('SERVER_START', serverInfo.name || 'Paper Server', 'Dispatched START signal to node agent');
   };
 
   const stopServer = async () => {
-    setPendingTransition({ type: 'stopping', startedAt: Date.now() });
+    pendingTransitionRef.current = { type: 'stopping', startedAt: Date.now() };
     setServerInfo((prev) => ({ ...prev, status: 'stopping' }));
     await dispatchServerCommand('STOP');
     addAudit('SERVER_STOP', serverInfo.name || 'Paper Server', 'Dispatched STOP signal to node agent');
   };
 
   const restartServer = async () => {
-    setPendingTransition({ type: 'starting', startedAt: Date.now() });
+    pendingTransitionRef.current = { type: 'starting', startedAt: Date.now() };
     setServerInfo((prev) => ({ ...prev, status: 'stopping' }));
     await dispatchServerCommand('RESTART');
     addAudit('SERVER_RESTART', serverInfo.name || 'Paper Server', 'Dispatched RESTART signal to node agent');
