@@ -27,6 +27,7 @@ import {
   RefreshCw,
   Loader2,
   HeartCrack,
+  ArrowRight,
 } from 'lucide-react';
 import { useServerStore } from '@/lib/serverStore';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -475,6 +476,38 @@ export default function DashboardOverviewPage() {
           </div>
         </div>
       </div>
+
+        {/* ================================================================ */}
+        {/* 1.5 LIVE PUBLIC PROTOCOL REACHABILITY (Raw Minecraft SLP Probe)  */}
+        {/* ================================================================ */}
+        <div className="p-4 sm:p-5 rounded-2xl bg-white border border-[#1a1522]/10 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0 border border-blue-200">
+              <Activity className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-bold text-[#1a1522]">Live Public Socket Checker</span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                  Real Minecraft Handshake
+                </span>
+              </div>
+              <p className="text-[11px] text-[#1a1522]/60 truncate mt-0.5">
+                Probes public tunnel <code className="font-mono font-bold text-[#1a1522]">{serverInfo.publicTunnelJava || 'scooter-stuffing.tun.ply.gg:25565'}</code> without running your PC game.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-start sm:self-auto flex-shrink-0">
+            <Link
+              href="/dashboard/checker"
+              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+            >
+              <span>Open Full Checker</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+        </div>
 
         {/* ================================================================ */}
         {/* 2. MULTIPLE IP ENDPOINTS MANAGER (Saved Directly in Database)    */}

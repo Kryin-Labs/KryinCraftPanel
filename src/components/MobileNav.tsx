@@ -11,6 +11,7 @@ import {
   Sliders,
   ArrowLeft,
   LogOut,
+  Activity,
 } from 'lucide-react';
 import { useServerStore } from '@/lib/serverStore';
 import { createClient } from '@/lib/supabase/client';
@@ -18,6 +19,7 @@ import { createClient } from '@/lib/supabase/client';
 const navItems = [
   { name: 'Overview', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Console', href: '/dashboard/console', icon: Terminal },
+  { name: 'Ping', href: '/dashboard/checker', icon: Activity },
   { name: 'Players', href: '/dashboard/players', icon: Users },
   { name: 'Files', href: '/dashboard/files', icon: FolderTree },
   { name: 'Settings', href: '/dashboard/settings', icon: Sliders },
