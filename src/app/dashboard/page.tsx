@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { useServerStore } from '@/lib/serverStore';
 import { StatusBadge } from '@/components/StatusBadge';
+import { AdSidebar } from '@/components/AdBanner';
 
 export default function DashboardOverviewPage() {
   const {
@@ -83,8 +84,10 @@ export default function DashboardOverviewPage() {
   const capacityPercent = Math.min(100, Math.round((onlinePlayers.length / serverInfo.maxPlayers) * 100));
 
   return (
-    <div className="space-y-6 font-mono text-[#1a1522]">
-      {/* Action Notification Toast */}
+    <div className="flex flex-col xl:flex-row items-start gap-6 font-mono text-[#1a1522]">
+      {/* Left Column: Primary Dashboard Operations */}
+      <div className="flex-1 min-w-0 space-y-6 w-full">
+        {/* Action Notification Toast */}
       {actionNotice && (
         <div className="p-3.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs font-medium flex items-center justify-between shadow-xs animate-fade-in">
           <span className="flex items-center gap-2">
@@ -504,7 +507,7 @@ export default function DashboardOverviewPage() {
               </div>
               <div className="flex items-center justify-between py-1.5 border-b border-[#1a1522]/8">
                 <span className="text-[#1a1522]/60">Compute Core</span>
-                <span className="font-bold text-[#1a1522]">AMD EPYC 9654 (4.4 GHz)</span>
+                <span className="font-bold text-[#1a1522]">Octa-Core Kryo ARM64 (Node 01)</span>
               </div>
               <div className="flex items-center justify-between py-1.5 border-b border-[#1a1522]/8">
                 <span className="text-[#1a1522]/60">Network Uplink</span>
@@ -534,6 +537,10 @@ export default function DashboardOverviewPage() {
           </div>
         </div>
       </div>
+      </div>
+
+      {/* Right Column: Dedicated Ad & Sponsor Sidebar */}
+      <AdSidebar />
     </div>
   );
 }
