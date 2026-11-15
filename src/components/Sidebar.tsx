@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useServerStore } from '@/lib/serverStore';
 import { StatusBadge } from './StatusBadge';
+import { ServerSwitcher } from './ServerSwitcher';
 import { createClient } from '@/lib/supabase/client';
 
 const navItems = [
@@ -63,9 +64,9 @@ export const Sidebar: React.FC = () => {
 
   return (
     <aside className="hidden lg:flex flex-col w-64 bg-white border-r border-[#1a1522]/10 p-4 justify-between fixed top-0 left-0 bottom-0 z-30 select-none font-mono text-[#1a1522] shadow-[1px_0_0_rgba(0,0,0,0.02)] overflow-y-auto">
-      <div className="space-y-5">
+      <div className="space-y-4">
         {/* Brand / Logo */}
-        <Link href="/" className="flex items-center gap-2.5 px-2 py-2 group">
+        <Link href="/" className="flex items-center gap-2.5 px-2 py-1.5 group">
           <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shadow-xs group-hover:bg-blue-700 transition-colors">
             <svg width="18" height="18" viewBox="0 0 32 32" fill="none">
               <path d="M16 2L3 9.5V22.5L16 30L29 22.5V9.5L16 2Z" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round"/>
@@ -80,14 +81,20 @@ export const Sidebar: React.FC = () => {
                 PRO
               </span>
             </div>
-            <p className="text-[10px] text-[#1a1522]/50 truncate font-mono">Mumbai Node 01</p>
+            <p className="text-[10px] text-[#1a1522]/50 truncate font-mono">Cloud Portal</p>
           </div>
         </Link>
+
+        {/* Multi-Device Server Selector */}
+        <ServerSwitcher />
 
         {/* Server State Quick Card */}
         <div className="p-3.5 rounded-xl bg-[#f8f9fd] border border-[#1a1522]/10 space-y-2.5">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] text-[#1a1522]/60 font-semibold uppercase tracking-wider">Server Status</span>
+            <div className="min-w-0 pr-2">
+              <span className="text-[11px] font-bold text-[#1a1522] block truncate">{serverInfo.name}</span>
+              <span className="text-[9px] text-[#1a1522]/50 block truncate">{serverInfo.device || 'Termux Node'}</span>
+            </div>
             <StatusBadge status={serverInfo.status} size="sm" />
           </div>
 

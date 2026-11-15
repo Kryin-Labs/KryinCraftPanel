@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import {
   ServerInfo,
+  ServerSummary,
   HardwareMetrics,
   MetricHistoryPoint,
   MinecraftPlayer,
@@ -29,6 +30,11 @@ import { parseMinecraftStats } from './minecraftAssets';
 
 interface ServerStoreContextType {
   serverInfo: ServerInfo;
+  serversList: ServerSummary[];
+  activeServerId: string | null;
+  setActiveServerId: (id: string) => void;
+  refreshServers: () => Promise<void>;
+  addServer: (name: string, deviceName?: string) => Promise<{ success: boolean; agentToken?: string; server?: any; error?: string }>;
   metrics: HardwareMetrics;
   history: MetricHistoryPoint[];
   players: MinecraftPlayer[];
@@ -68,6 +74,18 @@ const ServerStoreContext = createContext<ServerStoreContextType | null>(null);
 export function ServerStoreProvider({ children }: { children: React.ReactNode }) {
   const supabase = createClient();
 
+  const [serversList, setServersList] = useState<ServerSummary[]>([
+    {
+      id: initialServerInfo.id,
+      name: initialServerInfo.name,
+      status: initialServerInfo.status,
+      device: initialServerInfo.device,
+      localIp: initialServerInfo.localIp,
+      publicTunnelJava: initialServerInfo.publicTunnelJava,
+    }
+  ]);
+  const [activeServerId, setActiveServerId] = useState<string | null>(null);
+
   const [serverInfo, setServerInfo] = useState<ServerInfo>(initialServerInfo);
   const [metrics, setMetrics] = useState<HardwareMetrics>(initialMetrics);
   const [history, setHistory] = useState<MetricHistoryPoint[]>(metricHistory);
@@ -86,13 +104,21 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
 
     async function syncLiveServerData() {
       try {
-        const res = await fetch('/api/server/live');
+        const queryParam = activeServerId ? `?serverId=${encodeURIComponent(activeServerId)}` : '';
+        const res = await fetch(`/api/server/live${queryParam}`);
         if (!res.ok) return;
         const data = await res.json();
         if (!data || !isMounted) return;
 
+        if (Array.isArray(data.servers) && data.servers.length > 0) {
+          setServersList(data.servers);
+        }
+
         if (data.server) {
           setIsLiveDbConnected(true);
+          if (!activeServerId) {
+            setActiveServerId(data.server.id);
+          }
           setServerInfo((prev) => ({
             ...prev,
             id: data.server.id,
@@ -202,7 +228,50 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
       isMounted = false;
       clearInterval(interval);
     };
-  }, []);
+  }, [activeServerId]);
+
+  const addServer = async (name: string, deviceName?: string) => {
+    try {
+      const res = await fetch('/api/servers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, device_name: deviceName }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        return { success: false, error: data.error || 'Failed to create server' };
+      }
+      if (data.server?.id) {
+        setActiveServerId(data.server.id);
+        setServersList((prev) => [
+          ...prev,
+          {
+            id: data.server.id,
+            name: data.server.name,
+            status: 'offline',
+            device: data.server.device_name,
+            localIp: data.server.local_ip,
+            publicTunnelJava: data.server.public_tunnel_java,
+          },
+        ]);
+      }
+      return { success: true, server: data.server, agentToken: data.agentToken };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  };
+
+  const refreshServers = async () => {
+    try {
+      const res = await fetch('/api/servers');
+      const data = await res.json();
+      if (res.ok && Array.isArray(data.servers)) {
+        setServersList(data.servers);
+      }
+    } catch (e) {
+      console.warn('Failed to refresh servers:', e);
+    }
+  };
 
   const addAudit = (action: string, target: string, details: string) => {
     const newAudit: AuditLog = {
@@ -224,7 +293,7 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          server_id: serverInfo.id,
+          server_id: activeServerId || serverInfo.id,
           command_type,
           payload,
         }),
@@ -507,6 +576,11 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
     <ServerStoreContext.Provider
       value={{
         serverInfo,
+        serversList,
+        activeServerId,
+        setActiveServerId,
+        addServer,
+        refreshServers,
         metrics,
         history,
         players,

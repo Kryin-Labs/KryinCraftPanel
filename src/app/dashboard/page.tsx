@@ -66,13 +66,13 @@ export default function DashboardOverviewPage() {
 
   const handleQuickAction = async (action: 'start' | 'restart' | 'stop' | 'hibernate') => {
     if (action === 'start') {
-      setActionNotice('Starting Paper server on Mumbai Node 01...');
+      setActionNotice(`Starting Paper server ${serverInfo.name}...`);
       await startServer();
     } else if (action === 'restart') {
-      setActionNotice('Gracefully restarting server and flushing chunks...');
+      setActionNotice(`Gracefully restarting ${serverInfo.name} and flushing chunks...`);
       await restartServer();
     } else if (action === 'stop') {
-      setActionNotice('Gracefully stopping server. World chunks safely saved to NVMe.');
+      setActionNotice(`Gracefully stopping ${serverInfo.name}. World chunks safely saved.`);
       await stopServer();
     } else if (action === 'hibernate') {
       setActionNotice('Server placed in smart low-power hibernation. Wakes on player join in <90s.');
@@ -117,7 +117,7 @@ export default function DashboardOverviewPage() {
           </div>
 
           <p className="text-xs text-[#1a1522]/60 flex flex-wrap items-center gap-2">
-            <span>Node: <strong className="text-[#1a1522]">Mumbai DC-1 (India)</strong></span>
+            <span>Node: <strong className="text-[#1a1522]">{serverInfo.device || 'Indian Node (Termux ARM64)'}</strong></span>
             <span>•</span>
             <span>Uptime: <strong className="text-[#1a1522]">{serverInfo.status === 'online' ? `${Math.floor(serverInfo.uptimeSeconds / 3600)}h ${Math.floor((serverInfo.uptimeSeconds % 3600) / 60)}m` : 'Offline'}</strong></span>
             <span>•</span>

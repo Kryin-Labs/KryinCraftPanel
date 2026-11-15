@@ -12,7 +12,7 @@ import {
 
 export const initialServerInfo: ServerInfo = {
   id: 'in-mumbai-01',
-  name: 'Kryin Paper Server',
+  name: 'ECB Bache',
   status: 'offline',
   pid: null,
   minecraftVersion: '1.21.4',
@@ -257,7 +257,7 @@ enable-query=false
 generator-settings={}
 enforce-secure-profile=false
 level-name=world
-motd=\\u00a7bKryin Paper Server \\u00a78[\\u00a7aIndia Node\\u00a78]
+motd=\\u00a7bECB Bache \\u00a78[\\u00a7aIndia Node\\u00a78]
 query.port=25565
 pvp=true
 generate-structures=true

@@ -17,22 +17,64 @@ function getAdminClient() {
   });
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const supabase = getAdminClient();
+    const { searchParams } = new URL(req.url);
+    const requestedServerId = searchParams.get('serverId');
 
-    // 1. Fetch server
-    const { data: server, error: serverError } = await supabase
+    // 1. Fetch all servers so the UI can populate the server switcher
+    const { data: allServers } = await supabase
       .from('servers')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+      .select('id, name, status, device_name, public_tunnel_java, local_ip, last_heartbeat, created_at')
+      .order('created_at', { ascending: true });
 
-    if (serverError || !server) {
+    let targetServerId = requestedServerId;
+    if (!targetServerId && allServers && allServers.length > 0) {
+      targetServerId = allServers[0].id;
+    }
+
+    // 2. Fetch active server
+    let server: any = null;
+    if (targetServerId) {
+      const { data: matchedServer } = await supabase
+        .from('servers')
+        .select('*')
+        .eq('id', targetServerId)
+        .single();
+      server = matchedServer;
+    }
+
+    if (!server) {
+      const { data: fallbackServer } = await supabase
+        .from('servers')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+      server = fallbackServer;
+    }
+
+    // Format server list with live freshness check
+    const formattedServers = (allServers || []).map((s: any) => {
+      const hbTime = s.last_heartbeat ? new Date(s.last_heartbeat).getTime() : 0;
+      const isFresh = Date.now() - hbTime < 90 * 1000;
+      return {
+        id: s.id,
+        name: s.name,
+        status: isFresh && s.status === 'online' ? 'online' : (isFresh ? s.status : 'offline'),
+        device: s.device_name || 'Termux ARM64 Node',
+        localIp: s.local_ip,
+        publicTunnelJava: s.public_tunnel_java,
+        lastHeartbeat: s.last_heartbeat,
+      };
+    });
+
+    if (!server) {
       return NextResponse.json({
         online: false,
         status: 'offline',
+        servers: formattedServers,
         server: null,
         metrics: null,
         logs: [],
@@ -73,6 +115,7 @@ export async function GET() {
     return NextResponse.json({
       online: isOnline,
       status: isOnline ? 'online' : (isHeartbeatFresh ? server.status : 'offline'),
+      servers: formattedServers,
       server: {
         id: server.id,
         name: server.name,

@@ -159,6 +159,16 @@ export interface TunnelConfig {
   };
 }
 
+export interface ServerSummary {
+  id: string;
+  name: string;
+  status: ServerStatus;
+  device?: string;
+  localIp?: string;
+  publicTunnelJava?: string | null;
+  lastHeartbeat?: string | null;
+}
+
 export interface ServerInfo {
   id: string;
   name: string;

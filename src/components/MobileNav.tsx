@@ -40,16 +40,21 @@ export const MobileNav: React.FC = () => {
     <div className="lg:hidden flex flex-col font-mono text-[#1a1522]">
       {/* Top Mobile Bar */}
       <header className="h-14 bg-white border-b border-[#1a1522]/10 px-4 flex items-center justify-between sticky top-0 z-30 shadow-xs">
-        <Link href="/" className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center">
-            <svg width="15" height="15" viewBox="0 0 32 32" fill="none">
-              <path d="M16 2L3 9.5V22.5L16 30L29 22.5V9.5L16 2Z" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round"/>
-              <path d="M16 2V30M3 9.5L29 22.5M29 9.5L3 22.5" stroke="currentColor" strokeWidth="1.4" strokeOpacity="0.4"/>
-              <circle cx="16" cy="16" r="3.5" fill="#ffffff" />
-            </svg>
-          </div>
-          <span className="font-bold text-[#1a1522] text-sm tracking-tight font-mono">KryinHost</span>
-        </Link>
+        <div className="flex items-center gap-2 min-w-0">
+          <Link href="/" className="flex items-center gap-2 flex-shrink-0">
+            <div className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center">
+              <svg width="15" height="15" viewBox="0 0 32 32" fill="none">
+                <path d="M16 2L3 9.5V22.5L16 30L29 22.5V9.5L16 2Z" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round"/>
+                <path d="M16 2V30M3 9.5L29 22.5M29 9.5L3 22.5" stroke="currentColor" strokeWidth="1.4" strokeOpacity="0.4"/>
+                <circle cx="16" cy="16" r="3.5" fill="#ffffff" />
+              </svg>
+            </div>
+            <span className="font-bold text-[#1a1522] text-sm tracking-tight font-mono hidden sm:inline">KryinHost</span>
+          </Link>
+          <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-bold border border-blue-200 truncate max-w-[120px]">
+            {serverInfo.name}
+          </span>
+        </div>
 
         <div className="flex items-center gap-2">
           <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${serverInfo.status === 'online' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-slate-100 border-slate-200 text-slate-600'}`}>
