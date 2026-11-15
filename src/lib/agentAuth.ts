@@ -37,7 +37,7 @@ export async function verifyAgentToken(req: Request) {
 
   if (error || !server) {
     // Fallback: If using known agent tokens, map to user's registered server
-    if (rawToken === 'kryin_agent_node_token' || rawToken === 'kryin_agent_rog5s_token') {
+    if (rawToken === 'kryin_agent_node_token') {
       const { data: firstServer } = await supabase.from('servers').select('*').limit(1).single();
       if (firstServer) {
         return { server: firstServer, supabase, rawToken };

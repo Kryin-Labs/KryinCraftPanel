@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
+import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createClient } from '@supabase/supabase-js';
 
 function getAdminClient() {
   const url =
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
-    process.env.SUPABASE_URL ||
     'https://qekhtvzzllaufevvljxj.supabase.co';
   const secretKey =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
@@ -17,13 +17,29 @@ function getAdminClient() {
   });
 }
 
+// Strictly select only non-secret columns (NEVER select agent_token_hash)
+const SAFE_SERVER_COLUMNS =
+  'id, name, status, device_name, public_tunnel_java, public_tunnel_bedrock, local_ip, java_port, bedrock_port, max_players, online_players, tps, uptime_seconds, pid, last_heartbeat, created_at, owner_id';
+
 export async function GET(req: Request) {
   try {
+    // Check if requester has an authenticated session
+    let isAuthenticated = false;
+    try {
+      const supabaseUser = await createServerClient();
+      const {
+        data: { user },
+      } = await supabaseUser.auth.getUser();
+      isAuthenticated = Boolean(user);
+    } catch (e) {
+      isAuthenticated = false;
+    }
+
     const supabase = getAdminClient();
     const { searchParams } = new URL(req.url);
     const requestedServerId = searchParams.get('serverId');
 
-    // 1. Fetch all servers so the UI can populate the server switcher
+    // 1. Fetch available servers
     const { data: allServers } = await supabase
       .from('servers')
       .select('id, name, status, device_name, public_tunnel_java, local_ip, last_heartbeat, created_at')
@@ -34,12 +50,12 @@ export async function GET(req: Request) {
       targetServerId = allServers[0].id;
     }
 
-    // 2. Fetch active server
+    // 2. Fetch active server with SAFE columns only
     let server: any = null;
     if (targetServerId) {
       const { data: matchedServer } = await supabase
         .from('servers')
-        .select('*')
+        .select(SAFE_SERVER_COLUMNS)
         .eq('id', targetServerId)
         .single();
       server = matchedServer;
@@ -48,7 +64,7 @@ export async function GET(req: Request) {
     if (!server) {
       const { data: fallbackServer } = await supabase
         .from('servers')
-        .select('*')
+        .select(SAFE_SERVER_COLUMNS)
         .order('created_at', { ascending: false })
         .limit(1)
         .single();
@@ -63,9 +79,9 @@ export async function GET(req: Request) {
         id: s.id,
         name: s.name,
         status: isFresh && s.status === 'online' ? 'online' : (isFresh ? s.status : 'offline'),
-        device: s.device_name || 'Device Node',
+        device: s.device_name || 'Indian Node',
         deviceConnected: isFresh,
-        localIp: s.local_ip,
+        localIp: isAuthenticated ? s.local_ip : null,
         publicTunnelJava: s.public_tunnel_java,
         lastHeartbeat: s.last_heartbeat,
       };
@@ -89,34 +105,45 @@ export async function GET(req: Request) {
     const isHeartbeatFresh = Date.now() - lastHeartbeatTime < 45 * 1000;
     const isOnline = isHeartbeatFresh && server.status === 'online';
 
-    // 2. Fetch latest metrics
-    const { data: latestMetrics } = await supabase
-      .from('server_metrics')
-      .select('*')
-      .eq('server_id', server.id)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+    // 3. Fetch latest metrics (if server is online)
+    let latestMetrics: any = null;
+    if (isOnline) {
+      const { data: metricsData } = await supabase
+        .from('server_metrics')
+        .select('total_ram_mb, used_ram_mb, available_ram_mb, java_heap_used_mb, java_heap_max_mb, cpu_usage_percent, cpu_temp_c, battery_percent, is_charging, power_source, created_at')
+        .eq('server_id', server.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+      latestMetrics = metricsData;
+    }
 
-    // 3. Fetch latest logs
-    const { data: recentLogs } = await supabase
-      .from('server_logs')
-      .select('id, timestamp, level, message, created_at')
-      .eq('server_id', server.id)
-      .order('created_at', { ascending: false })
-      .limit(80);
+    // 4. Fetch latest logs (only for authenticated operators to protect console privacy)
+    let logs: any[] = [];
+    if (isAuthenticated) {
+      const { data: recentLogs } = await supabase
+        .from('server_logs')
+        .select('id, timestamp, level, message, created_at')
+        .eq('server_id', server.id)
+        .order('created_at', { ascending: false })
+        .limit(80);
 
-    const logs = (recentLogs || []).reverse();
+      logs = (recentLogs || []).reverse();
+    }
 
-    // 4. Fetch players
+    // 5. Fetch players
     const { data: dbPlayers } = await supabase
       .from('server_players')
-      .select('*')
+      .select('uuid, username, is_online, ping_ms, health, max_health, food_level, xp_level, gamemode, is_op, is_whitelisted, is_banned, last_seen')
       .eq('server_id', server.id);
 
     // Parse multi-endpoint IP list from database
     let ipEndpoints: any[] = [];
-    if (server.public_tunnel_bedrock && typeof server.public_tunnel_bedrock === 'string' && server.public_tunnel_bedrock.trim().startsWith('[')) {
+    if (
+      server.public_tunnel_bedrock &&
+      typeof server.public_tunnel_bedrock === 'string' &&
+      server.public_tunnel_bedrock.trim().startsWith('[')
+    ) {
       try {
         ipEndpoints = JSON.parse(server.public_tunnel_bedrock);
       } catch (e) {}
@@ -133,7 +160,7 @@ export async function GET(req: Request) {
           isPrimary: true,
         });
       }
-      if (server.local_ip) {
+      if (server.local_ip && isAuthenticated) {
         ipEndpoints.push({
           id: 'ep-lan-default',
           type: 'lan',
@@ -156,12 +183,12 @@ export async function GET(req: Request) {
         device: server.device_name || 'Indian Node',
         device_connected: isHeartbeatFresh,
         status: isOnline ? 'online' : (isHeartbeatFresh ? server.status : 'offline'),
-        pid: isOnline ? server.pid : null,
+        pid: (isAuthenticated && isOnline) ? server.pid : null,
         tps: isOnline ? Number(server.tps || 20.0) : 0,
         uptime_seconds: isOnline ? (server.uptime_seconds || 0) : 0,
         online_players: isOnline ? (server.online_players || 0) : 0,
         max_players: server.max_players || 20,
-        local_ip: server.local_ip || null,
+        local_ip: isAuthenticated ? (server.local_ip || null) : null,
         public_tunnel_java: server.public_tunnel_java || null,
         public_tunnel_bedrock: server.public_tunnel_bedrock || null,
         ip_endpoints: ipEndpoints,
@@ -192,6 +219,9 @@ export async function GET(req: Request) {
       players: dbPlayers || [],
     });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Internal server error retrieving live telemetry' },
+      { status: 500 }
+    );
   }
 }

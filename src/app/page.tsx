@@ -521,7 +521,7 @@ const MEDIA_NAV_ITEMS = [
 ];
 
 /* ------------------------------------------------------------------ */
-/* RAM Plans Data (Exact 4 Plans, No Free Plan, Zero DDoS references)  */
+/* RAM Plans Data (Exact 4 Plans, No Free Plan) */
 /* ------------------------------------------------------------------ */
 
 const RAM_PLANS = [
@@ -610,7 +610,7 @@ const RAM_PLANS = [
 ];
 
 /* ------------------------------------------------------------------ */
-/* FAQ Accordion Data (Zero DDoS references)                          */
+/* FAQ Accordion Data                                                    */
 /* ------------------------------------------------------------------ */
 
 const FAQ_ITEMS = [
@@ -1411,7 +1411,7 @@ export default function HomePage() {
                       {/* SECTION: USE WARP EVERYWHERE (PLANS INSTEAD OF THIS)   */}
                       {/* (ID: plans - EXACT 4 RAM PLANS, NO FREE PLAN)          */}
                       {/* SECTION: DEDICATED INDIAN SERVER PLANS                 */}
-                      {/* (ID: plans - EXACT 4 RAM PLANS, ZERO DDOS MENTIONS)    */}
+                      {/* (ID: plans - EXACT 4 RAM PLANS)    */}
                       {/* ====================================================== */}
                       <section className="w-section" id="plans">
                         <div className="w-wrap">

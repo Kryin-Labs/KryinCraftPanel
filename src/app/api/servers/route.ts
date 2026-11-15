@@ -6,7 +6,6 @@ import { createHash, randomBytes } from 'crypto';
 function getAdminClient() {
   const url =
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
-    process.env.SUPABASE_URL ||
     'https://qekhtvzzllaufevvljxj.supabase.co';
   const secretKey =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
@@ -21,54 +20,111 @@ function getAdminClient() {
 
 export async function GET() {
   try {
+    // 1. Authenticate user session
+    let user: any = null;
+    try {
+      const supabaseUser = await createServerClient();
+      const {
+        data: { user: sessionUser },
+        error: authErr,
+      } = await supabaseUser.auth.getUser();
+
+      if (authErr || !sessionUser) {
+        return NextResponse.json(
+          { error: 'Unauthorized: Authentication required to list servers' },
+          { status: 401 }
+        );
+      }
+      user = sessionUser;
+    } catch (e) {
+      return NextResponse.json(
+        { error: 'Unauthorized: Unable to verify user session' },
+        { status: 401 }
+      );
+    }
+
     const supabase = getAdminClient();
+
+    // 2. Fetch only servers belonging to the user or unowned legacy servers
     const { data: servers, error } = await supabase
       .from('servers')
-      .select('id, name, status, device_name, public_tunnel_java, local_ip, last_heartbeat, created_at')
+      .select('id, name, status, device_name, public_tunnel_java, local_ip, last_heartbeat, created_at, owner_id')
+      .or(`owner_id.eq.${user.id},owner_id.is.null`)
       .order('created_at', { ascending: true });
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ error: 'Failed to retrieve servers' }, { status: 500 });
     }
 
-    return NextResponse.json({ servers: servers || [] });
+    // Strip sensitive fields before returning
+    const safeServers = (servers || []).map((s) => ({
+      id: s.id,
+      name: s.name,
+      status: s.status,
+      device_name: s.device_name,
+      public_tunnel_java: s.public_tunnel_java,
+      local_ip: s.local_ip,
+      last_heartbeat: s.last_heartbeat,
+      created_at: s.created_at,
+    }));
+
+    return NextResponse.json({ servers: safeServers });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
 export async function POST(req: Request) {
   try {
-    const supabase = getAdminClient();
-    const body = await req.json();
+    // 1. Authenticate user session
+    let user: any = null;
+    try {
+      const supabaseUser = await createServerClient();
+      const {
+        data: { user: sessionUser },
+        error: authErr,
+      } = await supabaseUser.auth.getUser();
+
+      if (authErr || !sessionUser) {
+        return NextResponse.json(
+          { error: 'Unauthorized: Authentication required to create a new server' },
+          { status: 401 }
+        );
+      }
+      user = sessionUser;
+    } catch (e) {
+      return NextResponse.json(
+        { error: 'Unauthorized: Unable to verify user session' },
+        { status: 401 }
+      );
+    }
+
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body !== 'object') {
+      return NextResponse.json({ error: 'Invalid JSON payload' }, { status: 400 });
+    }
+
     const { name, device_name, minecraft_version } = body;
 
-    if (!name || typeof name !== 'string') {
+    if (!name || typeof name !== 'string' || !name.trim()) {
       return NextResponse.json({ error: 'Server name is required' }, { status: 400 });
     }
 
-    // Generate unique agent token
+    const cleanName = name.trim().slice(0, 50);
+    const cleanDeviceName = (device_name || 'Indian Node').trim().slice(0, 50);
+
+    // 2. Generate secure unique agent token & sha256 hash
     const rawToken = `kryin_node_${randomBytes(16).toString('hex')}`;
     const tokenHash = createHash('sha256').update(rawToken).digest('hex');
 
-    let ownerId: string | null = null;
-    try {
-      const supabaseUser = await createServerClient();
-      const { data: { user } } = await supabaseUser.auth.getUser();
-      if (user) ownerId = user.id;
-    } catch (e) {}
-
-    if (!ownerId) {
-      const { data: existing } = await supabase.from('servers').select('owner_id').limit(1).single();
-      ownerId = existing?.owner_id || null;
-    }
+    const supabase = getAdminClient();
 
     const { data: newServer, error: insertError } = await supabase
       .from('servers')
       .insert({
-        owner_id: ownerId,
-        name: name.trim(),
-        device_name: (device_name || 'Secondary Node').trim(),
+        owner_id: user.id,
+        name: cleanName,
+        device_name: cleanDeviceName,
         android_version: 'Termux / Linux ARM64',
         minecraft_version: minecraft_version || '1.21.4',
         paper_build: 249,
@@ -76,26 +132,26 @@ export async function POST(req: Request) {
         status: 'offline',
         agent_token_hash: tokenHash,
         agent_connected: false,
-        local_ip: '192.168.0.165',
+        local_ip: '192.168.0.164',
         java_port: 25565,
         bedrock_port: 19132,
         max_players: 20,
         online_players: 0,
         tps: 0.0,
       })
-      .select()
+      .select('id, name, device_name, status, local_ip, java_port, bedrock_port, max_players, created_at')
       .single();
 
-    if (insertError) {
-      return NextResponse.json({ error: insertError.message }, { status: 500 });
+    if (insertError || !newServer) {
+      return NextResponse.json({ error: 'Failed to create server record' }, { status: 500 });
     }
 
     return NextResponse.json({
       success: true,
       server: newServer,
-      agentToken: rawToken,
+      agentToken: rawToken, // Provided once upon creation to configure the node
     });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error creating server' }, { status: 500 });
   }
 }

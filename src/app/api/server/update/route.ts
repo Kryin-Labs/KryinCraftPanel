@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
+import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createClient } from '@supabase/supabase-js';
 
 function getAdminClient() {
   const url =
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
-    process.env.SUPABASE_URL ||
     'https://qekhtvzzllaufevvljxj.supabase.co';
   const secretKey =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
@@ -19,49 +19,123 @@ function getAdminClient() {
 
 export async function POST(req: Request) {
   try {
-    const supabase = getAdminClient();
-    const body = await req.json();
-    const { serverId, public_tunnel_java, public_tunnel_bedrock, ip_endpoints, name } = body;
+    // 1. Authenticate user session
+    let user: any = null;
+    try {
+      const supabaseUser = await createServerClient();
+      const {
+        data: { user: sessionUser },
+        error: authErr,
+      } = await supabaseUser.auth.getUser();
 
-    if (!serverId) {
-      return NextResponse.json({ error: 'Missing serverId' }, { status: 400 });
+      if (authErr || !sessionUser) {
+        return NextResponse.json(
+          { error: 'Unauthorized: Authentication required to update server settings' },
+          { status: 401 }
+        );
+      }
+      user = sessionUser;
+    } catch (e) {
+      return NextResponse.json(
+        { error: 'Unauthorized: Unable to verify user session' },
+        { status: 401 }
+      );
     }
 
+    // 2. Validate request body
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body !== 'object') {
+      return NextResponse.json({ error: 'Invalid JSON payload' }, { status: 400 });
+    }
+
+    const { serverId, public_tunnel_java, public_tunnel_bedrock, ip_endpoints, name } = body;
+
+    if (!serverId || typeof serverId !== 'string') {
+      return NextResponse.json({ error: 'Missing or invalid serverId' }, { status: 400 });
+    }
+
+    const admin = getAdminClient();
+
+    // 3. Verify server existence & ownership
+    const { data: server, error: serverErr } = await admin
+      .from('servers')
+      .select('id, owner_id')
+      .eq('id', serverId)
+      .single();
+
+    if (serverErr || !server) {
+      return NextResponse.json({ error: 'Server not found' }, { status: 404 });
+    }
+
+    // Action Protection: Verify ownership
+    if (server.owner_id && server.owner_id !== user.id) {
+      return NextResponse.json(
+        { error: 'Forbidden: You do not have permission to modify this server' },
+        { status: 403 }
+      );
+    }
+
+    // 4. Construct sanitized updates (strictly whitelist allowed fields)
     const updates: Record<string, any> = {
       updated_at: new Date().toISOString(),
     };
 
+    if (!server.owner_id) {
+      updates.owner_id = user.id;
+    }
+
+    if (name !== undefined && typeof name === 'string') {
+      const cleanName = name.trim().slice(0, 50);
+      if (cleanName.length > 0) {
+        updates.name = cleanName;
+      }
+    }
+
     if (Array.isArray(ip_endpoints)) {
-      updates.public_tunnel_bedrock = JSON.stringify(ip_endpoints);
-      const primaryJava = ip_endpoints.find((e: any) => e.isPrimary || e.type === 'java') || ip_endpoints[0];
+      // Validate each endpoint object
+      const sanitizedEndpoints = ip_endpoints.slice(0, 10).map((ep: any, index: number) => ({
+        id: String(ep.id || `ep-${index}-${Date.now()}`).slice(0, 50),
+        type: ['java', 'bedrock', 'lan', 'other'].includes(ep.type) ? ep.type : 'java',
+        label: String(ep.label || 'Endpoint').trim().slice(0, 40),
+        host: String(ep.host || '').trim().slice(0, 120),
+        port: Math.min(65535, Math.max(1, Number(ep.port) || 25565)),
+        isPrimary: Boolean(ep.isPrimary),
+      }));
+
+      updates.public_tunnel_bedrock = JSON.stringify(sanitizedEndpoints);
+
+      const primaryJava =
+        sanitizedEndpoints.find((e) => e.isPrimary && e.type === 'java') ||
+        sanitizedEndpoints.find((e) => e.type === 'java') ||
+        sanitizedEndpoints[0];
+
       if (primaryJava) {
-        updates.public_tunnel_java = primaryJava.host ? primaryJava.host.trim() : null;
+        updates.public_tunnel_java = primaryJava.host || null;
         if (primaryJava.port) {
-          updates.java_port = Number(primaryJava.port) || 25565;
+          updates.java_port = primaryJava.port;
         }
       }
     } else {
       if (public_tunnel_java !== undefined) {
-        updates.public_tunnel_java = public_tunnel_java ? public_tunnel_java.trim() : null;
+        updates.public_tunnel_java =
+          typeof public_tunnel_java === 'string' ? public_tunnel_java.trim().slice(0, 120) : null;
       }
       if (public_tunnel_bedrock !== undefined) {
-        updates.public_tunnel_bedrock = public_tunnel_bedrock ? public_tunnel_bedrock.trim() : null;
+        updates.public_tunnel_bedrock =
+          typeof public_tunnel_bedrock === 'string' ? public_tunnel_bedrock.trim().slice(0, 500) : null;
       }
     }
 
-    if (name !== undefined && name.trim()) {
-      updates.name = name.trim();
-    }
-
-    const { data: updatedServer, error } = await supabase
+    // 5. Update database and return sanitized response (NO secrets/tokens)
+    const { data: updatedServer, error } = await admin
       .from('servers')
       .update(updates)
       .eq('id', serverId)
-      .select()
+      .select('id, name, public_tunnel_java, java_port, public_tunnel_bedrock, updated_at')
       .single();
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ error: 'Failed to update server configuration' }, { status: 500 });
     }
 
     return NextResponse.json({
@@ -69,6 +143,9 @@ export async function POST(req: Request) {
       server: updatedServer,
     });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Internal server error processing settings update' },
+      { status: 500 }
+    );
   }
 }

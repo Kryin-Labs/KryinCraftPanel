@@ -274,8 +274,11 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, device_name: deviceName }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        if (res.status === 401 && typeof window !== 'undefined') {
+          window.location.href = '/login?next=/dashboard';
+        }
         return { success: false, error: data.error || 'Failed to create server' };
       }
       if (data.server?.id) {
@@ -323,8 +326,11 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
           ...data,
         }),
       });
-      const resData = await res.json();
+      const resData = await res.json().catch(() => ({}));
       if (!res.ok) {
+        if (res.status === 401 && typeof window !== 'undefined') {
+          window.location.href = '/login?next=/dashboard';
+        }
         return { success: false, error: resData.error || 'Failed to update server' };
       }
       if (resData.server) {
@@ -380,7 +386,7 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
 
   const dispatchServerCommand = async (command_type: string, payload: any = {}) => {
     try {
-      await fetch('/api/server/command', {
+      const res = await fetch('/api/server/command', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -389,6 +395,9 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
           payload,
         }),
       });
+      if (res.status === 401 && typeof window !== 'undefined') {
+        window.location.href = '/login?next=/dashboard';
+      }
     } catch (e) {
       console.warn('Command dispatch queued locally:', e);
     }
