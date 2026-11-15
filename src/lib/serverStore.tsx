@@ -340,7 +340,7 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
     }
 
     syncLiveServerData();
-    const interval = setInterval(syncLiveServerData, 2000); // 2-second fast polling
+    const interval = setInterval(syncLiveServerData, 1000); // 1-second ultra-responsive polling (Pterodactyl parity)
 
     // Refresh instantly when user returns to the tab
     const handleVisibility = () => {

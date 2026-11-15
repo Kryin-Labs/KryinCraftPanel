@@ -86,6 +86,65 @@ export default function DedicatedConsolePage() {
   const scrollHelperAddonRef = useRef<XtermScrollDownHelperAddon | null>(null);
   const writtenLogIdsRef = useRef<Set<string>>(new Set());
   const prevStatusRef = useRef<string>(serverInfo.status);
+  const lastTimestampRef = useRef<string | null>(null);
+
+  // Dedicated High-Speed (400ms) Console Streamer (Pterodactyl parity)
+  useEffect(() => {
+    if (!isTerminalReady) return;
+    let isMounted = true;
+    let isFetching = false;
+
+    async function streamFastLogs() {
+      if (isFetching || !isMounted) return;
+      isFetching = true;
+      try {
+        const term = terminalInstanceRef.current;
+        if (!term) return;
+
+        const serverParam = serverInfo.id ? `&serverId=${encodeURIComponent(serverInfo.id)}` : '';
+        const sinceParam = lastTimestampRef.current ? `&since=${encodeURIComponent(lastTimestampRef.current)}` : '';
+        const res = await fetch(`/api/server/console?limit=150${serverParam}${sinceParam}`);
+        if (!res.ok) return;
+
+        const data = await res.json();
+        if (!data || !isMounted) return;
+
+        if (Array.isArray(data.logs) && data.logs.length > 0) {
+          let wroteAny = false;
+          for (const log of data.logs) {
+            const logKey = log.id || `${log.timestamp}-${log.message}`;
+            if (!writtenLogIdsRef.current.has(logKey)) {
+              writtenLogIdsRef.current.add(logKey);
+              term.writeln(formatMinecraftLog(log.message));
+              wroteAny = true;
+            }
+          }
+          if (wroteAny) {
+            term.scrollToBottom();
+          }
+        }
+
+        if (data.latestTimestamp) {
+          lastTimestampRef.current = data.latestTimestamp;
+        }
+      } catch (err) {
+        // silent fail on transient network errors
+      } finally {
+        isFetching = false;
+      }
+    }
+
+    // Initial instant fetch
+    streamFastLogs();
+
+    // 400ms continuous streaming interval (Pterodactyl speed)
+    const streamInterval = setInterval(streamFastLogs, 400);
+
+    return () => {
+      isMounted = false;
+      clearInterval(streamInterval);
+    };
+  }, [isTerminalReady, serverInfo.id]);
 
   // Smooth Pterodactyl-style status change events in terminal
   useEffect(() => {
@@ -339,6 +398,28 @@ export default function DedicatedConsolePage() {
     setIsSending(true);
     try {
       await sendConsoleCommand(cmd);
+
+      // Fast-poll output after 200ms and 500ms for instantaneous Pterodactyl response
+      setTimeout(async () => {
+        try {
+          const serverParam = serverInfo.id ? `&serverId=${encodeURIComponent(serverInfo.id)}` : '';
+          const sinceParam = lastTimestampRef.current ? `&since=${encodeURIComponent(lastTimestampRef.current)}` : '';
+          const res = await fetch(`/api/server/console?limit=50${serverParam}${sinceParam}`);
+          if (!res.ok) return;
+          const data = await res.json();
+          if (Array.isArray(data.logs) && data.logs.length > 0 && terminalInstanceRef.current) {
+            for (const log of data.logs) {
+              const logKey = log.id || `${log.timestamp}-${log.message}`;
+              if (!writtenLogIdsRef.current.has(logKey)) {
+                writtenLogIdsRef.current.add(logKey);
+                terminalInstanceRef.current.writeln(formatMinecraftLog(log.message));
+              }
+            }
+            terminalInstanceRef.current.scrollToBottom();
+            if (data.latestTimestamp) lastTimestampRef.current = data.latestTimestamp;
+          }
+        } catch (e) {}
+      }, 250);
     } catch (err: any) {
       if (terminalInstanceRef.current) {
         terminalInstanceRef.current.writeln(

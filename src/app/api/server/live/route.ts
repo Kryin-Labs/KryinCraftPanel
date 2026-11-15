@@ -48,28 +48,33 @@ export async function GET(req: Request) {
       .select('id, name, status, device_name, public_tunnel_java, local_ip, last_heartbeat, created_at')
       .order('created_at', { ascending: true });
 
-    let targetServerId = requestedServerId;
-    if (!targetServerId && allServers && allServers.length > 0) {
-      targetServerId = allServers[0].id;
+    // Prioritize active servers with live heartbeats
+    const now = Date.now();
+    let bestServerId = requestedServerId;
+    if (!bestServerId && allServers && allServers.length > 0) {
+      const liveServer = allServers.find((s) => {
+        const hb = s.last_heartbeat ? new Date(s.last_heartbeat).getTime() : 0;
+        return now - hb < 45000;
+      });
+      bestServerId = liveServer ? liveServer.id : allServers[0].id;
     }
 
     // 2. Fetch active server with SAFE columns only
     let server: any = null;
-    if (targetServerId) {
+    if (bestServerId) {
       const { data: matchedServer } = await supabase
         .from('servers')
         .select(SAFE_SERVER_COLUMNS)
-        .eq('id', targetServerId)
+        .eq('id', bestServerId)
         .single();
       server = matchedServer;
     }
 
-    if (!server) {
+    if (!server && allServers && allServers.length > 0) {
       const { data: fallbackServer } = await supabase
         .from('servers')
         .select(SAFE_SERVER_COLUMNS)
-        .order('created_at', { ascending: false })
-        .limit(1)
+        .eq('id', allServers[0].id)
         .single();
       server = fallbackServer;
     }
@@ -129,7 +134,7 @@ export async function GET(req: Request) {
         .select('id, timestamp, level, message, created_at')
         .eq('server_id', server.id)
         .order('created_at', { ascending: false })
-        .limit(400);
+        .limit(100);
 
       logs = (recentLogs || []).reverse();
     }
