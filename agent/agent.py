@@ -25,6 +25,7 @@ config = {
     "rconPassword": "334001",
     "heartbeatInterval": 4,
     "commandPollInterval": 2,
+    "logPollInterval": 2,
 }
 
 if os.path.exists(CONFIG_FILE):
@@ -43,7 +44,11 @@ print("==================================================")
 print("   KryinCraftPanel Python Node Agent")
 print("   Target: Indian Node (Android / Termux)")
 print(f"   Connecting outbound to: {BACKEND_URL}")
+print(f"   Server Directory: {SERVER_DIR}")
 print("==================================================")
+
+log_file_pos = 0
+last_player_sync = 0
 
 def api_post(endpoint, data):
     url = f"{BACKEND_URL}{endpoint}"
@@ -86,6 +91,16 @@ def api_get(endpoint):
         return {"error": str(err)}
     return {}
 
+def get_local_ip():
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "192.168.0.164"
+
 def check_minecraft_process():
     """Check if Minecraft Java process is running."""
     try:
@@ -113,24 +128,165 @@ def get_ram_usage():
     used_mb = max(0, total_mb - free_mb)
     return total_mb, used_mb
 
+def read_server_properties():
+    """Parse real server.properties file for MOTD, max players, port, etc."""
+    props_file = os.path.join(SERVER_DIR, "server.properties")
+    props = {
+        "max-players": 20,
+        "motd": "ECB Bache Minecraft Server",
+        "server-port": 25565,
+        "difficulty": "normal",
+        "gamemode": "survival",
+        "pvp": True,
+        "white-list": False,
+        "view-distance": 10,
+    }
+    if os.path.exists(props_file):
+        try:
+            with open(props_file, "r", encoding="utf-8", errors="ignore") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, v = line.split("=", 1)
+                        k = k.strip()
+                        v = v.strip()
+                        if k == "max-players":
+                            props["max-players"] = int(v) if v.isdigit() else 20
+                        elif k == "server-port":
+                            props["server-port"] = int(v) if v.isdigit() else 25565
+                        elif k in ("pvp", "white-list"):
+                            props[k] = v.lower() == "true"
+                        else:
+                            props[k] = v
+        except Exception as e:
+            print(f"[!] Warning reading server.properties: {e}")
+    return props
+
 def send_heartbeat():
     is_mc_running, pid = check_minecraft_process()
     total_ram, used_ram = get_ram_usage()
+    props = read_server_properties()
 
     data = {
         "status": "online" if is_mc_running else "offline",
         "pid": pid,
         "tps": 20.0 if is_mc_running else 0.0,
         "uptime_seconds": 0,
-        "local_ip": "192.168.0.164",
+        "local_ip": get_local_ip(),
         "online_players": 0,
-        "max_players": 20,
+        "max_players": props.get("max-players", 20),
     }
     res = api_post("/api/agent/heartbeat", data)
     if "error" in res:
         print(f"[!] Heartbeat error: {res['error']}")
     else:
-        print(f"[✓] Heartbeat sent: Minecraft is {'ONLINE (PID ' + str(pid) + ')' if is_mc_running else 'OFFLINE (Standby)'}")
+        status_str = f"ONLINE (PID {pid}, Max Players: {props.get('max-players', 20)})" if is_mc_running else "OFFLINE (Standby)"
+        print(f"[✓] Heartbeat sent: Minecraft is {status_str}")
+
+def sync_logs():
+    """Tails real logs/latest.log and streams new lines to the website console."""
+    global log_file_pos
+    log_file = os.path.join(SERVER_DIR, "logs", "latest.log")
+    if not os.path.exists(log_file):
+        return
+
+    try:
+        file_size = os.path.getsize(log_file)
+        if log_file_pos > file_size:
+            log_file_pos = 0
+
+        if log_file_pos == 0 and file_size > 15000:
+            log_file_pos = max(0, file_size - 8000)
+
+        with open(log_file, "r", encoding="utf-8", errors="ignore") as f:
+            f.seek(log_file_pos)
+            new_lines = f.readlines()
+            log_file_pos = f.tell()
+
+        if new_lines:
+            batch = []
+            for line in new_lines[-50:]:
+                raw = line.strip()
+                if not raw:
+                    continue
+                level = "INFO"
+                if "/WARN" in raw:
+                    level = "WARN"
+                elif "/ERROR" in raw:
+                    level = "ERROR"
+
+                ts = time.strftime("%H:%M:%S")
+                if raw.startswith("[") and "]" in raw:
+                    ts_cand = raw[1:raw.index("]")]
+                    if len(ts_cand) in (8, 12):
+                        ts = ts_cand
+
+                batch.append({
+                    "timestamp": ts,
+                    "level": level,
+                    "message": raw[:1000],
+                })
+
+            if batch:
+                api_post("/api/agent/logs", {"logs": batch})
+    except Exception:
+        pass
+
+def sync_players():
+    """Syncs real player cache from usercache.json, ops.json, whitelist.json."""
+    global last_player_sync
+    now = time.time()
+    if now - last_player_sync < 60:
+        return
+    last_player_sync = now
+
+    usercache_file = os.path.join(SERVER_DIR, "usercache.json")
+    ops_file = os.path.join(SERVER_DIR, "ops.json")
+    wl_file = os.path.join(SERVER_DIR, "whitelist.json")
+    banned_file = os.path.join(SERVER_DIR, "banned-players.json")
+
+    ops_set = set()
+    wl_set = set()
+    banned_set = set()
+
+    try:
+        if os.path.exists(ops_file):
+            with open(ops_file, "r") as f:
+                ops_set = {x.get("uuid", "").lower() for x in json.load(f)}
+        if os.path.exists(wl_file):
+            with open(wl_file, "r") as f:
+                wl_set = {x.get("uuid", "").lower() for x in json.load(f)}
+        if os.path.exists(banned_file):
+            with open(banned_file, "r") as f:
+                banned_set = {x.get("uuid", "").lower() for x in json.load(f)}
+    except Exception:
+        pass
+
+    players_list = []
+    if os.path.exists(usercache_file):
+        try:
+            with open(usercache_file, "r") as f:
+                cache = json.load(f)
+                for entry in cache[:50]:
+                    uuid = entry.get("uuid", "").lower()
+                    name = entry.get("name", "Player")
+                    if uuid:
+                        players_list.append({
+                            "uuid": uuid,
+                            "username": name,
+                            "is_online": False,
+                            "is_op": uuid in ops_set,
+                            "is_whitelisted": uuid in wl_set,
+                            "is_banned": uuid in banned_set,
+                            "health": 20.0,
+                            "food_level": 20,
+                            "last_seen": entry.get("expiresOn", "Recently"),
+                        })
+        except Exception:
+            pass
+
+    if players_list:
+        api_post("/api/agent/players", {"players": players_list})
 
 def poll_and_execute_commands():
     res = api_get("/api/agent/commands")
@@ -188,6 +344,35 @@ def poll_and_execute_commands():
             raw_cmd = payload.get("command", "")
             output = f"Executed console command: {raw_cmd}"
 
+        elif cmd_type == "SAVE_PROPERTIES":
+            props_file = os.path.join(SERVER_DIR, "server.properties")
+            new_props = payload.get("properties", {})
+            if os.path.exists(props_file) and isinstance(new_props, dict):
+                try:
+                    lines = []
+                    with open(props_file, "r") as f:
+                        lines = f.readlines()
+                    updated_lines = []
+                    seen_keys = set()
+                    for line in lines:
+                        if "=" in line and not line.strip().startswith("#"):
+                            k, v = line.split("=", 1)
+                            k = k.strip()
+                            if k in new_props:
+                                updated_lines.append(f"{k}={new_props[k]}\n")
+                                seen_keys.add(k)
+                                continue
+                        updated_lines.append(line)
+                    for k, v in new_props.items():
+                        if k not in seen_keys:
+                            updated_lines.append(f"{k}={v}\n")
+                    with open(props_file, "w") as f:
+                        f.writelines(updated_lines)
+                    output = "Saved updated server.properties successfully."
+                except Exception as e:
+                    output = f"Failed to save server.properties: {e}"
+                    success = False
+
         # Report result back
         api_post("/api/agent/result", {
             "command_id": cmd_id,
@@ -197,16 +382,17 @@ def poll_and_execute_commands():
         print(f"[✓] Command {cmd_id} finished: {output}")
 
 def main():
-    # Acquire Termux wake lock if available
     try:
         subprocess.run(["termux-wake-lock"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except Exception:
         pass
 
     print("[Agent] Polling loop running. Press Ctrl+C to stop.")
-    # Send instant first heartbeat so dashboard turns green immediately (0 second delay)
     send_heartbeat()
+    sync_logs()
+    sync_players()
     last_hb = time.time()
+    last_log_sync = time.time()
 
     while True:
         now = time.time()
@@ -214,6 +400,11 @@ def main():
             send_heartbeat()
             last_hb = now
 
+        if now - last_log_sync >= config.get("logPollInterval", 2):
+            sync_logs()
+            last_log_sync = now
+
+        sync_players()
         poll_and_execute_commands()
         time.sleep(config["commandPollInterval"])
 

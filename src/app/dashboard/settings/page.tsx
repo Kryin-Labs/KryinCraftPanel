@@ -18,17 +18,40 @@ export default function ServerSettingsPage() {
   const [motd, setMotd] = useState(serverInfo.name ? `§b${serverInfo.name} §8[§aNode§8]` : '§bMinecraft Server §8[§aNode§8]');
   const [viewDistance, setViewDistance] = useState(10);
   const [simulationDistance, setSimulationDistance] = useState(8);
-  const [maxPlayers, setMaxPlayers] = useState(20);
+  const [maxPlayers, setMaxPlayers] = useState(serverInfo.maxPlayers || 20);
   const [difficulty, setDifficulty] = useState('hard');
   const [pvp, setPvp] = useState(true);
   const [whitelist, setWhitelist] = useState(true);
   const [idleSleepMinutes, setIdleSleepMinutes] = useState(10);
   const [autoWake, setAutoWake] = useState(true);
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 3000);
+    try {
+      await fetch('/api/server/command', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          server_id: serverInfo.id,
+          command_type: 'SAVE_PROPERTIES',
+          payload: {
+            properties: {
+              motd,
+              'max-players': maxPlayers,
+              'view-distance': viewDistance,
+              'simulation-distance': simulationDistance,
+              difficulty,
+              pvp,
+              'white-list': whitelist,
+            },
+          },
+        }),
+      });
+      setSavedSuccess(true);
+      setTimeout(() => setSavedSuccess(false), 3000);
+    } catch (e) {
+      console.warn('Failed to dispatch save properties:', e);
+    }
   };
 
   return (

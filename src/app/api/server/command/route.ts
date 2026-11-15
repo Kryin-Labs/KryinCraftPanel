@@ -37,6 +37,8 @@ const ALLOWED_COMMANDS = new Set([
   'KILL',
   'TELEPORT',
   'GAMEMODE',
+  'SAVE_PROPERTIES',
+  'SAVE_SETTINGS',
 ]);
 
 export async function POST(req: Request) {

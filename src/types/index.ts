@@ -1,6 +1,6 @@
 // Core types for KryinCraftPanel
 
-export type ServerStatus = 'online' | 'offline' | 'starting' | 'stopping';
+export type ServerStatus = 'online' | 'offline' | 'starting' | 'stopping' | 'hibernating' | 'crashed';
 
 export type UserRole = 'owner' | 'admin' | 'operator' | 'viewer';
 

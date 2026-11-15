@@ -33,6 +33,12 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
           bg: 'bg-red-50 text-red-700 border-red-200',
           dot: 'bg-red-500',
         };
+      case 'hibernating':
+        return {
+          label: 'HIBERNATE',
+          bg: 'bg-amber-50 text-amber-700 border-amber-200',
+          dot: 'bg-amber-500',
+        };
       case 'starting':
         return {
           label: 'STARTING...',

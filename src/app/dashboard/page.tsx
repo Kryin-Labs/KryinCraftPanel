@@ -26,6 +26,7 @@ import {
   CheckCircle2,
   RefreshCw,
   Loader2,
+  HeartCrack,
 } from 'lucide-react';
 import { useServerStore } from '@/lib/serverStore';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -187,7 +188,46 @@ export default function DashboardOverviewPage() {
     setTimeout(() => setActionNotice(null), 4000);
   };
 
+  const isCrashed =
+    serverInfo.status === 'crashed' ||
+    (metrics && metrics.totalRamMb > 0 && metrics.usedRamMb >= metrics.totalRamMb * 0.98);
+  const isHibernate = serverInfo.status === 'hibernating';
   const isServerOnline = serverInfo.status === 'online';
+  const isStopped = !isServerOnline && !isHibernate && !isCrashed;
+
+  // Banner color configuration according to server status:
+  // Green Online | Red Stopped | Yellow Hibernate | Red with Broken Heart for Crashed/RAM
+  const bannerConfig = isCrashed
+    ? {
+        cardBorder: 'border-red-500 shadow-xl shadow-red-500/10',
+        bannerBg: 'bg-gradient-to-r from-red-600 via-rose-600 to-red-700 text-white',
+        badgeBg: 'bg-red-950/80 text-red-100 border-red-400',
+        statusLabel: 'CRITICAL CRASH / RAM OOM DETECTED',
+        icon: <HeartCrack className="w-4 h-4 text-red-200 animate-bounce" />,
+      }
+    : isServerOnline
+    ? {
+        cardBorder: 'border-emerald-400 shadow-xl shadow-emerald-500/5',
+        bannerBg: 'bg-gradient-to-r from-emerald-600 via-green-600 to-teal-600 text-white',
+        badgeBg: 'bg-emerald-950/80 text-emerald-100 border-emerald-400',
+        statusLabel: 'SYSTEM ONLINE & RUNNING',
+        icon: <span className="w-2.5 h-2.5 rounded-full bg-emerald-300 animate-pulse" />,
+      }
+    : isHibernate
+    ? {
+        cardBorder: 'border-amber-400 shadow-xl shadow-amber-500/5',
+        bannerBg: 'bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 text-slate-950',
+        badgeBg: 'bg-amber-950/80 text-amber-200 border-amber-400',
+        statusLabel: 'SMART HIBERNATION ACTIVE',
+        icon: <Moon className="w-3.5 h-3.5 text-amber-200" />,
+      }
+    : {
+        cardBorder: 'border-rose-400 shadow-xl shadow-rose-500/5',
+        bannerBg: 'bg-gradient-to-r from-rose-600 via-red-600 to-rose-700 text-white',
+        badgeBg: 'bg-rose-950/80 text-rose-100 border-rose-400',
+        statusLabel: 'SERVER STOPPED',
+        icon: <span className="w-2.5 h-2.5 rounded-full bg-rose-300" />,
+      };
 
   return (
     <div className="flex flex-col xl:flex-row items-start gap-6 font-mono text-[#1a1522]">
@@ -210,81 +250,107 @@ export default function DashboardOverviewPage() {
         )}
 
         {/* ================================================================ */}
-        {/* 1. MAIN SERVER CARD: Server Name, Node, Status & Controls */}
+        {/* 1. MAIN SERVER CARD: Behind Banner, Server Name, Status & Controls */}
         {/* ================================================================ */}
-        <div className="p-6 sm:p-8 rounded-2xl bg-white border border-[#1a1522]/10 shadow-xs flex flex-col items-center text-center space-y-5">
-          {/* Centered Server Name & Node Tag */}
-          <div className="space-y-1">
-            <div className="flex items-center justify-center gap-2">
-              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#1a1522]">
-                {serverInfo.name || (isLoading ? 'Loading Server...' : 'Minecraft Server')}
-              </h1>
-              <button
-                onClick={refreshStatus}
-                disabled={isRefreshing}
-                title="Instant live status sync"
-                className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
-              >
-                <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-blue-600' : ''}`} />
-              </button>
+        <div className={`rounded-3xl bg-white border ${bannerConfig.cardBorder} shadow-sm overflow-hidden flex flex-col items-center text-center transition-all duration-300`}>
+          {/* BEHIND STATUS BANNER */}
+          <div className={`w-full py-2.5 px-4 sm:px-6 ${bannerConfig.bannerBg} flex items-center justify-between text-xs font-bold font-mono tracking-wider shadow-inner`}>
+            <div className="flex items-center gap-2">
+              {bannerConfig.icon}
+              <span className="uppercase text-[11px] tracking-widest">{bannerConfig.statusLabel}</span>
             </div>
-            <p className="text-xs text-[#1a1522]/60 font-medium">
-              Node: <strong className="text-[#1a1522]">Indian Node</strong>
-            </p>
+            <span className="text-[10px] opacity-90 uppercase font-semibold">Indian Node</span>
           </div>
 
-          {/* Dual Status Bar: Device Connection & Minecraft Server State */}
-          <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
-            {/* Device Connection Indicator */}
-            {isLoading && !isDeviceConnected ? (
-              <div
-                className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border text-xs font-bold bg-blue-50 text-blue-800 border-blue-200 shadow-2xs animate-pulse"
-                title="Checking device connection status..."
-              >
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
-                <span>Checking Device...</span>
+          <div className="p-6 sm:p-8 w-full flex flex-col items-center text-center space-y-5">
+            {/* Centered Server Name & Node Tag */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-center gap-2">
+                <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#1a1522]">
+                  {serverInfo.name || (isLoading ? 'Loading Server...' : 'Minecraft Server')}
+                </h1>
+                <button
+                  onClick={refreshStatus}
+                  disabled={isRefreshing}
+                  title="Instant live status sync"
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-blue-600' : ''}`} />
+                </button>
               </div>
-            ) : isDeviceConnected ? (
-              <div
-                className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-2xs bg-emerald-50 text-emerald-800 border-emerald-300"
-                title="Device daemon is online and communicating. Ready to start game!"
-              >
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span>Device: Connected</span>
-              </div>
-            ) : (
-              <div
-                className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-2xs bg-amber-50 text-amber-800 border-amber-300"
-                title="Device daemon is offline. Website cannot start game until device connects."
-              >
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-                <span>Device: Not Connected</span>
-              </div>
-            )}
+              <p className="text-xs text-[#1a1522]/60 font-medium">
+                Node: <strong className="text-[#1a1522]">Indian Node</strong>
+              </p>
+            </div>
 
-            {/* Minecraft Process State Badge */}
-            <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold">
-              <span className="text-[#1a1522]/60 font-semibold">Minecraft:</span>
-              {isLoading && serverInfo.status === 'offline' ? (
-                <div className="flex items-center gap-1.5 text-xs text-blue-600 font-semibold">
-                  <Loader2 className="w-3 h-3 animate-spin text-blue-600" />
-                  <span>Syncing...</span>
+            {/* Dual Status Bar: Device Connection & Minecraft Server State */}
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
+              {/* Device Connection Indicator */}
+              {isLoading && !isDeviceConnected ? (
+                <div
+                  className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border text-xs font-bold bg-blue-50 text-blue-800 border-blue-200 shadow-2xs animate-pulse"
+                  title="Checking device connection status..."
+                >
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
+                  <span>Checking Device...</span>
+                </div>
+              ) : isDeviceConnected ? (
+                <div
+                  className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-2xs bg-emerald-50 text-emerald-800 border-emerald-300"
+                  title="Device daemon is online and communicating. Ready to start game!"
+                >
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>Device: Connected</span>
                 </div>
               ) : (
-                <StatusBadge status={serverInfo.status} size="sm" />
+                <div
+                  className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-2xs bg-amber-50 text-amber-800 border-amber-300"
+                  title="Device daemon is offline. Website cannot start game until device connects."
+                >
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                  <span>Device: Not Connected</span>
+                </div>
+              )}
+
+              {/* Minecraft Process State Badge */}
+              <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold">
+                <span className="text-[#1a1522]/60 font-semibold">Minecraft:</span>
+                {isLoading && serverInfo.status === 'offline' ? (
+                  <div className="flex items-center gap-1.5 text-xs text-blue-600 font-semibold">
+                    <Loader2 className="w-3 h-3 animate-spin text-blue-600" />
+                    <span>Syncing...</span>
+                  </div>
+                ) : isCrashed ? (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-100 text-red-700 text-xs font-bold border border-red-300">
+                    <HeartCrack className="w-3.5 h-3.5 text-red-600" />
+                    CRASHED
+                  </span>
+                ) : (
+                  <StatusBadge status={isHibernate ? 'hibernating' : serverInfo.status} size="sm" />
+                )}
+              </div>
+
+              {/* Online Player Status (Online X/X from server.properties) */}
+              {isServerOnline ? (
+                <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs font-bold shadow-2xs">
+                  <Users className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Online {serverInfo.onlinePlayers} / {serverInfo.maxPlayers}</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-600 text-xs font-semibold">
+                  <Users className="w-3.5 h-3.5 text-slate-400" />
+                  <span>0 / {serverInfo.maxPlayers} (Offline)</span>
+                </div>
+              )}
+
+              {/* Active TPS Live Counter */}
+              {isServerOnline && (
+                <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs font-bold">
+                  <Radio className="w-3 h-3 text-blue-600 animate-pulse" />
+                  <span>{serverInfo.tps.toFixed(1)} TPS</span>
+                </div>
               )}
             </div>
-
-            {/* Active Players & TPS Live Counter */}
-            {isServerOnline && (
-              <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs font-bold">
-                <Radio className="w-3 h-3 text-blue-600 animate-pulse" />
-                <span>{serverInfo.tps.toFixed(1)} TPS</span>
-                <span>•</span>
-                <span>{onlinePlayers.length} / {serverInfo.maxPlayers} Players</span>
-              </div>
-            )}
-          </div>
 
           {/* Connection Guidance Alert if Device is Offline */}
           {!isDeviceConnected && (
@@ -349,6 +415,7 @@ export default function DashboardOverviewPage() {
             )}
           </div>
         </div>
+      </div>
 
         {/* ================================================================ */}
         {/* 2. MULTIPLE IP ENDPOINTS MANAGER (Saved Directly in Database)    */}

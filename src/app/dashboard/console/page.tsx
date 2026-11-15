@@ -8,7 +8,8 @@ import {
   Search,
   Download,
   Check,
-  Radio
+  Radio,
+  Power
 } from 'lucide-react';
 import { useServerStore } from '@/lib/serverStore';
 
@@ -82,7 +83,7 @@ export default function DedicatedConsolePage() {
             Live Minecraft Terminal
           </h1>
           <p className="text-xs text-[#1a1522]/60 mt-0.5">
-            Real-time interactive RCON stream for Paper 1.21.4 on Mumbai Datacenter Node 01.
+            Real-time interactive live console for {serverInfo.name || 'Minecraft Server'} on Indian Node.
           </p>
         </div>
 
@@ -143,7 +144,7 @@ export default function DedicatedConsolePage() {
         <div className="h-10 bg-[#fbfbfe] border-b border-[#1a1522]/10 px-4 flex items-center justify-between text-xs">
           <div className="flex items-center gap-3">
             <span className="text-[#1a1522]/50 font-bold">Node:</span>
-            <span className="text-[#1a1522] font-semibold">in-mumbai-01</span>
+            <span className="text-[#1a1522] font-semibold">Indian Node</span>
             <div className="hidden sm:flex items-center gap-2 pl-3 border-l border-[#1a1522]/10">
               {(['paper', 'world', 'players', 'network'] as const).map((tab) => (
                 <button
@@ -185,9 +186,20 @@ export default function DedicatedConsolePage() {
 
         {/* Scrollable Terminal Output Window (high contrast terminal interior) */}
         <div className="p-4 sm:p-5 bg-[#0e1117] font-mono text-xs overflow-y-auto h-[540px] space-y-1.5 leading-relaxed select-text">
-          {filteredLogs.length === 0 ? (
-            <div className="h-full flex items-center justify-center text-zinc-500 text-xs">
-              No log entries match the active filter or search query.
+          {serverInfo.status === 'offline' ? (
+            <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-500">
+                <Power className="w-6 h-6" />
+              </div>
+              <div className="text-base font-bold text-zinc-300">Server Is Offline</div>
+              <p className="text-xs text-zinc-500 max-w-sm">
+                The Minecraft server engine is not running. Launch the server from the dashboard to view live terminal output.
+              </p>
+            </div>
+          ) : filteredLogs.length === 0 ? (
+            <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-2">
+              <div className="text-xs font-semibold text-zinc-400">Waiting for live server output...</div>
+              <p className="text-[11px] text-zinc-600">Starting Paper engine...</p>
             </div>
           ) : (
             filteredLogs.map((log, idx) => {

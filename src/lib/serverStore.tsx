@@ -456,56 +456,20 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
 
   const startServer = async () => {
     setServerInfo((prev) => ({ ...prev, status: 'starting' }));
-    const newLog: ConsoleLogEntry = {
-      id: String(Date.now()),
-      timestamp: new Date().toLocaleTimeString(),
-      level: 'INFO',
-      message: '[Agent] Executing termux-wake-lock & launching Paper 26.3 (-Xms1G -Xmx4G)...',
-    };
-    setLogs((prev) => [...prev, newLog]);
-
     await dispatchServerCommand('START');
-
-    await new Promise((res) => setTimeout(res, 1200));
-    setServerInfo((prev) => ({
-      ...prev,
-      status: 'online',
-      pid: prev.pid || 19104,
-      uptimeSeconds: 0,
-      lastStartup: new Date().toISOString(),
-    }));
-    addAudit('SERVER_START', 'Paper 26.3', 'Dispatched START command to Termux agent');
+    addAudit('SERVER_START', serverInfo.name || 'Paper Server', 'Dispatched START signal to node agent');
   };
 
   const stopServer = async () => {
     setServerInfo((prev) => ({ ...prev, status: 'stopping' }));
-    const newLog: ConsoleLogEntry = {
-      id: String(Date.now()),
-      timestamp: new Date().toLocaleTimeString(),
-      level: 'INFO',
-      message: '[Agent] Sent graceful stop command via local RCON. Flushing chunks...',
-    };
-    setLogs((prev) => [...prev, newLog]);
-
     await dispatchServerCommand('STOP');
-
-    await new Promise((res) => setTimeout(res, 1000));
-    setServerInfo((prev) => ({
-      ...prev,
-      status: 'offline',
-      pid: null,
-      lastShutdown: new Date().toISOString(),
-      onlinePlayers: 0,
-    }));
-    setPlayers((prev) => prev.map((p) => ({ ...p, isOnline: false })));
-    addAudit('SERVER_STOP', 'Paper 26.3', 'Dispatched graceful STOP signal to Termux agent');
+    addAudit('SERVER_STOP', serverInfo.name || 'Paper Server', 'Dispatched STOP signal to node agent');
   };
 
   const restartServer = async () => {
-    await stopServer();
+    setServerInfo((prev) => ({ ...prev, status: 'stopping' }));
     await dispatchServerCommand('RESTART');
-    await new Promise((res) => setTimeout(res, 800));
-    await startServer();
+    addAudit('SERVER_RESTART', serverInfo.name || 'Paper Server', 'Dispatched RESTART signal to node agent');
   };
 
   const sendConsoleCommand = async (cmd: string): Promise<string> => {
@@ -521,34 +485,8 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
     setLogs((prev) => [...prev, cmdLog]);
 
     await dispatchServerCommand('CONSOLE_CMD', { command: trimmed });
-
-    let reply = `[Server] Command "${trimmed}" executed successfully.`;
-    if (trimmed === 'list') {
-      const onlineNames = players.filter((p) => p.isOnline).map((p) => p.username).join(', ');
-      reply = `[Server] There are ${players.filter((p) => p.isOnline).length} of a max of ${serverInfo.maxPlayers} players online: ${onlineNames || 'None'}`;
-    } else if (trimmed === 'tps') {
-      reply = `[Server] TPS from last 1m, 5m, 15m: 20.0, 19.98, 20.0`;
-    } else if (trimmed.startsWith('say ')) {
-      const msg = trimmed.replace('say ', '');
-      reply = `[Server] [Server] ${msg}`;
-    } else if (trimmed === 'save-all') {
-      reply = `[Server] Saving the game (all chunks flushed to disk safely)`;
-    }
-
-    setTimeout(() => {
-      setLogs((prev) => [
-        ...prev,
-        {
-          id: String(Date.now() + 1),
-          timestamp: new Date().toLocaleTimeString(),
-          level: 'INFO',
-          message: reply,
-        },
-      ]);
-    }, 400);
-
-    addAudit('CONSOLE_COMMAND', trimmed, 'Executed via authorized dashboard interface');
-    return reply;
+    addAudit('CONSOLE_COMMAND', trimmed, 'Executed via operator terminal');
+    return '';
   };
 
   const clearLogs = () => {
