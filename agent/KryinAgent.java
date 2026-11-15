@@ -27,9 +27,9 @@ public class KryinAgent {
     private static String rconPassword = "334001";
 
     // Polling Intervals (milliseconds)
-    private static int heartbeatIntervalMs = 30000; // 30 sec
-    private static int metricsIntervalMs = 10000;   // 10 sec
-    private static int commandPollIntervalMs = 3000; // 3 sec
+    private static int heartbeatIntervalMs = 5000;  // 5 sec (Fast instant dashboard response)
+    private static int metricsIntervalMs = 8000;    // 8 sec
+    private static int commandPollIntervalMs = 2000; // 2 sec
 
     private static final HttpClient httpClient = HttpClient.newBuilder()
             .version(HttpClient.Version.HTTP_1_1)

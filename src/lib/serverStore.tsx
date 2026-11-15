@@ -39,7 +39,9 @@ interface ServerStoreContextType {
   updateServerSettings: (data: { publicTunnelJava?: string; publicTunnelBedrock?: string; ip_endpoints?: ServerIpEndpoint[]; name?: string }) => Promise<{ success: boolean; error?: string }>;
   saveIpEndpoints: (endpoints: ServerIpEndpoint[]) => Promise<{ success: boolean; error?: string }>;
   isLoading: boolean;
+  isRefreshing: boolean;
   isDeviceConnected: boolean;
+  refreshStatus: () => Promise<void>;
   metrics: HardwareMetrics;
   history: MetricHistoryPoint[];
   players: MinecraftPlayer[];
@@ -82,6 +84,7 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
   const [serversList, setServersList] = useState<ServerSummary[]>([]);
   const [activeServerId, setActiveServerId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [isDeviceConnected, setIsDeviceConnected] = useState<boolean>(false);
   const [currentUserEmail, setCurrentUserEmail] = useState<string>('operator');
 
@@ -97,7 +100,7 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
   const [tunnel] = useState<TunnelConfig>(tunnelInfo);
   const [isLiveDbConnected, setIsLiveDbConnected] = useState<boolean>(false);
 
-  // Fast hydrate from localStorage cache immediately on mount
+  // Fast hydrate from localStorage cache immediately on mount (0ms instant render)
   useEffect(() => {
     try {
       const cached = localStorage.getItem('kryin_cached_server');
@@ -107,6 +110,13 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
           setServerInfo((prev) => ({ ...prev, ...parsed }));
           if (parsed.id && !activeServerId) {
             setActiveServerId(parsed.id);
+          }
+          // If cached within the last 60 seconds, restore device connection instantly with zero lag
+          if (parsed.deviceConnected !== undefined) {
+            const cachedAge = parsed.cachedAt ? Date.now() - Number(parsed.cachedAt) : 0;
+            if (cachedAge < 60 * 1000 && parsed.deviceConnected) {
+              setIsDeviceConnected(true);
+            }
           }
           setIsLoading(false);
         }
@@ -167,7 +177,13 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
           setServerInfo(updatedServerInfo);
 
           try {
-            localStorage.setItem('kryin_cached_server', JSON.stringify(updatedServerInfo));
+            localStorage.setItem(
+              'kryin_cached_server',
+              JSON.stringify({
+                ...updatedServerInfo,
+                cachedAt: Date.now(),
+              })
+            );
           } catch (e) {}
         }
 
@@ -259,11 +275,22 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
     }
 
     syncLiveServerData();
-    const interval = setInterval(syncLiveServerData, 3500);
+    const interval = setInterval(syncLiveServerData, 2000); // 2-second fast polling
+
+    // Refresh instantly when user returns to the tab
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        syncLiveServerData();
+      }
+    };
+    window.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('focus', syncLiveServerData);
 
     return () => {
       isMounted = false;
       clearInterval(interval);
+      window.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('focus', syncLiveServerData);
     };
   }, [activeServerId]);
 
@@ -368,6 +395,30 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
 
   const saveIpEndpoints = async (endpoints: ServerIpEndpoint[]) => {
     return updateServerSettings({ ip_endpoints: endpoints });
+  };
+
+  const refreshStatus = async () => {
+    setIsRefreshing(true);
+    try {
+      const queryParam = activeServerId ? `?serverId=${encodeURIComponent(activeServerId)}` : '';
+      const res = await fetch(`/api/server/live${queryParam}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.server) {
+          const devConn = Boolean(data.device_connected ?? data.server.device_connected);
+          setIsDeviceConnected(devConn);
+          setServerInfo((prev) => ({
+            ...prev,
+            ...data.server,
+            deviceConnected: devConn,
+          }));
+        }
+      }
+    } catch (e) {
+      console.warn('Status refresh warning:', e);
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 300);
+    }
   };
 
   const addAudit = (action: string, target: string, details: string) => {
@@ -684,7 +735,9 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
         updateServerSettings,
         saveIpEndpoints,
         isLoading,
+        isRefreshing,
         isDeviceConnected,
+        refreshStatus,
         metrics,
         history,
         players,

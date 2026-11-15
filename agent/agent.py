@@ -23,8 +23,8 @@ config = {
     "rconHost": "127.0.0.1",
     "rconPort": 25575,
     "rconPassword": "334001",
-    "heartbeatInterval": 15,
-    "commandPollInterval": 3,
+    "heartbeatInterval": 4,
+    "commandPollInterval": 2,
 }
 
 if os.path.exists(CONFIG_FILE):
@@ -203,8 +203,10 @@ def main():
     except Exception:
         pass
 
-    last_hb = 0
     print("[Agent] Polling loop running. Press Ctrl+C to stop.")
+    # Send instant first heartbeat so dashboard turns green immediately (0 second delay)
+    send_heartbeat()
+    last_hb = time.time()
 
     while True:
         now = time.time()

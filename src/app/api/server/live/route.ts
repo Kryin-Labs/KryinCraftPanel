@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createClient } from '@supabase/supabase-js';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 function getAdminClient() {
   const url =
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
@@ -172,52 +175,63 @@ export async function GET(req: Request) {
       }
     }
 
-    return NextResponse.json({
-      online: isOnline,
-      device_connected: isHeartbeatFresh,
-      status: isOnline ? 'online' : (isHeartbeatFresh ? server.status : 'offline'),
-      servers: formattedServers,
-      server: {
-        id: server.id,
-        name: server.name,
-        device: server.device_name || 'Indian Node',
+    return NextResponse.json(
+      {
+        online: isOnline,
         device_connected: isHeartbeatFresh,
-        status: isOnline ? 'online' : (isHeartbeatFresh ? server.status : 'offline'),
-        pid: (isAuthenticated && isOnline) ? server.pid : null,
-        tps: isOnline ? Number(server.tps || 20.0) : 0,
-        uptime_seconds: isOnline ? (server.uptime_seconds || 0) : 0,
-        online_players: isOnline ? (server.online_players || 0) : 0,
-        max_players: server.max_players || 20,
-        local_ip: isAuthenticated ? (server.local_ip || null) : null,
-        public_tunnel_java: server.public_tunnel_java || null,
-        public_tunnel_bedrock: server.public_tunnel_bedrock || null,
-        ip_endpoints: ipEndpoints,
-        last_heartbeat: server.last_heartbeat,
+        status: isOnline ? 'online' : isHeartbeatFresh ? server.status : 'offline',
+        servers: formattedServers,
+        server: {
+          id: server.id,
+          name: server.name,
+          device: server.device_name || 'Indian Node',
+          device_connected: isHeartbeatFresh,
+          status: isOnline ? 'online' : isHeartbeatFresh ? server.status : 'offline',
+          pid: isAuthenticated && isOnline ? server.pid : null,
+          tps: isOnline ? Number(server.tps || 20.0) : 0,
+          uptime_seconds: isOnline ? server.uptime_seconds || 0 : 0,
+          online_players: isOnline ? server.online_players || 0 : 0,
+          max_players: server.max_players || 20,
+          local_ip: isAuthenticated ? server.local_ip || null : null,
+          public_tunnel_java: server.public_tunnel_java || null,
+          public_tunnel_bedrock: server.public_tunnel_bedrock || null,
+          ip_endpoints: ipEndpoints,
+          last_heartbeat: server.last_heartbeat,
+        },
+        metrics:
+          latestMetrics && isOnline
+            ? {
+                totalRamMb: latestMetrics.total_ram_mb || 0,
+                usedRamMb: latestMetrics.used_ram_mb || 0,
+                javaHeapUsedMb: latestMetrics.java_heap_used_mb || 0,
+                javaHeapMaxMb: latestMetrics.java_heap_max_mb || 0,
+                cpuUsagePercent: Number(latestMetrics.cpu_usage_percent || 0),
+                cpuTempC: latestMetrics.cpu_temp_c ? Number(latestMetrics.cpu_temp_c) : null,
+                batteryPercent: latestMetrics.battery_percent ?? 0,
+                isCharging: Boolean(latestMetrics.is_charging),
+                powerSource: latestMetrics.power_source || 'Standby',
+              }
+            : {
+                totalRamMb: 0,
+                usedRamMb: 0,
+                javaHeapUsedMb: 0,
+                javaHeapMaxMb: 0,
+                cpuUsagePercent: 0,
+                cpuTempC: null,
+                batteryPercent: 0,
+                isCharging: false,
+                powerSource: 'Offline',
+              },
+        logs,
+        players: dbPlayers || [],
       },
-      metrics: (latestMetrics && isOnline) ? {
-        totalRamMb: latestMetrics.total_ram_mb || 0,
-        usedRamMb: latestMetrics.used_ram_mb || 0,
-        javaHeapUsedMb: latestMetrics.java_heap_used_mb || 0,
-        javaHeapMaxMb: latestMetrics.java_heap_max_mb || 0,
-        cpuUsagePercent: Number(latestMetrics.cpu_usage_percent || 0),
-        cpuTempC: latestMetrics.cpu_temp_c ? Number(latestMetrics.cpu_temp_c) : null,
-        batteryPercent: latestMetrics.battery_percent ?? 0,
-        isCharging: Boolean(latestMetrics.is_charging),
-        powerSource: latestMetrics.power_source || 'Standby',
-      } : {
-        totalRamMb: 0,
-        usedRamMb: 0,
-        javaHeapUsedMb: 0,
-        javaHeapMaxMb: 0,
-        cpuUsagePercent: 0,
-        cpuTempC: null,
-        batteryPercent: 0,
-        isCharging: false,
-        powerSource: 'Offline',
-      },
-      logs,
-      players: dbPlayers || [],
-    });
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+          Pragma: 'no-cache',
+        },
+      }
+    );
   } catch (err: any) {
     return NextResponse.json(
       { error: 'Internal server error retrieving live telemetry' },

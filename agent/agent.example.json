@@ -4,5 +4,7 @@
   "serverDir": "/data/data/com.termux/files/home/minecraft/server",
   "rconHost": "127.0.0.1",
   "rconPort": 25575,
-  "rconPassword": "334001"
+  "rconPassword": "334001",
+  "heartbeatInterval": 4,
+  "commandPollInterval": 2
 }

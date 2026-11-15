@@ -24,6 +24,8 @@ import {
   Radio,
   Globe,
   CheckCircle2,
+  RefreshCw,
+  Loader2,
 } from 'lucide-react';
 import { useServerStore } from '@/lib/serverStore';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -40,6 +42,8 @@ export default function DashboardOverviewPage() {
     restartServer,
     isDeviceConnected,
     isLoading,
+    isRefreshing,
+    refreshStatus,
     saveIpEndpoints,
   } = useServerStore();
 
@@ -215,6 +219,14 @@ export default function DashboardOverviewPage() {
               <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#1a1522]">
                 {serverInfo.name || (isLoading ? 'Loading Server...' : 'Minecraft Server')}
               </h1>
+              <button
+                onClick={refreshStatus}
+                disabled={isRefreshing}
+                title="Instant live status sync"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
+              >
+                <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-blue-600' : ''}`} />
+              </button>
             </div>
             <p className="text-xs text-[#1a1522]/60 font-medium">
               Node: <strong className="text-[#1a1522]">Indian Node</strong>
@@ -224,32 +236,43 @@ export default function DashboardOverviewPage() {
           {/* Dual Status Bar: Device Connection & Minecraft Server State */}
           <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
             {/* Device Connection Indicator */}
-            <div
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-2xs ${
-                isDeviceConnected
-                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                  : 'bg-amber-50 text-amber-800 border-amber-300'
-              }`}
-              title={
-                isDeviceConnected
-                  ? 'Device daemon is online and communicating. Ready to start game!'
-                  : 'Device daemon is offline. Website cannot start game until device connects.'
-              }
-            >
-              <span
-                className={`w-2.5 h-2.5 rounded-full ${
-                  isDeviceConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'
-                }`}
-              />
-              <span>
-                {isDeviceConnected ? 'Device: Connected' : 'Device: Not Connected'}
-              </span>
-            </div>
+            {isLoading && !isDeviceConnected ? (
+              <div
+                className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border text-xs font-bold bg-blue-50 text-blue-800 border-blue-200 shadow-2xs animate-pulse"
+                title="Checking device connection status..."
+              >
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
+                <span>Checking Device...</span>
+              </div>
+            ) : isDeviceConnected ? (
+              <div
+                className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-2xs bg-emerald-50 text-emerald-800 border-emerald-300"
+                title="Device daemon is online and communicating. Ready to start game!"
+              >
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span>Device: Connected</span>
+              </div>
+            ) : (
+              <div
+                className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-2xs bg-amber-50 text-amber-800 border-amber-300"
+                title="Device daemon is offline. Website cannot start game until device connects."
+              >
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                <span>Device: Not Connected</span>
+              </div>
+            )}
 
             {/* Minecraft Process State Badge */}
             <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold">
               <span className="text-[#1a1522]/60 font-semibold">Minecraft:</span>
-              <StatusBadge status={serverInfo.status} size="sm" />
+              {isLoading && serverInfo.status === 'offline' ? (
+                <div className="flex items-center gap-1.5 text-xs text-blue-600 font-semibold">
+                  <Loader2 className="w-3 h-3 animate-spin text-blue-600" />
+                  <span>Syncing...</span>
+                </div>
+              ) : (
+                <StatusBadge status={serverInfo.status} size="sm" />
+              )}
             </div>
 
             {/* Active Players & TPS Live Counter */}
