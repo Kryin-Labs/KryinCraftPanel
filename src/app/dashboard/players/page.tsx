@@ -22,16 +22,19 @@ export default function PlayersManagementPage() {
     banPlayer,
     unbanPlayer,
     toggleOp,
+    toggleWhitelist,
+    addWhitelistPlayer,
     setGamemode
   } = useServerStore();
 
   const [search, setSearch] = useState('');
-  const [activeTab, setActiveTab] = useState<'all' | 'online' | 'ops' | 'banned'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'online' | 'ops' | 'whitelist' | 'banned'>('all');
   const [newPlayerName, setNewPlayerName] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
 
   const onlinePlayers = players.filter((p) => p.isOnline);
   const opPlayers = players.filter((p) => p.isOp);
+  const wlPlayers = players.filter((p) => p.isWhitelisted);
   const bannedPlayers = players.filter((p) => p.isBanned);
 
   const filteredPlayers = players.filter((player) => {
@@ -43,6 +46,7 @@ export default function PlayersManagementPage() {
 
     if (activeTab === 'online') return player.isOnline;
     if (activeTab === 'ops') return player.isOp;
+    if (activeTab === 'whitelist') return player.isWhitelisted;
     if (activeTab === 'banned') return player.isBanned;
     return true;
   });
@@ -52,10 +56,12 @@ export default function PlayersManagementPage() {
     setTimeout(() => setNotice(null), 3000);
   };
 
-  const handleAddWhitelist = (e: React.FormEvent) => {
+  const handleAddWhitelist = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newPlayerName.trim()) return;
-    showNotice(`Added player "${newPlayerName.trim()}" to whitelist.`);
+    const name = newPlayerName.trim();
+    if (!name) return;
+    await addWhitelistPlayer(name);
+    showNotice(`Added player "${name}" to whitelist on server.`);
     setNewPlayerName('');
   };
 
@@ -104,11 +110,12 @@ export default function PlayersManagementPage() {
       {/* Search & Filter Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         {/* Filter Tabs */}
-        <div className="flex items-center rounded-xl bg-white border border-[#1a1522]/10 p-1 text-xs shadow-xs">
+        <div className="flex items-center rounded-xl bg-white border border-[#1a1522]/10 p-1 text-xs shadow-xs flex-wrap">
           {[
             { id: 'all', label: `All (${players.length})` },
             { id: 'online', label: `Online (${onlinePlayers.length})` },
-            { id: 'ops', label: `Operators (${opPlayers.length})` },
+            { id: 'ops', label: `Ops (${opPlayers.length})` },
+            { id: 'whitelist', label: `Whitelist (${wlPlayers.length})` },
             { id: 'banned', label: `Banned (${bannedPlayers.length})` },
           ].map((tab) => (
             <button
@@ -197,7 +204,7 @@ export default function PlayersManagementPage() {
                         )}
 
                         {player.isBanned && (
-                          <span className="text-[9px] px-2 py-0.2 rounded bg-red-50 text-red-700 border border-red-200 font-bold">
+                          <span className="text-[9px] px-2 py-0.2 rounded bg-red-50 text-red-700 border border-red-200 font-bold" title={(player as any).banReason || 'Banned'}>
                             BANNED
                           </span>
                         )}
@@ -215,6 +222,12 @@ export default function PlayersManagementPage() {
                             <span>
                               XYZ: {Math.round(player.coordinates.x)}, {Math.round(player.coordinates.y)}, {Math.round(player.coordinates.z)}
                             </span>
+                          </>
+                        )}
+                        {player.lastSeen && (
+                          <>
+                            <span>•</span>
+                            <span>Seen: {player.lastSeen}</span>
                           </>
                         )}
                       </div>
@@ -253,6 +266,22 @@ export default function PlayersManagementPage() {
                     >
                       <Shield className="w-3.5 h-3.5" />
                       <span>{player.isOp ? 'De-OP' : 'OP'}</span>
+                    </button>
+
+                    {/* Whitelist Toggle */}
+                    <button
+                      onClick={() => {
+                        toggleWhitelist(player.uuid);
+                        showNotice(`Toggled whitelist for ${player.username}.`);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all flex items-center gap-1.5 ${
+                        player.isWhitelisted
+                          ? 'bg-blue-50 text-blue-800 border-blue-300 hover:bg-blue-100'
+                          : 'bg-white text-[#1a1522]/70 border-[#1a1522]/15 hover:bg-slate-50'
+                      }`}
+                      title={player.isWhitelisted ? 'Remove from whitelist' : 'Add to whitelist'}
+                    >
+                      <span>{player.isWhitelisted ? 'Un-Whitelist' : 'Whitelist'}</span>
                     </button>
 
                     {/* Kick Button (if online) */}

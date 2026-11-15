@@ -1,0 +1,18 @@
+
+--- Starting playitd at 2026-11-15 22:52:30 ---
+2026-11-15T17:22:30.291426Z  INFO playitd::daemon: Starting playitd socket_path=None secret_path=Some("d:\\APPS(d)\\KryinMinecraftPortal\\tools\\playit\\playit.toml") version=2.0.2
+2026-11-15T17:22:32.465068Z  WARN playit_agent_core::agent_control::maintained_control: control session expired; reconnecting reason=SessionNotSetup
+2026-11-15T17:22:32.759587Z  INFO playitd::daemon: playit connected; tunnels loaded agent_id=92239be3-cc37-4c6d-be31-fbecb4b3467b tunnel_count=1 pending_tunnel_count=0 disabled_tunnel_count=0 account_status="verified"
+2026-11-15T17:22:33.900941Z  WARN playit_agent_core::agent_control::maintained_control: control session expired; reconnecting reason=SessionNotSetup
+
+--- Starting playitd at 2026-11-15 22:56:23 ---
+2026-11-15T17:26:23.411980Z  INFO playitd::daemon: Starting playitd socket_path=None secret_path=Some("d:\\APPS(d)\\KryinMinecraftPortal\\tools\\playit\\playit.toml") version=2.0.2
+2026-11-15T17:26:25.478626Z  WARN playit_agent_core::agent_control::maintained_control: control session expired; reconnecting reason=SessionNotSetup
+2026-11-15T17:26:25.788313Z  INFO playitd::daemon: playit connected; tunnels loaded agent_id=92239be3-cc37-4c6d-be31-fbecb4b3467b tunnel_count=1 pending_tunnel_count=0 disabled_tunnel_count=0 account_status="verified"
+2026-11-15T17:26:26.929400Z  WARN playit_agent_core::agent_control::maintained_control: control session expired; reconnecting reason=SessionNotSetup
+
+--- Starting playitd at 2026-11-15 22:57:05 ---
+2026-11-15T17:27:06.213642Z  INFO playitd::daemon: Starting playitd socket_path=None secret_path=Some("d:\\APPS(d)\\KryinMinecraftPortal\\tools\\playit\\playit.toml") version=2.0.2
+2026-11-15T17:27:08.306379Z  WARN playit_agent_core::agent_control::maintained_control: control session expired; reconnecting reason=SessionNotSetup
+2026-11-15T17:27:08.603756Z  INFO playitd::daemon: playit connected; tunnels loaded agent_id=92239be3-cc37-4c6d-be31-fbecb4b3467b tunnel_count=1 pending_tunnel_count=0 disabled_tunnel_count=0 account_status="verified"
+2026-11-15T17:27:09.746117Z  WARN playit_agent_core::agent_control::maintained_control: control session expired; reconnecting reason=SessionNotSetup

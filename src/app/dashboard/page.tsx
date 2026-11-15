@@ -168,12 +168,6 @@ export default function DashboardOverviewPage() {
   };
 
   const handleQuickAction = async (action: 'start' | 'restart' | 'stop' | 'hibernate') => {
-    if (!isDeviceConnected) {
-      setActionNotice('Cannot start game: Your phone/device daemon is not connected. Launch the agent on your device first.');
-      setTimeout(() => setActionNotice(null), 4500);
-      return;
-    }
-
     if (action === 'start') {
       setActionNotice(`Starting Paper server ${serverInfo.name}...`);
       await startServer();
@@ -380,6 +374,16 @@ export default function DashboardOverviewPage() {
                   <Users className="w-3.5 h-3.5 text-emerald-600" />
                   <span>Online {serverInfo.onlinePlayers} / {serverInfo.maxPlayers}</span>
                 </div>
+              ) : isStarting ? (
+                <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-600 text-xs font-semibold">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" />
+                  <span>0 / {serverInfo.maxPlayers} (Starting)</span>
+                </div>
+              ) : isStopping ? (
+                <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-600 text-xs font-semibold">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-500" />
+                  <span>0 / {serverInfo.maxPlayers} (Stopping)</span>
+                </div>
               ) : (
                 <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-600 text-xs font-semibold">
                   <Users className="w-3.5 h-3.5 text-slate-400" />
@@ -388,25 +392,18 @@ export default function DashboardOverviewPage() {
               )}
 
               {/* Active TPS Live Counter */}
-              {isServerOnline && (
+              {isServerOnline ? (
                 <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs font-bold">
                   <Radio className="w-3 h-3 text-blue-600 animate-pulse" />
-                  <span>{serverInfo.tps.toFixed(1)} TPS</span>
+                  <span>{(serverInfo.tps || 20.0).toFixed(1)} TPS</span>
                 </div>
-              )}
+              ) : isStarting ? (
+                <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-blue-50/60 border border-blue-200/60 text-blue-700 text-xs font-bold">
+                  <Loader2 className="w-3 h-3 text-blue-500 animate-spin" />
+                  <span>Warming TPS...</span>
+                </div>
+              ) : null}
             </div>
-
-          {/* Connection Guidance Alert if Device is Offline */}
-          {!isDeviceConnected && (
-            <div className="p-3 bg-amber-50/90 border border-amber-200 text-amber-900 rounded-xl text-xs max-w-lg text-left leading-relaxed">
-              <p className="font-bold flex items-center gap-1.5 text-amber-800">
-                <span>⚠️</span> Phone / Device Daemon Offline
-              </p>
-              <p className="text-[11px] text-amber-700 mt-1">
-                The portal cannot send commands to start the game because your device is not currently pinging. Run the agent command in Termux to connect your phone.
-              </p>
-            </div>
-          )}
 
           {/* Power Actions Hub */}
           <div className="flex flex-wrap items-center justify-center gap-2.5 pt-2">
@@ -429,13 +426,8 @@ export default function DashboardOverviewPage() {
             ) : !isServerOnline ? (
               <button
                 onClick={() => handleQuickAction('start')}
-                disabled={!isDeviceConnected}
-                className={`px-5 py-2.5 rounded-xl text-white text-xs font-bold flex items-center gap-2 transition-all shadow-xs ${
-                  isDeviceConnected
-                    ? 'bg-emerald-600 hover:bg-emerald-700 cursor-pointer shadow-emerald-600/20'
-                    : 'bg-slate-300 text-slate-500 cursor-not-allowed'
-                }`}
-                title={isDeviceConnected ? 'Launch Minecraft Server' : 'Device not connected: Cannot start game'}
+                className="px-5 py-2.5 rounded-xl text-white text-xs font-bold flex items-center gap-2 transition-all shadow-xs bg-emerald-600 hover:bg-emerald-700 cursor-pointer shadow-emerald-600/20 active:scale-95"
+                title="Launch Minecraft Server"
               >
                 <Play className="w-4 h-4 fill-current" />
                 <span>Start Game</span>
@@ -443,8 +435,7 @@ export default function DashboardOverviewPage() {
             ) : (
               <button
                 onClick={() => handleQuickAction('restart')}
-                disabled={!isDeviceConnected}
-                className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-2 transition-all shadow-xs"
+                className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-2 transition-all shadow-xs active:scale-95 cursor-pointer"
                 title="Restart Minecraft server"
               >
                 <RotateCw className="w-4 h-4" />
@@ -455,8 +446,8 @@ export default function DashboardOverviewPage() {
             {isServerOnline && (
               <button
                 onClick={() => handleQuickAction('stop')}
-                disabled={!isDeviceConnected || isStopping || isStarting}
-                className="px-4 py-2.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-bold flex items-center gap-1.5 transition-all"
+                disabled={isStopping || isStarting}
+                className="px-4 py-2.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer disabled:opacity-50"
                 title="Gracefully stop server"
               >
                 <Power className="w-4 h-4" />
@@ -466,8 +457,8 @@ export default function DashboardOverviewPage() {
 
             <button
               onClick={() => handleQuickAction('hibernate')}
-              disabled={!isDeviceConnected || !isServerOnline || isStopping || isStarting}
-              className="px-4 py-2.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold flex items-center gap-1.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              disabled={!isServerOnline || isStopping || isStarting}
+              className="px-4 py-2.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold flex items-center gap-1.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
               title="Hibernate server when idle"
             >
               <Moon className="w-3.5 h-3.5" />

@@ -35,11 +35,19 @@ const ALLOWED_COMMANDS = new Set([
   'FEED',
   'STARVE',
   'KILL',
+  'KILL_SERVER',
+  'FORCE_STOP',
   'TELEPORT',
   'GAMEMODE',
   'SAVE_PROPERTIES',
   'SAVE_SETTINGS',
   'SAVE_FILE',
+  'LIST_FILES',
+  'READ_FILE',
+  'DELETE_FILE',
+  'CREATE_FOLDER',
+  'CREATE_FILE',
+  'RENAME_FILE',
 ]);
 
 export async function POST(req: Request) {
@@ -152,6 +160,52 @@ export async function POST(req: Request) {
       if (typeof payload.coords === 'string') {
         sanitizedPayload.coords = payload.coords.slice(0, 50).trim();
       }
+      if (typeof payload.directory === 'string') {
+        sanitizedPayload.directory = payload.directory.slice(0, 500).trim();
+      }
+      if (typeof payload.path === 'string') {
+        sanitizedPayload.path = payload.path.slice(0, 500).trim();
+      }
+      if (typeof payload.content === 'string') {
+        sanitizedPayload.content = payload.content.slice(0, 5 * 1024 * 1024); // max 5MB
+      }
+      if (payload.properties && typeof payload.properties === 'object') {
+        sanitizedPayload.properties = payload.properties;
+      }
+      if (typeof payload.name === 'string') {
+        sanitizedPayload.name = payload.name.slice(0, 200).trim();
+      }
+      if (typeof payload.newName === 'string') {
+        sanitizedPayload.newName = payload.newName.slice(0, 200).trim();
+      }
+      if (typeof payload.oldPath === 'string') {
+        sanitizedPayload.oldPath = payload.oldPath.slice(0, 500).trim();
+      }
+      if (typeof payload.newPath === 'string') {
+        sanitizedPayload.newPath = payload.newPath.slice(0, 500).trim();
+      }
+    }
+
+    // Map to valid PostgreSQL check constraint enum:
+    // check (command_type in ('START', 'STOP', 'RESTART', 'CONSOLE_CMD', 'PLAYER_ACTION', 'CONFIG_UPDATE'))
+    let dbCommandType = 'CONFIG_UPDATE';
+    sanitizedPayload.action = normalizedCmd;
+
+    if (['START'].includes(normalizedCmd)) {
+      dbCommandType = 'START';
+    } else if (['STOP', 'HIBERNATE'].includes(normalizedCmd)) {
+      dbCommandType = 'STOP';
+    } else if (['KILL', 'KILL_SERVER', 'FORCE_STOP'].includes(normalizedCmd)) {
+      dbCommandType = 'STOP';
+      sanitizedPayload.action = 'KILL';
+    } else if (['RESTART'].includes(normalizedCmd)) {
+      dbCommandType = 'RESTART';
+    } else if (['CONSOLE_CMD', 'COMMAND'].includes(normalizedCmd)) {
+      dbCommandType = 'CONSOLE_CMD';
+    } else if (['KICK', 'BAN', 'UNBAN', 'OP', 'DEOP', 'WHITELIST', 'HEAL', 'FEED', 'STARVE', 'TELEPORT', 'GAMEMODE'].includes(normalizedCmd)) {
+      dbCommandType = 'PLAYER_ACTION';
+    } else {
+      dbCommandType = 'CONFIG_UPDATE';
     }
 
     // 7. Queue command into server_commands with 60s expiration
@@ -161,7 +215,7 @@ export async function POST(req: Request) {
       .insert({
         server_id: targetServer.id,
         requested_by: user.id,
-        command_type: normalizedCmd,
+        command_type: dbCommandType,
         payload: sanitizedPayload,
         status: 'PENDING',
         expires_at: expiresAt,
@@ -176,11 +230,26 @@ export async function POST(req: Request) {
       );
     }
 
-    // Instant state synchronization: update server status in DB so live polling never flashes stale state
+    // Instant state synchronization: update server status in DB so live polling and Realtime never flash stale state
+    const nowIso = new Date().toISOString();
     if (normalizedCmd === 'START') {
-      await admin.from('servers').update({ status: 'starting' }).eq('id', targetServer.id);
+      await admin.from('servers').update({
+        status: 'starting',
+        last_heartbeat: nowIso,
+        agent_connected: true,
+      }).eq('id', targetServer.id);
     } else if (normalizedCmd === 'STOP' || normalizedCmd === 'RESTART' || normalizedCmd === 'HIBERNATE') {
-      await admin.from('servers').update({ status: 'stopping' }).eq('id', targetServer.id);
+      await admin.from('servers').update({
+        status: 'stopping',
+        last_heartbeat: nowIso,
+      }).eq('id', targetServer.id);
+    } else if (normalizedCmd === 'KILL' || normalizedCmd === 'KILL_SERVER' || normalizedCmd === 'FORCE_STOP') {
+      await admin.from('servers').update({
+        status: 'offline',
+        pid: null,
+        tps: 0.0,
+        last_heartbeat: nowIso,
+      }).eq('id', targetServer.id);
     }
 
     // 8. Log into audit_logs (fail-safe)

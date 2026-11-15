@@ -11,11 +11,22 @@ export async function POST(req: Request) {
     const { server, supabase } = authResult;
     const body = await req.json();
 
-    const {
-      command_id,
-      status = 'EXECUTED', // 'EXECUTED' or 'FAILED'
-      result = {},
-    } = body;
+    const command_id = body.command_id;
+    const rawStatus = (body.status || 'EXECUTED').toUpperCase();
+    const status = rawStatus === 'FAILED' ? 'FAILED' : 'EXECUTED';
+
+    let finalResult = body.result || {};
+    if (body.result_output) {
+      if (typeof body.result_output === 'string') {
+        try {
+          finalResult = JSON.parse(body.result_output);
+        } catch {
+          finalResult = { output: body.result_output };
+        }
+      } else {
+        finalResult = body.result_output;
+      }
+    }
 
     if (!command_id) {
       return NextResponse.json({ error: 'Missing command_id' }, { status: 400 });
@@ -25,7 +36,7 @@ export async function POST(req: Request) {
       .from('server_commands')
       .update({
         status,
-        result,
+        result: finalResult,
         executed_at: new Date().toISOString(),
       })
       .eq('id', command_id)

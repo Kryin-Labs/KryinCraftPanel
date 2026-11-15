@@ -57,6 +57,9 @@ interface ServerStoreContextType {
   startServer: () => Promise<void>;
   stopServer: () => Promise<void>;
   restartServer: () => Promise<void>;
+  killServer: () => Promise<void>;
+  fetchDirectory: (dir: string) => Promise<ServerFile[]>;
+  fetchFileContent: (path: string) => Promise<string>;
   sendConsoleCommand: (cmd: string) => Promise<string>;
   clearLogs: () => void;
   kickPlayer: (uuid: string, reason?: string) => Promise<void>;
@@ -73,6 +76,8 @@ interface ServerStoreContextType {
   saveFileContent: (path: string, content: string) => Promise<void>;
   deleteFile: (path: string) => Promise<void>;
   createFolder: (parentPath: string, name: string) => Promise<void>;
+  createFile: (parentPath: string, name: string, content?: string) => Promise<void>;
+  addWhitelistPlayer: (username: string) => Promise<void>;
   inviteMember: (email: string, role: RoleMember['role'], permissions: string[]) => Promise<void>;
   revokeMember: (id: string) => Promise<void>;
 }
@@ -104,6 +109,47 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
     type: 'starting' | 'stopping';
     startedAt: number;
   } | null>(null);
+
+  const computeServerStatus = (
+    rawStatus: string | undefined,
+    isFresh: boolean,
+    pending: { type: 'starting' | 'stopping'; startedAt: number } | null
+  ): { status: ServerStatus; clearPending: boolean } => {
+    const norm = (rawStatus || 'offline').toLowerCase();
+    let current: ServerStatus =
+      norm === 'online' && isFresh
+        ? 'online'
+        : norm === 'starting' || norm === 'stopping' || norm === 'crashed' || norm === 'hibernating'
+        ? (norm as ServerStatus)
+        : 'offline';
+
+    if (!pending) {
+      return { status: current, clearPending: false };
+    }
+
+    const elapsed = Date.now() - pending.startedAt;
+    if (pending.type === 'starting') {
+      if (current === 'online') {
+        return { status: 'online', clearPending: true };
+      }
+      if (elapsed < 90000) {
+        return { status: 'starting', clearPending: false };
+      }
+      return { status: current, clearPending: true };
+    }
+
+    if (pending.type === 'stopping') {
+      if (current === 'offline') {
+        return { status: 'offline', clearPending: true };
+      }
+      if (elapsed < 60000) {
+        return { status: 'stopping', clearPending: false };
+      }
+      return { status: current, clearPending: true };
+    }
+
+    return { status: current, clearPending: false };
+  };
 
   // Fast hydrate from localStorage cache immediately on mount (0ms instant render)
   useEffect(() => {
@@ -161,59 +207,49 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
             setActiveServerId(data.server.id);
           }
 
-          let currentStatus = (data.server.status as ServerStatus) || 'offline';
-          const pending = pendingTransitionRef.current;
-          if (pending) {
-            const elapsed = Date.now() - pending.startedAt;
-            if (pending.type === 'starting') {
-              if (currentStatus === 'online') {
-                pendingTransitionRef.current = null;
-              } else if (elapsed < 90000) {
-                currentStatus = 'starting';
-              } else {
-                pendingTransitionRef.current = null;
-              }
-            } else if (pending.type === 'stopping') {
-              if (currentStatus === 'offline') {
-                pendingTransitionRef.current = null;
-              } else if (elapsed < 60000) {
-                currentStatus = 'stopping';
-              } else {
-                pendingTransitionRef.current = null;
-              }
-            }
+          const isFresh = Boolean(data.device_connected ?? devConn);
+          const { status: resolvedStatus, clearPending } = computeServerStatus(
+            data.server.status,
+            isFresh,
+            pendingTransitionRef.current
+          );
+          if (clearPending) {
+            pendingTransitionRef.current = null;
           }
 
-          const updatedServerInfo: ServerInfo = {
-            ...serverInfo,
-            id: data.server.id,
-            name: data.server.name || '',
-            status: currentStatus,
-            pid: data.server.pid,
-            device: data.server.device || 'Indian Node',
-            deviceConnected: devConn,
-            uptimeSeconds: data.server.uptime_seconds,
-            agentConnected: devConn,
-            lastHeartbeat: data.server.last_heartbeat ? new Date(data.server.last_heartbeat).toLocaleTimeString() : 'Standby',
-            onlinePlayers: data.server.online_players,
-            maxPlayers: data.server.max_players,
-            tps: data.server.tps,
-            localIp: data.server.local_ip,
-            publicTunnelJava: data.server.public_tunnel_java,
-            publicTunnelBedrock: data.server.public_tunnel_bedrock,
-            ipEndpoints: data.server.ip_endpoints || [],
-          };
-          setServerInfo(updatedServerInfo);
+          setServerInfo((prev) => {
+            const updatedServerInfo: ServerInfo = {
+              ...prev,
+              id: data.server.id,
+              name: data.server.name || prev.name,
+              status: resolvedStatus,
+              pid: data.server.pid,
+              device: data.server.device || prev.device || 'Indian Node',
+              deviceConnected: devConn || resolvedStatus === 'online' || resolvedStatus === 'starting' || resolvedStatus === 'stopping',
+              uptimeSeconds: data.server.uptime_seconds ?? prev.uptimeSeconds,
+              agentConnected: devConn,
+              lastHeartbeat: data.server.last_heartbeat ? new Date(data.server.last_heartbeat).toLocaleTimeString() : prev.lastHeartbeat,
+              onlinePlayers: data.server.online_players ?? prev.onlinePlayers,
+              maxPlayers: data.server.max_players ?? prev.maxPlayers,
+              tps: Number(data.server.tps ?? prev.tps),
+              localIp: data.server.local_ip ?? prev.localIp,
+              publicTunnelJava: data.server.public_tunnel_java !== undefined ? data.server.public_tunnel_java : prev.publicTunnelJava,
+              publicTunnelBedrock: data.server.public_tunnel_bedrock !== undefined ? data.server.public_tunnel_bedrock : prev.publicTunnelBedrock,
+              ipEndpoints: data.server.ip_endpoints || prev.ipEndpoints,
+            };
 
-          try {
-            localStorage.setItem(
-              'kryin_cached_server',
-              JSON.stringify({
-                ...updatedServerInfo,
-                cachedAt: Date.now(),
-              })
-            );
-          } catch (e) {}
+            try {
+              localStorage.setItem(
+                'kryin_cached_server',
+                JSON.stringify({
+                  ...updatedServerInfo,
+                  cachedAt: Date.now(),
+                })
+              );
+            } catch (e) {}
+
+            return updatedServerInfo;
+          });
         }
 
         if (data.metrics) {
@@ -315,11 +351,80 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
     window.addEventListener('visibilitychange', handleVisibility);
     window.addEventListener('focus', syncLiveServerData);
 
+    // Supabase Realtime channel for millisecond log streaming and instant server status updates
+    const currentServerId = activeServerId || serverInfo.id;
+    const realtimeChannel = supabase
+      .channel(`kryin-realtime-${currentServerId || 'global'}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'server_logs',
+        },
+        (payload: any) => {
+          const newRow = payload?.new;
+          if (newRow && (!currentServerId || newRow.server_id === currentServerId)) {
+            setLogs((prev) => {
+              if (prev.some((l) => l.id === newRow.id)) return prev;
+              const formattedTs = newRow.timestamp
+                ? newRow.timestamp.includes('T')
+                  ? new Date(newRow.timestamp).toLocaleTimeString()
+                  : newRow.timestamp
+                : new Date().toLocaleTimeString();
+              return [
+                ...prev,
+                {
+                  id: newRow.id,
+                  timestamp: formattedTs,
+                  level: newRow.level || 'INFO',
+                  message: newRow.message,
+                },
+              ];
+            });
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'servers',
+        },
+        (payload: any) => {
+          const updated = payload?.new;
+          if (updated && (!currentServerId || updated.id === currentServerId)) {
+            const hbTime = updated.last_heartbeat ? new Date(updated.last_heartbeat).getTime() : 0;
+            const isFresh = Date.now() - hbTime < 45 * 1000;
+            const { status: resolvedStatus, clearPending } = computeServerStatus(
+              updated.status,
+              isFresh,
+              pendingTransitionRef.current
+            );
+            if (clearPending) {
+              pendingTransitionRef.current = null;
+            }
+            setServerInfo((prev) => ({
+              ...prev,
+              status: resolvedStatus,
+              tps: Number(updated.tps || prev.tps),
+              onlinePlayers: updated.online_players ?? prev.onlinePlayers,
+              maxPlayers: updated.max_players ?? prev.maxPlayers,
+              uptimeSeconds: updated.uptime_seconds ?? prev.uptimeSeconds,
+              deviceConnected: isFresh || resolvedStatus === 'starting' || resolvedStatus === 'stopping' || resolvedStatus === 'online',
+            }));
+          }
+        }
+      )
+      .subscribe();
+
     return () => {
       isMounted = false;
       clearInterval(interval);
       window.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('focus', syncLiveServerData);
+      supabase.removeChannel(realtimeChannel);
     };
   }, [activeServerId]);
 
@@ -486,6 +591,7 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
   const startServer = async () => {
     pendingTransitionRef.current = { type: 'starting', startedAt: Date.now() };
     setServerInfo((prev) => ({ ...prev, status: 'starting' }));
+    setLogs([]); // Immediately clear console for fresh running Minecraft instance
     await dispatchServerCommand('START');
     addAudit('SERVER_START', serverInfo.name || 'Paper Server', 'Dispatched START signal to node agent');
   };
@@ -500,21 +606,55 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
   const restartServer = async () => {
     pendingTransitionRef.current = { type: 'starting', startedAt: Date.now() };
     setServerInfo((prev) => ({ ...prev, status: 'stopping' }));
+    setLogs([]); // Immediately clear console for fresh running Minecraft instance
     await dispatchServerCommand('RESTART');
     addAudit('SERVER_RESTART', serverInfo.name || 'Paper Server', 'Dispatched RESTART signal to node agent');
+  };
+
+  const killServer = async () => {
+    pendingTransitionRef.current = null;
+    setServerInfo((prev) => ({ ...prev, status: 'offline', pid: null, tps: 0 }));
+    await dispatchServerCommand('KILL');
+    addAudit('SERVER_KILL', serverInfo.name || 'Paper Server', 'Forcibly sent SIGKILL to node agent');
+  };
+
+  const fetchDirectory = async (dir: string): Promise<ServerFile[]> => {
+    try {
+      const serverParam = activeServerId ? `&serverId=${encodeURIComponent(activeServerId)}` : '';
+      const res = await fetch(`/api/server/files?action=list&dir=${encodeURIComponent(dir)}${serverParam}`);
+      if (!res.ok) return files[dir] || [];
+      const json = await res.json();
+      if (json.success && json.data && Array.isArray(json.data.files)) {
+        const fetchedFiles: ServerFile[] = json.data.files;
+        setFiles((prev) => ({ ...prev, [dir]: fetchedFiles }));
+        return fetchedFiles;
+      }
+    } catch (e) {
+      console.warn('Directory fetch warning:', e);
+    }
+    return files[dir] || [];
+  };
+
+  const fetchFileContent = async (path: string): Promise<string> => {
+    try {
+      const serverParam = activeServerId ? `&serverId=${encodeURIComponent(activeServerId)}` : '';
+      const res = await fetch(`/api/server/files?action=read&path=${encodeURIComponent(path)}${serverParam}`);
+      if (!res.ok) return fileContents[path] || '';
+      const json = await res.json();
+      if (json.success && json.data?.content !== undefined) {
+        const content = json.data.content;
+        setFileContents((prev) => ({ ...prev, [path]: content }));
+        return content;
+      }
+    } catch (e) {
+      console.warn('File read warning:', e);
+    }
+    return fileContents[path] || '';
   };
 
   const sendConsoleCommand = async (cmd: string): Promise<string> => {
     const trimmed = cmd.trim();
     if (!trimmed) return '';
-
-    const cmdLog: ConsoleLogEntry = {
-      id: String(Date.now()),
-      timestamp: new Date().toLocaleTimeString(),
-      level: 'INFO',
-      message: `> ${trimmed}`,
-    };
-    setLogs((prev) => [...prev, cmdLog]);
 
     await dispatchServerCommand('CONSOLE_CMD', { command: trimmed });
     addAudit('CONSOLE_COMMAND', trimmed, 'Executed via operator terminal');
@@ -638,7 +778,16 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
 
   const saveFileContent = async (path: string, content: string) => {
     setFileContents((prev) => ({ ...prev, [path]: content }));
-    await dispatchServerCommand('SAVE_FILE', { path, content });
+    await fetch('/api/server/files', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'save',
+        serverId: activeServerId || serverInfo.id,
+        path,
+        content,
+      }),
+    });
     addAudit('FILE_SAVE', path, `Saved file (${content.length} characters)`);
   };
 
@@ -650,6 +799,15 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
         ...prev,
         [parentDir]: existing.filter((f) => f.path !== path),
       };
+    });
+    await fetch('/api/server/files', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'delete',
+        serverId: activeServerId || serverInfo.id,
+        path,
+      }),
     });
     addAudit('FILE_DELETE', path, 'Deleted file from server');
   };
@@ -669,7 +827,54 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
       [parentPath]: [...(prev[parentPath] || []), newDir],
       [fullPath]: [],
     }));
+    await fetch('/api/server/files', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'create_folder',
+        serverId: activeServerId || serverInfo.id,
+        directory: parentPath,
+        name,
+      }),
+    });
     addAudit('CREATE_FOLDER', fullPath, 'Created directory');
+  };
+
+  const createFile = async (parentPath: string, name: string, content = '') => {
+    const cleanParent = parentPath === '/' ? '' : parentPath;
+    const fullPath = `${cleanParent}/${name}`;
+    const newF: ServerFile = {
+      name,
+      path: fullPath,
+      isDirectory: false,
+      sizeBytes: content.length,
+      modifiedAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
+      extension: name.split('.').pop() || '',
+    };
+    setFiles((prev) => ({
+      ...prev,
+      [parentPath]: [...(prev[parentPath] || []), newF],
+    }));
+    setFileContents((prev) => ({ ...prev, [fullPath]: content }));
+    await fetch('/api/server/files', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'create_file',
+        serverId: activeServerId || serverInfo.id,
+        directory: parentPath,
+        name,
+        content,
+      }),
+    });
+    addAudit('CREATE_FILE', fullPath, 'Created file');
+  };
+
+  const addWhitelistPlayer = async (username: string) => {
+    const trimmed = username.trim();
+    if (!trimmed) return;
+    await sendConsoleCommand(`whitelist add ${trimmed}`);
+    addAudit('PLAYER_WHITELIST_ADD', trimmed, 'Added to whitelist');
   };
 
   const inviteMember = async (email: string, role: RoleMember['role'], permissions: string[]) => {
@@ -722,6 +927,9 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
         startServer,
         stopServer,
         restartServer,
+        killServer,
+        fetchDirectory,
+        fetchFileContent,
         sendConsoleCommand,
         clearLogs,
         kickPlayer,
@@ -738,6 +946,8 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
         saveFileContent,
         deleteFile,
         createFolder,
+        createFile,
+        addWhitelistPlayer,
         inviteMember,
         revokeMember,
       }}

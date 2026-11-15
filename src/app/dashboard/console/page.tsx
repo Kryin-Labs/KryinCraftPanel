@@ -1,17 +1,27 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
-  Terminal,
+  Terminal as TerminalIcon,
   Send,
   Trash2,
   Search,
   Download,
-  Check,
   Radio,
-  Power
+  Power,
+  ChevronUp,
+  ChevronDown,
+  X,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 import { useServerStore } from '@/lib/serverStore';
+import { formatMinecraftLog } from '@/lib/xterm/formatMinecraftLog';
+import { XtermScrollDownHelperAddon } from '@/lib/xterm/XtermScrollDownHelperAddon';
+import { PowerButtons } from '@/components/server/PowerButtons';
+import { StatGraphs } from '@/components/server/StatGraphs';
+
+import '@xterm/xterm/css/xterm.css';
 
 const QUICK_COMMANDS = [
   'tps',
@@ -24,43 +34,336 @@ const QUICK_COMMANDS = [
   'version'
 ];
 
+const PTERODACTYL_THEME = {
+  background: '#0d1117',
+  foreground: '#c9d1d9',
+  cursor: '#58a6ff',
+  cursorAccent: '#0d1117',
+  black: '#000000',
+  red: '#E54B4B',
+  green: '#9ECE58',
+  yellow: '#FAED70',
+  blue: '#396FE2',
+  magenta: '#BB80B3',
+  cyan: '#2DDAFD',
+  white: '#d0d0d0',
+  brightBlack: '#6e7681',
+  brightRed: '#FF5370',
+  brightGreen: '#C3E88D',
+  brightYellow: '#FFCB6B',
+  brightBlue: '#82AAFF',
+  brightMagenta: '#C792EA',
+  brightCyan: '#89DDFF',
+  brightWhite: '#ffffff',
+  selectionBackground: '#1f6feb55',
+};
+
+const TERMINAL_PRELUDE = '\u001b[1m\u001b[33mcontainer@indian-node~ \u001b[0m';
+
 export default function DedicatedConsolePage() {
   const { logs, serverInfo, sendConsoleCommand, clearLogs } = useServerStore();
+
   const [commandInput, setCommandInput] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [logFilter, setLogFilter] = useState<'ALL' | 'INFO' | 'WARN' | 'ERROR'>('ALL');
-  const [autoScroll, setAutoScroll] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [activeTab, setActiveTab] = useState<'paper' | 'world' | 'players' | 'network'>('paper');
+  const [isMaximized, setIsMaximized] = useState(false);
+  const [isTerminalReady, setIsTerminalReady] = useState(false);
 
-  const terminalContainerRef = useRef<HTMLDivElement>(null);
+  // Search state
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Command History
+  const [history, setHistory] = useState<string[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+
+  // DOM Refs & Addons
+  const terminalElementRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const terminalInstanceRef = useRef<any>(null);
+  const fitAddonRef = useRef<any>(null);
+  const searchAddonRef = useRef<any>(null);
+  const scrollHelperAddonRef = useRef<XtermScrollDownHelperAddon | null>(null);
+  const writtenLogIdsRef = useRef<Set<string>>(new Set());
+  const prevStatusRef = useRef<string>(serverInfo.status);
+
+  // Smooth Pterodactyl-style status change events in terminal
+  useEffect(() => {
+    const term = terminalInstanceRef.current;
+    if (!term || !isTerminalReady) return;
+
+    const prev = prevStatusRef.current;
+    const current = serverInfo.status;
+    if (prev !== current) {
+      prevStatusRef.current = current;
+
+      if (current === 'starting') {
+        term.clear();
+        writtenLogIdsRef.current.clear();
+        term.writeln(`${TERMINAL_PRELUDE}\u001b[1m\u001b[33mServer marked as starting...\u001b[0m`);
+      } else if (current === 'online') {
+        term.writeln(`${TERMINAL_PRELUDE}\u001b[1m\u001b[32mServer marked as running...\u001b[0m`);
+      } else if (current === 'stopping') {
+        term.writeln(`${TERMINAL_PRELUDE}\u001b[1m\u001b[33mServer marked as stopping...\u001b[0m`);
+      } else if (current === 'offline') {
+        term.writeln(`${TERMINAL_PRELUDE}\u001b[1m\u001b[31mServer marked as offline.\u001b[0m`);
+      }
+    }
+  }, [serverInfo.status, isTerminalReady]);
+
+  // Load command history from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('kryin:command_history');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          setHistory(parsed.slice(0, 50));
+        }
+      }
+    } catch (e) {}
+  }, []);
+
+  // Initialize xterm.js instance
+  useEffect(() => {
+    let isMounted = true;
+
+    async function initXterm() {
+      if (!terminalElementRef.current || terminalInstanceRef.current) return;
+
+      const { Terminal } = await import('@xterm/xterm');
+      const { FitAddon } = await import('@xterm/addon-fit');
+      const { SearchAddon } = await import('@xterm/addon-search');
+      const { WebLinksAddon } = await import('@xterm/addon-web-links');
+      const { Unicode11Addon } = await import('@xterm/addon-unicode11');
+
+      if (!isMounted || !terminalElementRef.current) return;
+
+      const term = new Terminal({
+        cursorStyle: 'bar',
+        cursorBlink: true,
+        disableStdin: true,
+        allowTransparency: true,
+        fontSize: 12.5,
+        lineHeight: 1.35,
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+        theme: PTERODACTYL_THEME,
+        scrollback: 3000,
+        convertEol: true,
+      });
+
+      const fitAddon = new FitAddon();
+      const searchAddon = new SearchAddon();
+      const webLinksAddon = new WebLinksAddon();
+      const unicode11Addon = new Unicode11Addon();
+      const scrollHelperAddon = new XtermScrollDownHelperAddon();
+
+      term.loadAddon(fitAddon);
+      term.loadAddon(searchAddon);
+      term.loadAddon(webLinksAddon);
+      term.loadAddon(unicode11Addon);
+      term.loadAddon(scrollHelperAddon);
+
+      term.open(terminalElementRef.current);
+      term.unicode.activeVersion = '11';
+
+      // Clipboard copy on Ctrl+C / Cmd+C when text is selected
+      term.attachCustomKeyEventHandler((e: KeyboardEvent) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+          const selection = term.getSelection();
+          if (selection) {
+            navigator.clipboard.writeText(selection);
+            return false;
+          }
+        } else if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+          e.preventDefault();
+          setIsSearchOpen(true);
+          setTimeout(() => searchInputRef.current?.focus(), 50);
+          return false;
+        } else if (e.key === 'Escape') {
+          setIsSearchOpen(false);
+          term.focus();
+        }
+        return true;
+      });
+
+      try {
+        fitAddon.fit();
+      } catch (e) {}
+
+      terminalInstanceRef.current = term;
+      fitAddonRef.current = fitAddon;
+      searchAddonRef.current = searchAddon;
+      scrollHelperAddonRef.current = scrollHelperAddon;
+
+      // Welcome header
+      term.writeln(`${TERMINAL_PRELUDE}\u001b[92mConnected to Indian Node (Paper 1.21.4)\u001b[0m`);
+      term.writeln(`${TERMINAL_PRELUDE}\u001b[90mSession established. Type /help or shortcuts below for commands.\u001b[0m\r\n`);
+      setIsTerminalReady(true);
+    }
+
+    initXterm();
+
+    // Resize handler with debounce
+    const handleResize = () => {
+      if (fitAddonRef.current && terminalElementRef.current) {
+        try {
+          fitAddonRef.current.fit();
+        } catch (e) {}
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('resize', handleResize);
+      if (scrollHelperAddonRef.current) {
+        scrollHelperAddonRef.current.dispose();
+      }
+      if (terminalInstanceRef.current) {
+        terminalInstanceRef.current.dispose();
+        terminalInstanceRef.current = null;
+      }
+    };
+  }, []);
+
+  // Stream new logs to xterm without clearing history
+  useEffect(() => {
+    const term = terminalInstanceRef.current;
+    if (!term || !isTerminalReady) return;
+
+    if (!logs || logs.length === 0) {
+      if (serverInfo.status === 'offline') {
+        term.clear();
+        writtenLogIdsRef.current.clear();
+        term.writeln(`${TERMINAL_PRELUDE}\u001b[90mServer marked as offline. Console ready for fresh startup.\u001b[0m\r\n`);
+      }
+      return;
+    }
+
+    let wroteAny = false;
+    for (const log of logs) {
+      const logKey = log.id || `${log.timestamp}-${log.message}`;
+      if (!writtenLogIdsRef.current.has(logKey)) {
+        writtenLogIdsRef.current.add(logKey);
+        term.writeln(formatMinecraftLog(log.message));
+        wroteAny = true;
+      }
+    }
+
+    if (wroteAny) {
+      term.scrollToBottom();
+    }
+  }, [logs, isTerminalReady, serverInfo.status]);
+
+  // Fit terminal when container layout changes or toggles fullscreen
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (fitAddonRef.current) {
+        try {
+          fitAddonRef.current.fit();
+        } catch (e) {}
+      }
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [isMaximized]);
+
+  // Search logic
+  const handleSearchNext = useCallback(() => {
+    if (searchAddonRef.current && searchQuery.trim()) {
+      searchAddonRef.current.findNext(searchQuery.trim(), {
+        decorations: {
+          matchOverviewRuler: '#3b82f6',
+          activeMatchColorOverviewRuler: '#ef4444',
+        },
+      });
+    }
+  }, [searchQuery]);
+
+  const handleSearchPrev = useCallback(() => {
+    if (searchAddonRef.current && searchQuery.trim()) {
+      searchAddonRef.current.findPrevious(searchQuery.trim());
+    }
+  }, [searchQuery]);
 
   useEffect(() => {
-    if (autoScroll && terminalContainerRef.current) {
-      terminalContainerRef.current.scrollTop = terminalContainerRef.current.scrollHeight;
+    if (searchQuery.trim() && searchAddonRef.current) {
+      searchAddonRef.current.findNext(searchQuery.trim());
     }
-  }, [logs, autoScroll]);
+  }, [searchQuery]);
 
-  const handleContainerScroll = () => {
-    if (!terminalContainerRef.current) return;
-    const { scrollTop, scrollHeight, clientHeight } = terminalContainerRef.current;
-    const isAtBottom = scrollHeight - scrollTop - clientHeight < 60;
-    if (!isAtBottom && autoScroll) {
-      setAutoScroll(false);
-    } else if (isAtBottom && !autoScroll) {
-      setAutoScroll(true);
+  // Key navigation for Command History
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (history.length === 0) return;
+      const nextIndex = Math.min(historyIndex + 1, history.length - 1);
+      setHistoryIndex(nextIndex);
+      setCommandInput(history[nextIndex] || '');
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (historyIndex <= 0) {
+        setHistoryIndex(-1);
+        setCommandInput('');
+      } else {
+        const nextIndex = historyIndex - 1;
+        setHistoryIndex(nextIndex);
+        setCommandInput(history[nextIndex] || '');
+      }
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!commandInput.trim() || isSending) return;
+  // Execute Console Command
+  const executeCommand = async (rawCmd: string) => {
+    const cmd = rawCmd.trim();
+    if (!cmd || isSending) return;
 
-    const cmd = commandInput.trim();
+    // Update command history (latest first, limit 50)
+    const newHistory = [cmd, ...history.filter((c) => c !== cmd)].slice(0, 50);
+    setHistory(newHistory);
+    setHistoryIndex(-1);
+    try {
+      localStorage.setItem('kryin:command_history', JSON.stringify(newHistory));
+    } catch (err) {}
+
+    // Echo command in local terminal immediately
+    if (terminalInstanceRef.current) {
+      terminalInstanceRef.current.writeln(
+        `${TERMINAL_PRELUDE}\u001b[36;1m${cmd.startsWith('/') ? cmd : `/${cmd}`}\u001b[0m`
+      );
+      terminalInstanceRef.current.scrollToBottom();
+    }
+
     setCommandInput('');
     setIsSending(true);
-    await sendConsoleCommand(cmd);
-    setIsSending(false);
+    try {
+      await sendConsoleCommand(cmd);
+    } catch (err: any) {
+      if (terminalInstanceRef.current) {
+        terminalInstanceRef.current.writeln(
+          `\u001b[91m[Command Error: ${err?.message || err}]\u001b[0m`
+        );
+      }
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    executeCommand(commandInput);
+  };
+
+  const handleClearLogs = () => {
+    clearLogs();
+    writtenLogIdsRef.current.clear();
+    if (terminalInstanceRef.current) {
+      terminalInstanceRef.current.clear();
+      terminalInstanceRef.current.writeln(
+        `${TERMINAL_PRELUDE}\u001b[90mConsole buffer cleared by operator.\u001b[0m\r\n`
+      );
+    }
   };
 
   const handleDownloadLogs = () => {
@@ -76,200 +379,200 @@ export default function DedicatedConsolePage() {
     URL.revokeObjectURL(url);
   };
 
-  const filteredLogs = logs.filter((log) => {
-    const matchesFilter = logFilter === 'ALL' || log.level === logFilter;
-    const matchesSearch = searchQuery
-      ? log.message.toLowerCase().includes(searchQuery.toLowerCase())
-      : true;
-    return matchesFilter && matchesSearch;
-  });
-
   return (
-    <div className="space-y-4 font-mono text-[#1a1522]">
+    <div className={`space-y-4 font-mono text-[#1a1522] ${isMaximized ? 'fixed inset-4 z-50 bg-[#0d1117] flex flex-col p-4 rounded-2xl shadow-2xl border border-white/10' : ''}`}>
       {/* Console Top Header Bar */}
-      <div className="p-4 sm:p-5 rounded-2xl bg-white border border-[#1a1522]/10 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-bold text-[#1a1522] flex items-center gap-2">
-            <Terminal className="w-5 h-5 text-blue-600" />
-            Live Minecraft Terminal
-          </h1>
-          <p className="text-xs text-[#1a1522]/60 mt-0.5">
-            Real-time interactive live console for {serverInfo.name || 'Minecraft Server'} on Indian Node.
-          </p>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Search box */}
-          <div className="relative">
-            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[#1a1522]/40" />
-            <input
-              type="text"
-              placeholder="Search logs..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-8 pr-3 py-1.5 bg-[#f8f9fd] border border-[#1a1522]/15 rounded-lg text-xs text-[#1a1522] placeholder:text-[#1a1522]/40 focus:outline-none focus:border-blue-600 w-36 sm:w-44 font-mono transition-all"
-            />
+      {!isMaximized && (
+        <div className="p-4 sm:p-5 rounded-2xl bg-white border border-[#1a1522]/10 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-bold text-[#1a1522] flex items-center gap-2">
+              <TerminalIcon className="w-5 h-5 text-blue-600" />
+              Live Minecraft Terminal
+            </h1>
+            <p className="text-xs text-[#1a1522]/60 mt-0.5">
+              Interactive low-latency xterm.js console for {serverInfo.name || 'Minecraft Server'} on Indian Node.
+            </p>
           </div>
 
-          {/* Level Filter Dropdown */}
-          <div className="flex items-center rounded-lg bg-[#f8f9fd] border border-[#1a1522]/15 p-0.5 text-[11px]">
-            {(['ALL', 'INFO', 'WARN', 'ERROR'] as const).map((level) => (
-              <button
-                key={level}
-                onClick={() => setLogFilter(level)}
-                className={`px-2 py-1 rounded text-xs transition-colors ${
-                  logFilter === level
-                    ? 'bg-blue-600 text-white font-bold'
-                    : 'text-[#1a1522]/60 hover:text-[#1a1522]'
-                }`}
-              >
-                {level}
-              </button>
-            ))}
+          {/* Action Buttons */}
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* Pterodactyl Power Buttons */}
+            <PowerButtons compact />
+
+            <div className="h-5 w-px bg-zinc-200 hidden sm:block" />
+
+            {/* Search Toggle */}
+            <button
+              onClick={() => {
+                setIsSearchOpen((prev) => !prev);
+                setTimeout(() => searchInputRef.current?.focus(), 50);
+              }}
+              className={`px-3 py-1.5 rounded-lg border text-xs flex items-center gap-1.5 transition-colors ${
+                isSearchOpen
+                  ? 'bg-blue-600 text-white border-blue-600 font-bold'
+                  : 'bg-[#f8f9fd] hover:bg-slate-100 text-[#1a1522]/70 border-[#1a1522]/15'
+              }`}
+              title="Search logs (Ctrl+F)"
+            >
+              <Search className="w-3.5 h-3.5" />
+              <span>Search</span>
+            </button>
+
+            {/* Download Logs */}
+            <button
+              onClick={handleDownloadLogs}
+              className="p-2 rounded-lg bg-[#f8f9fd] hover:bg-slate-100 text-[#1a1522]/70 hover:text-[#1a1522] border border-[#1a1522]/15 text-xs transition-colors"
+              title="Download raw log text file"
+            >
+              <Download className="w-3.5 h-3.5" />
+            </button>
+
+            {/* Clear Logs */}
+            <button
+              onClick={handleClearLogs}
+              className="p-2 rounded-lg bg-[#f8f9fd] hover:bg-red-50 text-red-600 border border-[#1a1522]/15 hover:border-red-200 text-xs transition-colors"
+              title="Clear terminal buffer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+
+            {/* Fullscreen Toggle */}
+            <button
+              onClick={() => setIsMaximized((prev) => !prev)}
+              className="p-2 rounded-lg bg-[#f8f9fd] hover:bg-slate-100 text-[#1a1522]/70 hover:text-[#1a1522] border border-[#1a1522]/15 text-xs transition-colors"
+              title={isMaximized ? 'Exit Fullscreen' : 'Expand Terminal'}
+            >
+              {isMaximized ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+            </button>
           </div>
-
-          {/* Download Logs */}
-          <button
-            onClick={handleDownloadLogs}
-            className="p-2 rounded-lg bg-[#f8f9fd] hover:bg-slate-100 text-[#1a1522]/70 hover:text-[#1a1522] border border-[#1a1522]/15 text-xs transition-colors"
-            title="Download full log file"
-          >
-            <Download className="w-3.5 h-3.5" />
-          </button>
-
-          {/* Clear Logs */}
-          <button
-            onClick={clearLogs}
-            className="p-2 rounded-lg bg-[#f8f9fd] hover:bg-red-50 text-red-600 border border-[#1a1522]/15 hover:border-red-200 text-xs transition-colors"
-            title="Clear display logs"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
         </div>
-      </div>
+      )}
 
       {/* Main Terminal Shell Card */}
-      <div className="rounded-2xl bg-white border border-[#1a1522]/10 shadow-xs flex flex-col overflow-hidden">
-        {/* Terminal Tab Bar */}
-        <div className="h-10 bg-[#fbfbfe] border-b border-[#1a1522]/10 px-4 flex items-center justify-between text-xs">
-          <div className="flex items-center gap-3">
-            <span className="text-[#1a1522]/50 font-bold">Node:</span>
-            <span className="text-[#1a1522] font-semibold">Indian Node</span>
-            <div className="hidden sm:flex items-center gap-2 pl-3 border-l border-[#1a1522]/10">
-              {(['paper', 'world', 'players', 'network'] as const).map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`px-2.5 py-0.5 rounded text-[11px] uppercase transition-colors ${
-                    activeTab === tab
-                      ? 'text-blue-700 font-bold bg-blue-50 border border-blue-200'
-                      : 'text-[#1a1522]/60 hover:text-[#1a1522]'
-                  }`}
-                >
-                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5" />
-                  {tab}
-                </button>
-              ))}
+      <div className={`rounded-2xl bg-[#0d1117] border border-[#1a1522]/10 shadow-xs flex flex-col overflow-hidden ${isMaximized ? 'flex-1 border-white/10' : ''}`}>
+        {/* Terminal Header Bar */}
+        <div className="min-h-11 py-1.5 bg-[#161b22] border-b border-white/10 px-3 sm:px-4 flex flex-wrap items-center justify-between gap-2 text-xs text-white">
+          <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
+            {/* Device Status */}
+            <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-zinc-900 border border-white/10 text-[11px] font-bold">
+              <span className={`w-2 h-2 rounded-full ${serverInfo.deviceConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+              <span className="text-zinc-400">Device:</span>
+              <span className={serverInfo.deviceConnected ? 'text-emerald-400' : 'text-amber-400'}>
+                {serverInfo.deviceConnected ? 'Connected' : 'Connecting...'}
+              </span>
+            </div>
+
+            {/* Minecraft Status */}
+            <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-zinc-900 border border-white/10 text-[11px] font-bold">
+              <span className="text-zinc-400">Minecraft:</span>
+              <span className={
+                serverInfo.status === 'online'
+                  ? 'text-emerald-400'
+                  : serverInfo.status === 'starting'
+                  ? 'text-blue-400'
+                  : serverInfo.status === 'stopping'
+                  ? 'text-amber-400'
+                  : 'text-zinc-400'
+              }>
+                {serverInfo.status === 'online'
+                  ? `Online ${serverInfo.onlinePlayers} / ${serverInfo.maxPlayers}`
+                  : serverInfo.status === 'starting'
+                  ? `Starting... (0 / ${serverInfo.maxPlayers})`
+                  : serverInfo.status === 'stopping'
+                  ? `Stopping... (0 / ${serverInfo.maxPlayers})`
+                  : `Offline (0 / ${serverInfo.maxPlayers})`}
+              </span>
+            </div>
+
+            {/* TPS */}
+            <div className="flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-zinc-900 border border-white/10 text-[11px] font-bold text-zinc-300">
+              <Radio className={`w-3 h-3 ${serverInfo.status === 'online' ? 'text-emerald-400 animate-pulse' : 'text-zinc-500'}`} />
+              <span>{serverInfo.status === 'online' ? `${(serverInfo.tps || 20.0).toFixed(1)} TPS` : '0.0 TPS'}</span>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 text-[11px]">
-            <label className="flex items-center gap-1.5 text-[#1a1522]/60 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={autoScroll}
-                onChange={(e) => setAutoScroll(e.target.checked)}
-                className="rounded border-[#1a1522]/20 text-blue-600 focus:ring-0"
-              />
-              <span>Auto-Scroll</span>
-            </label>
-            <span className={`font-bold flex items-center gap-1 px-2 py-0.5 rounded border text-[11px] ${
-              serverInfo.status === 'online'
-                ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
-                : 'text-slate-600 bg-slate-100 border-slate-200'
-            }`}>
-              <Radio className={`w-3 h-3 ${serverInfo.status === 'online' ? 'text-emerald-600 animate-pulse' : 'text-slate-400'}`} />
-              {serverInfo.status === 'online' ? `${serverInfo.tps.toFixed(1)} TPS` : 'Offline'}
-            </span>
+          <div className="flex items-center gap-2 text-[11px]">
+            {/* Search floating box */}
+            {isSearchOpen && (
+              <div className="flex items-center gap-1.5 bg-[#0d1117] border border-blue-500/40 rounded-lg px-2 py-0.5 shadow-sm">
+                <Search className="w-3 h-3 text-blue-400" />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  placeholder="Find in logs..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.shiftKey ? handleSearchPrev() : handleSearchNext();
+                    } else if (e.key === 'Escape') {
+                      setIsSearchOpen(false);
+                    }
+                  }}
+                  className="bg-transparent text-white placeholder-zinc-500 text-xs w-28 sm:w-40 focus:outline-none font-mono"
+                />
+                <button
+                  onClick={handleSearchPrev}
+                  className="p-1 hover:text-blue-400 text-zinc-400"
+                  title="Previous match (Shift+Enter)"
+                >
+                  <ChevronUp className="w-3 h-3" />
+                </button>
+                <button
+                  onClick={handleSearchNext}
+                  className="p-1 hover:text-blue-400 text-zinc-400"
+                  title="Next match (Enter)"
+                >
+                  <ChevronDown className="w-3 h-3" />
+                </button>
+                <button
+                  onClick={() => setIsSearchOpen(false)}
+                  className="p-1 hover:text-red-400 text-zinc-400"
+                  title="Close search"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            )}
+
+            {isMaximized && (
+              <button
+                onClick={() => setIsMaximized(false)}
+                className="p-1 hover:text-white text-zinc-400 transition-colors"
+                title="Exit Fullscreen"
+              >
+                <Minimize2 className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Scrollable Terminal Output Window (high contrast terminal interior) */}
-        <div
-          ref={terminalContainerRef}
-          onScroll={handleContainerScroll}
-          className="p-4 sm:p-5 bg-[#0e1117] font-mono text-xs overflow-y-auto max-h-[70vh] min-h-[520px] space-y-1.5 leading-relaxed select-text"
-        >
-          {serverInfo.status === 'offline' ? (
-            <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-3">
-              <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-500">
-                <Power className="w-6 h-6" />
-              </div>
-              <div className="text-base font-bold text-zinc-300">Server Is Offline</div>
-              <p className="text-xs text-zinc-500 max-w-sm">
-                The Minecraft server engine is not running. Launch the server from the dashboard to view live terminal output.
-              </p>
-            </div>
-          ) : filteredLogs.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-2">
-              <div className="text-xs font-semibold text-zinc-400">Waiting for live server output...</div>
-              <p className="text-[11px] text-zinc-600">Starting Paper engine...</p>
-            </div>
-          ) : (
-            filteredLogs.map((log, idx) => {
-              const isError = log.level === 'ERROR';
-              const isWarn = log.level === 'WARN';
-              const isCommand = log.message.startsWith('/') || log.message.includes('executed');
-
-              return (
-                <div key={log.id || idx} className="flex items-start gap-2.5 font-mono">
-                  <span className="text-zinc-500 select-none flex-shrink-0">[{log.timestamp}]</span>
-                  <span
-                    className={`font-semibold flex-shrink-0 text-[10px] px-1 py-0.2 rounded ${
-                      isError
-                        ? 'bg-red-950 text-red-300 border border-red-800'
-                        : isWarn
-                        ? 'bg-amber-950 text-amber-200 border border-amber-800'
-                        : 'bg-zinc-800 text-zinc-300'
-                    }`}
-                  >
-                    {log.level}
-                  </span>
-                  <span
-                    className={`break-all ${
-                      isError
-                        ? 'text-red-300'
-                        : isWarn
-                        ? 'text-amber-200'
-                        : isCommand
-                        ? 'text-blue-300 font-semibold'
-                        : 'text-zinc-200'
-                    }`}
-                  >
-                    {log.message}
-                  </span>
-                </div>
-              );
-            })
-          )}
+        {/* XTerm.js Terminal Screen Container - Always visible like Pterodactyl */}
+        <div className="relative flex-1 bg-[#0d1117] min-h-[500px]">
+          <div
+            ref={terminalElementRef}
+            className="w-full h-full min-h-[500px] p-2.5 sm:p-3 overflow-hidden select-text"
+          />
         </div>
 
         {/* Bottom Command Composer Form */}
-        <form onSubmit={handleSubmit} className="p-3.5 bg-[#f8f9fd] border-t border-[#1a1522]/10 flex items-center gap-2">
-          <span className="text-blue-600 font-bold font-mono pl-2 text-sm select-none">&gt;</span>
+        <form onSubmit={handleSubmit} className="p-3 bg-[#161b22] border-t border-white/10 flex items-center gap-2">
+          <span className="text-blue-400 font-bold font-mono pl-2 text-sm select-none">&gt;</span>
           <input
             type="text"
             value={commandInput}
             onChange={(e) => setCommandInput(e.target.value)}
-            placeholder="Type a Minecraft server command (e.g. /tps, /say Server restarting in 5m, /op Player)..."
-            className="flex-1 bg-white border border-[#1a1522]/15 rounded-xl px-3.5 py-2 text-xs text-[#1a1522] placeholder:text-[#1a1522]/40 focus:outline-none focus:border-blue-600 font-mono shadow-2xs"
+            onKeyDown={handleKeyDown}
+            placeholder="Type a Minecraft server command... (Press Up/Down for history)"
+            className="flex-1 bg-[#0d1117] border border-white/10 rounded-xl px-3.5 py-2 text-xs text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-blue-500 font-mono shadow-inner transition-colors"
             disabled={isSending}
+            autoCorrect="off"
+            autoCapitalize="none"
           />
           <button
             type="submit"
             disabled={isSending || !commandInput.trim()}
-            className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white font-bold text-xs flex items-center gap-1.5 transition-all font-mono shadow-xs"
+            className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white font-bold text-xs flex items-center gap-1.5 transition-all font-mono shadow-sm"
           >
             <span>{isSending ? 'Sending...' : 'Send'}</span>
             <Send className="w-3.5 h-3.5" />
@@ -277,20 +580,27 @@ export default function DedicatedConsolePage() {
         </form>
 
         {/* Quick Command Suggestions Strip */}
-        <div className="px-4 py-2.5 bg-white border-t border-[#1a1522]/8 flex flex-wrap items-center gap-1.5 text-[11px] text-[#1a1522]/60">
-          <span className="font-semibold text-[#1a1522]">Shortcuts:</span>
+        <div className="px-4 py-2 bg-[#0d1117] border-t border-white/5 flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-400">
+          <span className="font-semibold text-zinc-300">Shortcuts:</span>
           {QUICK_COMMANDS.map((cmd) => (
             <button
               key={cmd}
               type="button"
-              onClick={() => setCommandInput(cmd.startsWith('/') ? cmd : `/${cmd}`)}
-              className="px-2 py-0.5 rounded-md bg-[#f8f9fd] hover:bg-blue-50 text-[#1a1522] hover:text-blue-700 border border-[#1a1522]/10 hover:border-blue-200 font-mono transition-colors"
+              onClick={() => executeCommand(cmd)}
+              className="px-2 py-0.5 rounded-md bg-[#161b22] hover:bg-blue-900/40 text-zinc-300 hover:text-blue-300 border border-white/10 hover:border-blue-500/40 font-mono transition-colors text-[10px] cursor-pointer"
             >
               /{cmd.replace(/^\//, '')}
             </button>
           ))}
         </div>
       </div>
+
+      {/* Pterodactyl-Style Rolling 60s Hardware Stat Graphs */}
+      {!isMaximized && (
+        <div className="pt-2">
+          <StatGraphs />
+        </div>
+      )}
     </div>
   );
 }

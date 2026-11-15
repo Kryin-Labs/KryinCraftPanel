@@ -28,6 +28,10 @@ yarn-error.log*
 .env
 
 # vercel
+# python
+__pycache__/
+*.pyc
+
 .vercel
 INSPIRATION/
 
@@ -44,6 +48,10 @@ supabase/.temp/
 agent.json
 agent.log
 
+
+# python
+__pycache__/
+*.pyc
 
 .vercel
 INSPIRATION/

@@ -9,6 +9,7 @@ import sys
 import json
 import time
 import socket
+import struct
 import subprocess
 import urllib.request
 import urllib.error
@@ -23,9 +24,9 @@ config = {
     "rconHost": "127.0.0.1",
     "rconPort": 25575,
     "rconPassword": "334001",
-    "heartbeatInterval": 4,
-    "commandPollInterval": 2,
-    "logPollInterval": 2,
+    "heartbeatInterval": 3,
+    "commandPollInterval": 0.5,
+    "logPollInterval": 0.8,
 }
 
 if os.path.exists(CONFIG_FILE):
@@ -162,6 +163,61 @@ def read_server_properties():
             print(f"[!] Warning reading server.properties: {e}")
     return props
 
+def ensure_rcon_configured():
+    """Ensures enable-rcon=true and correct password/port are set in server.properties."""
+    props_file = os.path.join(SERVER_DIR, "server.properties")
+    if not os.path.exists(props_file):
+        return
+
+    rcon_pwd = config.get("rconPassword", "334001")
+    rcon_port = str(config.get("rconPort", 25575))
+
+    required_settings = {
+        "enable-rcon": "true",
+        "rcon.port": rcon_port,
+        "rcon.password": rcon_pwd,
+        "broadcast-rcon-to-ops": "true"
+    }
+
+    try:
+        lines = []
+        with open(props_file, "r", encoding="utf-8", errors="ignore") as f:
+            lines = f.readlines()
+
+        modified = False
+        seen_keys = set()
+        new_lines = []
+
+        for line in lines:
+            trimmed = line.strip()
+            if trimmed and not trimmed.startswith("#") and "=" in trimmed:
+                k, v = trimmed.split("=", 1)
+                k = k.strip()
+                v = v.strip()
+                seen_keys.add(k)
+                if k in required_settings:
+                    if v != required_settings[k]:
+                        new_lines.append(f"{k}={required_settings[k]}\n")
+                        modified = True
+                    else:
+                        new_lines.append(line)
+                else:
+                    new_lines.append(line)
+            else:
+                new_lines.append(line)
+
+        for k, v in required_settings.items():
+            if k not in seen_keys:
+                new_lines.append(f"{k}={v}\n")
+                modified = True
+
+        if modified:
+            with open(props_file, "w", encoding="utf-8") as f:
+                f.writelines(new_lines)
+            print(f"[✓] Auto-configured RCON in {props_file} (port {rcon_port})")
+    except Exception as e:
+        print(f"[!] Warning updating RCON settings in server.properties: {e}")
+
 def check_port_open(port=25565):
     """Test if Minecraft server port is actively listening and accepting connections."""
     try:
@@ -173,40 +229,112 @@ def check_port_open(port=25565):
     except Exception:
         return False
 
-def send_heartbeat(forced_status=None):
+def send_rcon_command(command):
+    """Executes a command directly in the Minecraft server via RCON."""
+    host = config.get("rconHost", "127.0.0.1")
+    port = int(config.get("rconPort", 25575))
+    password = config.get("rconPassword", "334001")
+    if not password:
+        return False, "No RCON password configured"
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(1.5)
+        s.connect((host, port))
+
+        # Auth packet (type 3)
+        pwd_bytes = password.encode('utf-8')
+        packet = struct.pack('<iii', 4 + 4 + len(pwd_bytes) + 2, 1, 3) + pwd_bytes + b'\x00\x00'
+        s.sendall(packet)
+        auth_resp = s.recv(1024)
+        if len(auth_resp) < 12:
+            s.close()
+            return False, "RCON auth packet incomplete"
+        auth_id = struct.unpack('<i', auth_resp[4:8])[0]
+        if auth_id == -1:
+            s.close()
+            return False, "RCON authentication failed"
+
+        # Exec packet (type 2)
+        cmd_bytes = command.encode('utf-8')
+        packet = struct.pack('<iii', 4 + 4 + len(cmd_bytes) + 2, 2, 2) + cmd_bytes + b'\x00\x00'
+        s.sendall(packet)
+        exec_resp = s.recv(4096)
+        s.close()
+        out = exec_resp[12:-2].decode('utf-8', errors='replace').strip()
+        return True, out
+    except Exception as e:
+        return False, str(e)
+
+current_status = "offline"
+transition_start_time = 0
+online_players_cache = []
+
+def determine_status():
+    global current_status, transition_start_time
     is_mc_running, pid = check_minecraft_process()
+    props = read_server_properties()
+    server_port = props.get("server-port", 25565)
+    now = time.time()
+
+    if current_status == "starting":
+        if is_mc_running and check_port_open(server_port):
+            current_status = "online"
+            transition_start_time = 0
+        elif not is_mc_running and transition_start_time > 0 and (now - transition_start_time > 120):
+            current_status = "offline"
+            transition_start_time = 0
+    elif current_status == "stopping":
+        if not is_mc_running:
+            current_status = "offline"
+            transition_start_time = 0
+        elif transition_start_time > 0 and (now - transition_start_time > 30):
+            subprocess.run(["pkill", "-9", "-f", "paper.*\\.jar|server\\.jar"], check=False)
+            current_status = "offline"
+            transition_start_time = 0
+    else:
+        if is_mc_running:
+            is_ready = check_port_open(server_port)
+            current_status = "online" if is_ready else "starting"
+        else:
+            current_status = "offline"
+
+    return current_status, pid, is_mc_running
+
+def send_heartbeat(forced_status=None):
+    global current_status, transition_start_time, online_players_cache
+    if forced_status:
+        current_status = forced_status
+        if forced_status in ("starting", "stopping"):
+            transition_start_time = time.time()
+        else:
+            transition_start_time = 0
+
+    status, pid, is_running = determine_status()
     total_ram, used_ram = get_ram_usage()
     props = read_server_properties()
     server_port = props.get("server-port", 25565)
 
-    if forced_status:
-        status = forced_status
-    elif is_mc_running:
-        # If process is running, verify if port is actively open and ready
-        is_ready = check_port_open(server_port)
-        status = "online" if is_ready else "starting"
-    else:
-        status = "offline"
+    online_count = len(online_players_cache) if status == "online" else 0
 
     data = {
         "status": status,
-        "pid": pid,
+        "pid": pid if (status in ("online", "starting")) else None,
         "tps": 20.0 if status == "online" else (10.0 if status == "starting" else 0.0),
         "uptime_seconds": 0,
         "local_ip": get_local_ip(),
-        "online_players": 0,
+        "online_players": online_count,
         "max_players": props.get("max-players", 20),
     }
     res = api_post("/api/agent/heartbeat", data)
     if "error" in res:
         print(f"[!] Heartbeat error: {res['error']}")
     else:
-        status_str = f"{status.upper()} (PID {pid}, Port: {server_port}, Max Players: {props.get('max-players', 20)})"
+        status_str = f"{status.upper()} (PID {pid}, Port: {server_port}, Players: {online_count}/{props.get('max-players', 20)})"
         print(f"[✓] Heartbeat sent: Minecraft is {status_str}")
 
 def sync_logs():
     """Tails real logs/latest.log and streams new lines to the website console."""
-    global log_file_pos
+    global log_file_pos, current_status, transition_start_time
     log_file = os.path.join(SERVER_DIR, "logs", "latest.log")
     if not os.path.exists(log_file):
         return
@@ -216,16 +344,26 @@ def sync_logs():
         if log_file_pos > file_size:
             log_file_pos = 0
 
-        # Load recent logs on startup so console has startup context
-        if log_file_pos == 0 and file_size > 35000:
-            log_file_pos = max(0, file_size - 35000)
-
         with open(log_file, "r", encoding="utf-8", errors="ignore") as f:
             f.seek(log_file_pos)
             new_lines = f.readlines()
             log_file_pos = f.tell()
 
         if new_lines:
+            # Instant boot & shutdown detection (Pterodactyl-style responsiveness)
+            for line in new_lines:
+                raw_check = line.strip()
+                if "Done (" in raw_check or "For help, type \"help\"" in raw_check or "playit.gg: tunnel setup" in raw_check:
+                    current_status = "online"
+                    transition_start_time = 0
+                    send_heartbeat(forced_status="online")
+                    break
+                elif "Stopping server" in raw_check or "Saving chunks" in raw_check or "Closing Server" in raw_check:
+                    current_status = "stopping"
+                    transition_start_time = time.time()
+                    send_heartbeat(forced_status="stopping")
+                    break
+
             batch = []
             for line in new_lines[-200:]:
                 raw = line.strip()
@@ -255,10 +393,10 @@ def sync_logs():
         pass
 
 def sync_players():
-    """Syncs real player cache from usercache.json, ops.json, whitelist.json."""
-    global last_player_sync
+    """Syncs real player cache matching opanel approach (usercache, ops, whitelist, bans, playerdata, live RCON)."""
+    global last_player_sync, online_players_cache
     now = time.time()
-    if now - last_player_sync < 60:
+    if now - last_player_sync < 10:
         return
     last_player_sync = now
 
@@ -266,58 +404,116 @@ def sync_players():
     ops_file = os.path.join(SERVER_DIR, "ops.json")
     wl_file = os.path.join(SERVER_DIR, "whitelist.json")
     banned_file = os.path.join(SERVER_DIR, "banned-players.json")
+    playerdata_dir = os.path.join(SERVER_DIR, "world", "playerdata")
 
     ops_set = set()
     wl_set = set()
+    wl_names = set()
     banned_set = set()
+    banned_info = {}
 
     try:
         if os.path.exists(ops_file):
-            with open(ops_file, "r") as f:
-                ops_set = {x.get("uuid", "").lower() for x in json.load(f)}
+            with open(ops_file, "r", encoding="utf-8") as f:
+                for x in json.load(f):
+                    ops_set.add(x.get("uuid", "").lower())
         if os.path.exists(wl_file):
-            with open(wl_file, "r") as f:
-                wl_set = {x.get("uuid", "").lower() for x in json.load(f)}
+            with open(wl_file, "r", encoding="utf-8") as f:
+                for x in json.load(f):
+                    wl_set.add(x.get("uuid", "").lower())
+                    if x.get("name"):
+                        wl_names.add(x.get("name").lower())
         if os.path.exists(banned_file):
-            with open(banned_file, "r") as f:
-                banned_set = {x.get("uuid", "").lower() for x in json.load(f)}
-    except Exception:
-        pass
+            with open(banned_file, "r", encoding="utf-8") as f:
+                for x in json.load(f):
+                    u = x.get("uuid", "").lower()
+                    banned_set.add(u)
+                    banned_info[u] = x.get("reason", "Banned by an operator.")
+    except Exception as e:
+        print(f"[!] Warning reading player JSON files: {e}")
 
-    players_list = []
+    # Query live RCON for connected players
+    live_online_names = set()
+    is_running, _ = check_minecraft_process()
+    if is_running:
+        rcon_ok, rcon_out = send_rcon_command("list")
+        if rcon_ok and ":" in rcon_out:
+            players_part = rcon_out.split(":", 1)[1].strip()
+            if players_part:
+                for p_name in players_part.split(","):
+                    clean = p_name.strip()
+                    if clean:
+                        live_online_names.add(clean.lower())
+
+    online_players_cache = list(live_online_names)
+
+    # Collect known players by UUID
+    known_players = {}
+
+    # 1. usercache.json
     if os.path.exists(usercache_file):
         try:
-            with open(usercache_file, "r") as f:
-                cache = json.load(f)
-                for entry in cache[:50]:
+            with open(usercache_file, "r", encoding="utf-8") as f:
+                for entry in json.load(f):
                     uuid = entry.get("uuid", "").lower()
                     name = entry.get("name", "Player")
                     if uuid:
-                        players_list.append({
+                        known_players[uuid] = {
                             "uuid": uuid,
                             "username": name,
-                            "is_online": False,
-                            "is_op": uuid in ops_set,
-                            "is_whitelisted": uuid in wl_set,
-                            "is_banned": uuid in banned_set,
-                            "health": 20.0,
-                            "food_level": 20,
                             "last_seen": entry.get("expiresOn", "Recently"),
-                        })
+                        }
         except Exception:
             pass
+
+    # 2. world/playerdata/*.dat (discover offline players not in usercache)
+    if os.path.isdir(playerdata_dir):
+        try:
+            for fname in os.listdir(playerdata_dir):
+                if fname.endswith(".dat"):
+                    dat_uuid = fname[:-4].lower()
+                    if dat_uuid not in known_players:
+                        dat_path = os.path.join(playerdata_dir, fname)
+                        mtime = time.strftime("%Y-%m-%d %H:%M", time.localtime(os.path.getmtime(dat_path)))
+                        known_players[dat_uuid] = {
+                            "uuid": dat_uuid,
+                            "username": dat_uuid[:8],
+                            "last_seen": mtime,
+                        }
+        except Exception:
+            pass
+
+    # Build unified payload
+    players_list = []
+    for uuid, pdata in known_players.items():
+        uname = pdata["username"]
+        is_online = uname.lower() in live_online_names
+        players_list.append({
+            "uuid": uuid,
+            "username": uname,
+            "is_online": is_online,
+            "is_op": uuid in ops_set,
+            "is_whitelisted": uuid in wl_set or uname.lower() in wl_names,
+            "is_banned": uuid in banned_set,
+            "ban_reason": banned_info.get(uuid, None),
+            "health": 20.0,
+            "food_level": 20,
+            "last_seen": "Online now" if is_online else pdata.get("last_seen", "Standby"),
+        })
 
     if players_list:
         api_post("/api/agent/players", {"players": players_list})
 
 def poll_and_execute_commands():
+    global current_status, transition_start_time, log_file_pos
     res = api_get("/api/agent/commands")
     commands = res.get("commands", []) if isinstance(res, dict) else []
 
     for cmd in commands:
         cmd_id = cmd.get("id")
-        cmd_type = cmd.get("command_type", "").upper()
-        payload = cmd.get("payload", {})
+        payload = cmd.get("payload", {}) if isinstance(cmd.get("payload"), dict) else {}
+        action_type = payload.get("action")
+        cmd_type = (action_type or cmd.get("command_type", "")).upper()
         print(f"[+] Received command: {cmd_type} (ID: {cmd_id})")
 
         success = True
@@ -328,19 +524,32 @@ def poll_and_execute_commands():
             if is_running:
                 output = "Server is already running."
             else:
+                ensure_rcon_configured()
+                current_status = "starting"
+                transition_start_time = time.time()
                 send_heartbeat(forced_status="starting")
+
+                # Purge old console logs on startup so the new session is clean and fresh
+                api_post("/api/agent/logs", {"clear": True, "logs": []})
+
+                log_file = os.path.join(SERVER_DIR, "logs", "latest.log")
+                if os.path.exists(log_file):
+                    log_file_pos = os.path.getsize(log_file)
+                else:
+                    log_file_pos = 0
+
                 run_script = os.path.join(SERVER_DIR, "run.sh")
                 start_script = os.path.join(SERVER_DIR, "start.sh")
                 if os.path.exists(run_script):
-                    subprocess.Popen(["bash", run_script], cwd=SERVER_DIR)
+                    subprocess.Popen(["bash", run_script], cwd=SERVER_DIR, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                     output = "Started Paper server via run.sh"
                 elif os.path.exists(start_script):
-                    subprocess.Popen(["bash", start_script], cwd=SERVER_DIR)
+                    subprocess.Popen(["bash", start_script], cwd=SERVER_DIR, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                     output = "Started Paper server via start.sh"
                 elif os.path.isdir(SERVER_DIR):
                     jars = [f for f in os.listdir(SERVER_DIR) if f.endswith(".jar") and ("paper" in f or "server" in f)]
                     if jars:
-                        subprocess.Popen(["java", "-Xms1G", "-Xmx4G", "-jar", jars[0], "nogui"], cwd=SERVER_DIR)
+                        subprocess.Popen(["java", "-Xms1G", "-Xmx4G", "-Djava.net.preferIPv4Addresses=true", "-jar", jars[0], "--nogui"], cwd=SERVER_DIR, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                         output = f"Started server using {jars[0]}"
                     else:
                         output = f"Could not find startup script or jar in {SERVER_DIR}"
@@ -350,31 +559,183 @@ def poll_and_execute_commands():
                     success = False
 
         elif cmd_type in ("STOP", "STOP_SERVER", "GRACEFUL_STOP", "HIBERNATE"):
+            current_status = "stopping"
+            transition_start_time = time.time()
             send_heartbeat(forced_status="stopping")
-            subprocess.run(["pkill", "-f", "paper.*\\.jar|server\\.jar"], check=False)
-            time.sleep(1.5)
+
+            # Try graceful RCON stop first
+            rcon_ok, rcon_res = send_rcon_command("stop")
+            if not rcon_ok:
+                subprocess.run(["pkill", "-15", "-f", "paper.*\\.jar|server\\.jar"], check=False)
+            
+            # Wait for process to exit cleanly (up to 8s)
+            for _ in range(40):
+                is_running, _ = check_minecraft_process()
+                if not is_running:
+                    break
+                time.sleep(0.2)
+
+            # If still running after 8s, terminate
+            is_running, _ = check_minecraft_process()
+            if is_running:
+                subprocess.run(["pkill", "-9", "-f", "paper.*\\.jar|server\\.jar"], check=False)
+                time.sleep(0.3)
+
+            current_status = "offline"
+            transition_start_time = 0
+            log_file_pos = 0
             send_heartbeat(forced_status="offline")
-            output = "Issued stop command to Minecraft process."
+            # Clear logs on server stop
+            api_post("/api/agent/logs", {"clear": True, "logs": []})
+            output = "Server stopped cleanly."
+
+        elif cmd_type in ("KILL", "KILL_SERVER", "FORCE_STOP"):
+            current_status = "stopping"
+            send_heartbeat(forced_status="stopping")
+            subprocess.run(["pkill", "-9", "-f", "paper.*\\.jar|server\\.jar"], check=False)
+            time.sleep(0.2)
+            current_status = "offline"
+            transition_start_time = 0
+            log_file_pos = 0
+            send_heartbeat(forced_status="offline")
+            api_post("/api/agent/logs", {"clear": True, "logs": []})
+            output = "Forcibly killed Minecraft process (SIGKILL)."
 
         elif cmd_type in ("RESTART", "RESTART_SERVER"):
+            current_status = "stopping"
+            transition_start_time = time.time()
             send_heartbeat(forced_status="stopping")
-            subprocess.run(["pkill", "-f", "paper.*\\.jar|server\\.jar"], check=False)
-            time.sleep(2.5)
+            rcon_ok, _ = send_rcon_command("stop")
+            if not rcon_ok:
+                subprocess.run(["pkill", "-15", "-f", "paper.*\\.jar|server\\.jar"], check=False)
+            
+            for _ in range(35):
+                is_running, _ = check_minecraft_process()
+                if not is_running:
+                    break
+                time.sleep(0.2)
+            
+            is_running, _ = check_minecraft_process()
+            if is_running:
+                subprocess.run(["pkill", "-9", "-f", "paper.*\\.jar|server\\.jar"], check=False)
+                time.sleep(0.5)
+
+            # Clear logs on fresh restart
+            api_post("/api/agent/logs", {"clear": True, "logs": []})
+            log_file_pos = 0
+            ensure_rcon_configured()
+
+            current_status = "starting"
+            transition_start_time = time.time()
             send_heartbeat(forced_status="starting")
+
             run_script = os.path.join(SERVER_DIR, "run.sh")
             start_script = os.path.join(SERVER_DIR, "start.sh")
             if os.path.exists(run_script):
-                subprocess.Popen(["bash", run_script], cwd=SERVER_DIR)
+                subprocess.Popen(["bash", run_script], cwd=SERVER_DIR, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 output = "Restarted server via run.sh."
             elif os.path.exists(start_script):
-                subprocess.Popen(["bash", start_script], cwd=SERVER_DIR)
+                subprocess.Popen(["bash", start_script], cwd=SERVER_DIR, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 output = "Restarted server via start.sh."
             else:
                 output = "Stopped server."
 
         elif cmd_type in ("CONSOLE_CMD", "COMMAND"):
-            raw_cmd = payload.get("command", "")
-            output = f"Executed console command: {raw_cmd}"
+            raw_cmd = payload.get("command", "").strip()
+            if raw_cmd.startswith("/"):
+                raw_cmd = raw_cmd[1:]
+
+            ts = time.strftime("%H:%M:%S")
+            rcon_ok, rcon_out = send_rcon_command(raw_cmd)
+            if rcon_ok:
+                output = rcon_out if rcon_out else f"Executed: {raw_cmd}"
+                if rcon_out:
+                    api_post("/api/agent/logs", {
+                        "logs": [{
+                            "timestamp": ts,
+                            "level": "INFO",
+                            "message": f"[{ts} INFO]: {rcon_out}"
+                        }]
+                    })
+            else:
+                fallback_success = False
+                try:
+                    tmux_check = subprocess.run(["tmux", "list-sessions"], capture_output=True, text=True)
+                    if tmux_check.returncode == 0:
+                        for line in tmux_check.stdout.splitlines():
+                            sess_name = line.split(":")[0]
+                            if any(w in sess_name.lower() for w in ("mc", "minecraft", "paper", "server")):
+                                subprocess.run(["tmux", "send-keys", "-t", sess_name, raw_cmd, "C-m"], check=True)
+                                output = f"Sent to Minecraft tmux ({sess_name}): {raw_cmd}"
+                                fallback_success = True
+                                break
+                except Exception:
+                    pass
+
+                if not fallback_success:
+                    output = f"Command failed: {rcon_out}"
+                    api_post("/api/agent/logs", {
+                        "logs": [{
+                            "timestamp": ts,
+                            "level": "WARN",
+                            "message": f"[{ts} WARN]: [Server] {output}"
+                        }]
+                    })
+
+        elif cmd_type == "WHITELIST":
+            raw_target = payload.get("player") or payload.get("command", "").replace("whitelist add ", "").replace("whitelist remove ", "").strip()
+            sub_action = payload.get("action", "add")
+            cmd_str = f"whitelist {sub_action} {raw_target}" if raw_target else "whitelist list"
+            rcon_ok, rcon_out = send_rcon_command(cmd_str)
+            output = rcon_out or f"Executed: {cmd_str}"
+            if rcon_out:
+                ts = time.strftime("%H:%M:%S")
+                api_post("/api/agent/logs", {
+                    "logs": [{
+                        "timestamp": ts,
+                        "level": "INFO",
+                        "message": f"[{ts} INFO]: {rcon_out}"
+                    }]
+                })
+            sync_players()
+
+        elif cmd_type in ("OP", "DEOP", "KICK", "BAN", "UNBAN", "GAMEMODE", "TELEPORT", "HEAL", "FEED"):
+            target = payload.get("player") or payload.get("target", "").strip()
+            reason = payload.get("reason", "")
+            if cmd_type == "OP":
+                c = f"op {target}"
+            elif cmd_type == "DEOP":
+                c = f"deop {target}"
+            elif cmd_type == "KICK":
+                c = f"kick {target} {reason}".strip()
+            elif cmd_type == "BAN":
+                c = f"ban {target} {reason}".strip()
+            elif cmd_type == "UNBAN":
+                c = f"pardon {target}"
+            elif cmd_type == "GAMEMODE":
+                gm = payload.get("gamemode", "survival")
+                c = f"gamemode {gm} {target}"
+            elif cmd_type == "TELEPORT":
+                coords = payload.get("coords", "0 70 0")
+                c = f"tp {target} {coords}"
+            elif cmd_type == "HEAL":
+                c = f"effect give {target} minecraft:instant_health 1 255 true"
+            elif cmd_type == "FEED":
+                c = f"effect give {target} minecraft:saturation 1 255 true"
+            else:
+                c = f"{cmd_type.lower()} {target}"
+            rcon_ok, rcon_out = send_rcon_command(c)
+            output = rcon_out or f"Executed: {c}"
+            if rcon_out:
+                ts = time.strftime("%H:%M:%S")
+                api_post("/api/agent/logs", {
+                    "logs": [{
+                        "timestamp": ts,
+                        "level": "INFO",
+                        "message": f"[{ts} INFO]: {rcon_out}"
+                    }]
+                })
+            sync_players()
 
         elif cmd_type == "SAVE_PROPERTIES":
             props_file = os.path.join(SERVER_DIR, "server.properties")
@@ -417,7 +778,7 @@ def poll_and_execute_commands():
                     with open(temp_path, "w", encoding="utf-8") as f:
                         f.write(content)
                     os.replace(temp_path, target_path)
-                    output = f"Safely wrote {len(content)} characters to {rel_path}"
+                    output = json.dumps({"success": True, "path": ("/" + rel_path).replace("\\", "/"), "size": len(content)})
                 except Exception as e:
                     output = f"Failed to save file: {e}"
                     success = False
@@ -425,13 +786,125 @@ def poll_and_execute_commands():
                 output = "Security error: File path outside server directory."
                 success = False
 
-        # Report result back
+        elif cmd_type == "LIST_FILES":
+            rel_dir = payload.get("directory", "").strip().lstrip("/\\")
+            target_dir = os.path.abspath(os.path.join(SERVER_DIR, rel_dir)) if rel_dir else os.path.abspath(SERVER_DIR)
+            server_root = os.path.abspath(SERVER_DIR)
+            if target_dir.startswith(server_root) and os.path.isdir(target_dir):
+                try:
+                    entries = []
+                    with os.scandir(target_dir) as it:
+                        for entry in it:
+                            try:
+                                stat = entry.stat()
+                                is_dir = entry.is_dir()
+                                entries.append({
+                                    "name": entry.name,
+                                    "path": ("/" + os.path.relpath(entry.path, server_root)).replace("\\", "/"),
+                                    "isDirectory": is_dir,
+                                    "size": 0 if is_dir else stat.st_size,
+                                    "modified": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(stat.st_mtime)),
+                                    "extension": "" if is_dir else os.path.splitext(entry.name)[1].lstrip("."),
+                                })
+                            except Exception:
+                                continue
+                    entries.sort(key=lambda x: (not x["isDirectory"], x["name"].lower()))
+                    output = json.dumps({
+                        "directory": ("/" + rel_dir).rstrip("/") if rel_dir else "/",
+                        "files": entries,
+                    })
+                except Exception as e:
+                    output = f"Failed to list directory: {e}"
+                    success = False
+            else:
+                # If target directory doesn't exist yet, return empty list
+                output = json.dumps({
+                    "directory": ("/" + rel_dir).rstrip("/") if rel_dir else "/",
+                    "files": [],
+                })
+
+        elif cmd_type == "READ_FILE":
+            rel_path = payload.get("path", "").strip().lstrip("/\\")
+            target_path = os.path.abspath(os.path.join(SERVER_DIR, rel_path))
+            server_root = os.path.abspath(SERVER_DIR)
+            if target_path.startswith(server_root) and os.path.isfile(target_path):
+                try:
+                    max_bytes = 4 * 1024 * 1024  # 4MB max text read
+                    with open(target_path, "r", encoding="utf-8", errors="replace") as f:
+                        file_content = f.read(max_bytes)
+                    output = json.dumps({
+                        "path": ("/" + rel_path).replace("\\", "/"),
+                        "name": os.path.basename(target_path),
+                        "content": file_content,
+                    })
+                except Exception as e:
+                    output = f"Failed to read file: {e}"
+                    success = False
+            else:
+                output = "File not found or outside server directory."
+                success = False
+
+        elif cmd_type == "DELETE_FILE":
+            rel_path = payload.get("path", "").strip().lstrip("/\\")
+            target_path = os.path.abspath(os.path.join(SERVER_DIR, rel_path))
+            server_root = os.path.abspath(SERVER_DIR)
+            if target_path.startswith(server_root) and target_path != server_root:
+                try:
+                    if os.path.isdir(target_path):
+                        import shutil
+                        shutil.rmtree(target_path)
+                    elif os.path.isfile(target_path):
+                        os.remove(target_path)
+                    output = json.dumps({"success": True, "path": ("/" + rel_path).replace("\\", "/")})
+                except Exception as e:
+                    output = f"Failed to delete: {e}"
+                    success = False
+            else:
+                output = "Cannot delete: target outside server directory."
+                success = False
+
+        elif cmd_type == "CREATE_FOLDER":
+            rel_dir = payload.get("directory", "").strip().lstrip("/\\")
+            name = payload.get("name", "").strip().replace("/", "").replace("\\", "")
+            target_dir = os.path.abspath(os.path.join(SERVER_DIR, rel_dir, name))
+            server_root = os.path.abspath(SERVER_DIR)
+            if target_dir.startswith(server_root) and name:
+                try:
+                    os.makedirs(target_dir, exist_ok=True)
+                    output = json.dumps({"success": True, "path": ("/" + os.path.relpath(target_dir, server_root)).replace("\\", "/")})
+                except Exception as e:
+                    output = f"Failed to create folder: {e}"
+                    success = False
+            else:
+                output = "Invalid folder path."
+                success = False
+
+        elif cmd_type == "CREATE_FILE":
+            rel_dir = payload.get("directory", "").strip().lstrip("/\\")
+            name = payload.get("name", "").strip().replace("/", "").replace("\\", "")
+            content = payload.get("content", "")
+            target_file = os.path.abspath(os.path.join(SERVER_DIR, rel_dir, name))
+            server_root = os.path.abspath(SERVER_DIR)
+            if target_file.startswith(server_root) and name:
+                try:
+                    os.makedirs(os.path.dirname(target_file), exist_ok=True)
+                    with open(target_file, "w", encoding="utf-8") as f:
+                        f.write(content)
+                    output = json.dumps({"success": True, "path": ("/" + os.path.relpath(target_file, server_root)).replace("\\", "/")})
+                except Exception as e:
+                    output = f"Failed to create file: {e}"
+                    success = False
+            else:
+                output = "Invalid file path."
+                success = False
+
+        # Report result back with EXECUTED (satisfies server_commands check constraint)
         api_post("/api/agent/result", {
             "command_id": cmd_id,
-            "status": "COMPLETED" if success else "FAILED",
+            "status": "EXECUTED" if success else "FAILED",
             "result_output": output,
         })
-        print(f"[✓] Command {cmd_id} finished: {output}")
+        print(f"[✓] Command {cmd_id} finished: {output[:120]}")
 
 def main():
     try:
@@ -439,26 +912,32 @@ def main():
     except Exception:
         pass
 
+    ensure_rcon_configured()
+
     print("[Agent] Polling loop running. Press Ctrl+C to stop.")
     send_heartbeat()
     sync_logs()
     sync_players()
     last_hb = time.time()
     last_log_sync = time.time()
+    last_player_time = time.time()
 
     while True:
         now = time.time()
-        if now - last_hb >= config["heartbeatInterval"]:
+        if now - last_hb >= config.get("heartbeatInterval", 3):
             send_heartbeat()
             last_hb = now
 
-        if now - last_log_sync >= config.get("logPollInterval", 2):
+        if now - last_log_sync >= config.get("logPollInterval", 0.6):
             sync_logs()
             last_log_sync = now
 
-        sync_players()
+        if now - last_player_time >= 8.0:
+            sync_players()
+            last_player_time = now
+
         poll_and_execute_commands()
-        time.sleep(config.get("commandPollInterval", 1.2))
+        time.sleep(config.get("commandPollInterval", 0.5))
 
 if __name__ == "__main__":
     try:
