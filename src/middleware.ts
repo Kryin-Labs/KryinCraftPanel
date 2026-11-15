@@ -74,10 +74,11 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
+     * - sw.js (service worker file)
      * - api/agent (Termux node agent polling endpoints with Bearer auth)
      * - api/server/live (live stats for external displays)
-     * - image/font static file extensions
+     * - static file extensions (svg, png, jpg, js, css, etc.)
      */
-    '/((?!_next/static|_next/image|favicon.ico|api/agent|api/server/live|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff|woff2)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|sw\\.js|api/agent|api/server/live|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff|woff2|js|css)$).*)',
   ],
 };
