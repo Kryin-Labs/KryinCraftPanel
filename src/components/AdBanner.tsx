@@ -2,7 +2,7 @@
 
 import React, { useEffect } from 'react';
 import Link from 'next/link';
-import { ExternalLink, Sparkles, Shield, Zap } from 'lucide-react';
+import { ExternalLink, Sparkles, Zap } from 'lucide-react';
 
 interface AdBannerProps {
   slotId?: string;
@@ -18,13 +18,26 @@ export const AdBanner: React.FC<AdBannerProps> = ({
   className = '',
 }) => {
   useEffect(() => {
-    // If AdSense is enabled and script is present, trigger ad push
+    // Load Monetag In-Page Push Banner (Zone 12266230)
+    if (typeof window !== 'undefined' && !document.querySelector('script[data-zone="12266230"]')) {
+      try {
+        const s = document.createElement('script');
+        s.dataset.zone = '12266230';
+        s.src = 'https://nap5k.com/tag.min.js';
+        s.async = true;
+        document.body.appendChild(s);
+      } catch (err) {
+        console.error('Monetag In-Page Push script error:', err);
+      }
+    }
+
+    // If Google AdSense is also configured
     try {
       if (typeof window !== 'undefined' && client && slotId) {
         ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
       }
     } catch (e) {
-      console.error('AdSense error:', e);
+      console.error('AdSense push error:', e);
     }
   }, [client, slotId]);
 
@@ -32,10 +45,10 @@ export const AdBanner: React.FC<AdBannerProps> = ({
     <div
       className={`rounded-2xl bg-white border border-[#1a1522]/10 p-3.5 shadow-xs overflow-hidden flex flex-col font-mono text-[#1a1522] ${className}`}
     >
-      {/* Ad Label Header (Required by Google AdSense & Ad Networks) */}
+      {/* Ad Header Label */}
       <div className="flex items-center justify-between text-[10px] text-[#1a1522]/40 pb-2 mb-2 border-b border-[#1a1522]/5 uppercase tracking-wider font-bold">
         <span>Advertisement</span>
-        <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-500 font-semibold">
+        <span className="text-[9px] px-1.5 py-0.2 rounded bg-blue-50 text-blue-600 font-semibold">
           Sponsored
         </span>
       </div>
@@ -53,7 +66,7 @@ export const AdBanner: React.FC<AdBannerProps> = ({
           />
         </div>
       ) : (
-        /* Sleek High-Converting Default Sponsor / Ad Unit Placeholder */
+        /* Native Sponsor & Ad Zone Container */
         <div className="flex flex-col justify-between p-4 rounded-xl bg-gradient-to-br from-blue-50/70 via-indigo-50/40 to-white border border-blue-100/80 min-h-[220px]">
           <div className="space-y-2">
             <div className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center shadow-xs">
@@ -64,11 +77,11 @@ export const AdBanner: React.FC<AdBannerProps> = ({
                 Partner Showcase
               </span>
               <h4 className="text-sm font-bold text-[#1a1522] mt-0.5 leading-snug">
-                Advertise Your Minecraft Server Here
+                Featured Partner &amp; In-Page Sponsor
               </h4>
             </div>
             <p className="text-[11px] text-[#1a1522]/70 leading-relaxed font-sans">
-              Reach thousands of active Indian Minecraft players. Banner slots, native features &amp; community promotions.
+              Discover verified Minecraft community mods, Indian hosting nodes, and custom plugins.
             </p>
           </div>
 
@@ -96,7 +109,7 @@ export const AdSidebar: React.FC = () => {
         className="w-full"
       />
 
-      {/* Pro / Ad-Free Upgrade Promotion Card */}
+      {/* Pro / Ad-Free Upgrade Card */}
       <div className="rounded-2xl bg-white border border-[#1a1522]/10 p-4 shadow-xs font-mono space-y-3">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center justify-center">
