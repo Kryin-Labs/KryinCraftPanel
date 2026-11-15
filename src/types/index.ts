@@ -159,6 +159,15 @@ export interface TunnelConfig {
   };
 }
 
+export interface ServerIpEndpoint {
+  id: string;
+  type: 'java' | 'bedrock' | 'lan' | 'other';
+  label: string;
+  host: string;
+  port: number | string;
+  isPrimary?: boolean;
+}
+
 export interface ServerSummary {
   id: string;
   name: string;
@@ -168,6 +177,7 @@ export interface ServerSummary {
   localIp?: string;
   publicTunnelJava?: string | null;
   lastHeartbeat?: string | null;
+  ipEndpoints?: ServerIpEndpoint[];
 }
 
 export interface ServerInfo {
@@ -191,5 +201,6 @@ export interface ServerInfo {
   tps: number;
   publicTunnelJava?: string | null;
   publicTunnelBedrock?: string | null;
+  ipEndpoints?: ServerIpEndpoint[];
   localIp?: string;
 }

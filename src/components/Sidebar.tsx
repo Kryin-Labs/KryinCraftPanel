@@ -94,7 +94,7 @@ export const Sidebar: React.FC = () => {
           <div className="flex items-center justify-between">
             <div className="min-w-0 pr-2">
               <span className="text-[11px] font-bold text-[#1a1522] block truncate">{serverInfo.name || 'Loading Server...'}</span>
-              <span className="text-[9px] text-[#1a1522]/50 block truncate">{serverInfo.device || 'Cloud Node'}</span>
+              <span className="text-[9px] text-[#1a1522]/50 block truncate">{serverInfo.device || 'Indian Node'}</span>
             </div>
             <StatusBadge status={serverInfo.status} size="sm" />
           </div>

@@ -114,6 +114,37 @@ export async function GET(req: Request) {
       .select('*')
       .eq('server_id', server.id);
 
+    // Parse multi-endpoint IP list from database
+    let ipEndpoints: any[] = [];
+    if (server.public_tunnel_bedrock && typeof server.public_tunnel_bedrock === 'string' && server.public_tunnel_bedrock.trim().startsWith('[')) {
+      try {
+        ipEndpoints = JSON.parse(server.public_tunnel_bedrock);
+      } catch (e) {}
+    }
+
+    if (!Array.isArray(ipEndpoints) || ipEndpoints.length === 0) {
+      if (server.public_tunnel_java) {
+        ipEndpoints.push({
+          id: 'ep-java-default',
+          type: 'java',
+          label: 'Playit.gg Java',
+          host: server.public_tunnel_java,
+          port: server.java_port || 25565,
+          isPrimary: true,
+        });
+      }
+      if (server.local_ip) {
+        ipEndpoints.push({
+          id: 'ep-lan-default',
+          type: 'lan',
+          label: 'LAN Direct',
+          host: server.local_ip,
+          port: server.java_port || 25565,
+          isPrimary: false,
+        });
+      }
+    }
+
     return NextResponse.json({
       online: isOnline,
       device_connected: isHeartbeatFresh,
@@ -122,7 +153,7 @@ export async function GET(req: Request) {
       server: {
         id: server.id,
         name: server.name,
-        device: server.device_name || 'Device Node',
+        device: server.device_name || 'Indian Node',
         device_connected: isHeartbeatFresh,
         status: isOnline ? 'online' : (isHeartbeatFresh ? server.status : 'offline'),
         pid: isOnline ? server.pid : null,
@@ -133,6 +164,7 @@ export async function GET(req: Request) {
         local_ip: server.local_ip || null,
         public_tunnel_java: server.public_tunnel_java || null,
         public_tunnel_bedrock: server.public_tunnel_bedrock || null,
+        ip_endpoints: ipEndpoints,
         last_heartbeat: server.last_heartbeat,
       },
       metrics: (latestMetrics && isOnline) ? {

@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import {
   ServerInfo,
   ServerSummary,
+  ServerIpEndpoint,
   HardwareMetrics,
   MetricHistoryPoint,
   MinecraftPlayer,
@@ -35,7 +36,8 @@ interface ServerStoreContextType {
   setActiveServerId: (id: string) => void;
   refreshServers: () => Promise<void>;
   addServer: (name: string, deviceName?: string) => Promise<{ success: boolean; agentToken?: string; server?: any; error?: string }>;
-  updateServerSettings: (data: { publicTunnelJava?: string; publicTunnelBedrock?: string; name?: string }) => Promise<{ success: boolean; error?: string }>;
+  updateServerSettings: (data: { publicTunnelJava?: string; publicTunnelBedrock?: string; ip_endpoints?: ServerIpEndpoint[]; name?: string }) => Promise<{ success: boolean; error?: string }>;
+  saveIpEndpoints: (endpoints: ServerIpEndpoint[]) => Promise<{ success: boolean; error?: string }>;
   isLoading: boolean;
   isDeviceConnected: boolean;
   metrics: HardwareMetrics;
@@ -95,6 +97,23 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
   const [tunnel] = useState<TunnelConfig>(tunnelInfo);
   const [isLiveDbConnected, setIsLiveDbConnected] = useState<boolean>(false);
 
+  // Fast hydrate from localStorage cache immediately on mount
+  useEffect(() => {
+    try {
+      const cached = localStorage.getItem('kryin_cached_server');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed && (parsed.id || parsed.name)) {
+          setServerInfo((prev) => ({ ...prev, ...parsed }));
+          if (parsed.id && !activeServerId) {
+            setActiveServerId(parsed.id);
+          }
+          setIsLoading(false);
+        }
+      }
+    } catch (e) {}
+  }, []);
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user?.email) {
@@ -126,13 +145,13 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
           if (!activeServerId) {
             setActiveServerId(data.server.id);
           }
-          setServerInfo((prev) => ({
-            ...prev,
+          const updatedServerInfo: ServerInfo = {
+            ...serverInfo,
             id: data.server.id,
             name: data.server.name || '',
             status: data.server.status,
             pid: data.server.pid,
-            device: data.server.device,
+            device: data.server.device || 'Indian Node',
             deviceConnected: devConn,
             uptimeSeconds: data.server.uptime_seconds,
             agentConnected: devConn,
@@ -143,7 +162,13 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
             localIp: data.server.local_ip,
             publicTunnelJava: data.server.public_tunnel_java,
             publicTunnelBedrock: data.server.public_tunnel_bedrock,
-          }));
+            ipEndpoints: data.server.ip_endpoints || [],
+          };
+          setServerInfo(updatedServerInfo);
+
+          try {
+            localStorage.setItem('kryin_cached_server', JSON.stringify(updatedServerInfo));
+          } catch (e) {}
         }
 
         if (data.metrics) {
@@ -285,7 +310,7 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
     }
   };
 
-  const updateServerSettings = async (data: { publicTunnelJava?: string; publicTunnelBedrock?: string; name?: string }) => {
+  const updateServerSettings = async (data: { publicTunnelJava?: string; publicTunnelBedrock?: string; ip_endpoints?: ServerIpEndpoint[]; name?: string }) => {
     try {
       const targetId = activeServerId || serverInfo.id;
       if (!targetId) return { success: false, error: 'No active server selected' };
@@ -303,12 +328,20 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
         return { success: false, error: resData.error || 'Failed to update server' };
       }
       if (resData.server) {
-        setServerInfo((prev) => ({
-          ...prev,
-          name: resData.server.name ?? prev.name,
-          publicTunnelJava: resData.server.public_tunnel_java !== undefined ? resData.server.public_tunnel_java : prev.publicTunnelJava,
-          publicTunnelBedrock: resData.server.public_tunnel_bedrock !== undefined ? resData.server.public_tunnel_bedrock : prev.publicTunnelBedrock,
-        }));
+        setServerInfo((prev) => {
+          const updated = {
+            ...prev,
+            name: resData.server.name ?? prev.name,
+            publicTunnelJava: resData.server.public_tunnel_java !== undefined ? resData.server.public_tunnel_java : prev.publicTunnelJava,
+            publicTunnelBedrock: resData.server.public_tunnel_bedrock !== undefined ? resData.server.public_tunnel_bedrock : prev.publicTunnelBedrock,
+            ipEndpoints: data.ip_endpoints !== undefined ? data.ip_endpoints : (resData.server.ip_endpoints || prev.ipEndpoints),
+          };
+          try {
+            localStorage.setItem('kryin_cached_server', JSON.stringify(updated));
+          } catch (e) {}
+          return updated;
+        });
+
         setServersList((prev) =>
           prev.map((s) =>
             s.id === targetId
@@ -325,6 +358,10 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
     } catch (err: any) {
       return { success: false, error: err.message };
     }
+  };
+
+  const saveIpEndpoints = async (endpoints: ServerIpEndpoint[]) => {
+    return updateServerSettings({ ip_endpoints: endpoints });
   };
 
   const addAudit = (action: string, target: string, details: string) => {
@@ -636,6 +673,7 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
         addServer,
         refreshServers,
         updateServerSettings,
+        saveIpEndpoints,
         isLoading,
         isDeviceConnected,
         metrics,

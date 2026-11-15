@@ -21,7 +21,7 @@ export async function POST(req: Request) {
   try {
     const supabase = getAdminClient();
     const body = await req.json();
-    const { serverId, public_tunnel_java, public_tunnel_bedrock, name } = body;
+    const { serverId, public_tunnel_java, public_tunnel_bedrock, ip_endpoints, name } = body;
 
     if (!serverId) {
       return NextResponse.json({ error: 'Missing serverId' }, { status: 400 });
@@ -31,12 +31,22 @@ export async function POST(req: Request) {
       updated_at: new Date().toISOString(),
     };
 
-    if (public_tunnel_java !== undefined) {
-      updates.public_tunnel_java = public_tunnel_java ? public_tunnel_java.trim() : null;
-    }
-
-    if (public_tunnel_bedrock !== undefined) {
-      updates.public_tunnel_bedrock = public_tunnel_bedrock ? public_tunnel_bedrock.trim() : null;
+    if (Array.isArray(ip_endpoints)) {
+      updates.public_tunnel_bedrock = JSON.stringify(ip_endpoints);
+      const primaryJava = ip_endpoints.find((e: any) => e.isPrimary || e.type === 'java') || ip_endpoints[0];
+      if (primaryJava) {
+        updates.public_tunnel_java = primaryJava.host ? primaryJava.host.trim() : null;
+        if (primaryJava.port) {
+          updates.java_port = Number(primaryJava.port) || 25565;
+        }
+      }
+    } else {
+      if (public_tunnel_java !== undefined) {
+        updates.public_tunnel_java = public_tunnel_java ? public_tunnel_java.trim() : null;
+      }
+      if (public_tunnel_bedrock !== undefined) {
+        updates.public_tunnel_bedrock = public_tunnel_bedrock ? public_tunnel_bedrock.trim() : null;
+      }
     }
 
     if (name !== undefined && name.trim()) {
