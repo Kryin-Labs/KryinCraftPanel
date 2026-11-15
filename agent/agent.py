@@ -358,7 +358,7 @@ def sync_logs():
                     transition_start_time = 0
                     send_heartbeat(forced_status="online")
                     break
-                elif "Stopping server" in raw_check or "Saving chunks" in raw_check or "Closing Server" in raw_check:
+                elif "Stopping server" in raw_check or "Closing Server" in raw_check:
                     current_status = "stopping"
                     transition_start_time = time.time()
                     send_heartbeat(forced_status="stopping")
