@@ -87,7 +87,7 @@ The node includes a unified command suite in Termux:
 | Platform | Server Address | Port | Protocol | Notes |
 | :--- | :--- | :--- | :--- | :--- |
 | **Java Edition** | `molecule-two.tun.ply.gg` | `25565` | TCP | Paper plugin with auto-SRV lookup |
-| **Bedrock Edition (External)** | `molecule-edition.tun.ply.gg` | `41715` | UDP | Public Playit tunnel (Do NOT use 19132) |
+| **Bedrock Edition (External)** | `molecule-edition.tun.ply.gg` | `19132` | NetherNet (WebRTC) | Playit NetherNet NXS tunnel (Floodgate enabled) |
 | **LAN Java** | `192.168.0.164` | `25565` | TCP | Home Wi-Fi direct connection |
 | **LAN Bedrock** | `192.168.0.164` | `19132` | UDP | Home Wi-Fi direct connection |
 | **Web Dashboard** | `https://kryincraftpanel.vercel.app` | - | HTTPS | Real-time Pterodactyl-parity control panel |

@@ -157,7 +157,7 @@ When you type `minecraft fullstart` or `minecraft bedrockstart` on your phone, I
 | Platform | Address | Port | Notes |
 | :--- | :--- | :--- | :--- |
 | **Java Edition** (PC / Mac / Linux / Pojav) | `molecule-two.tun.ply.gg` | `25565` (Default) | Built into Paper plugin (`playit.jar`) with auto-SRV lookup |
-| **Bedrock Edition (Internet Players)** | `molecule-edition.tun.ply.gg` | `41715` | Playit public tunnel port. **Do not use 19132 here!** |
+| **Bedrock Edition (Internet Players)** | `molecule-edition.tun.ply.gg` | `19132` | Playit NetherNet NXS tunnel (Floodgate enabled, no Java account needed!) |
 | **Local Wi-Fi (Java)** | `192.168.0.164` | `25565` | Direct LAN connection for devices on home Wi-Fi |
 | **Local Wi-Fi (Bedrock)** | `192.168.0.164` | `19132` | Direct LAN connection for devices on home Wi-Fi |
 | **Web Dashboard** | `https://kryincraftpanel.vercel.app` | - | Real-time Pterodactyl-parity control panel |
@@ -165,10 +165,10 @@ When you type `minecraft fullstart` or `minecraft bedrockstart` on your phone, I
 ### ⚠️ Important Note on Bedrock Ports & Local IP:
 - **Local IP (`192.168.0.164`):** In Playit's dashboard, `192.168.0.164` is the Indian Node's actual LAN IP on your home Wi-Fi. (Never use `192.168.0.1` because that is your home router, not your phone!).
 - **Bedrock Port in Minecraft Client:**
-  - When playing from **outside your house (friends/mobile data)**: Enter Server Address `molecule-edition.tun.ply.gg` and Port `41715`.
+  - When playing from **outside your house (friends/mobile data)**: Enter Server Address `molecule-edition.tun.ply.gg` and Port **`19132`**.
   - When playing from **inside your house (same Wi-Fi)**: Enter Server Address `192.168.0.164` and Port `19132`.
-- **NetherNet Token Configuration:**  
-  Geyser is pre-configured with Playit's NXS signaling:
+- **Floodgate & NetherNet:**  
+  Floodgate is installed so Bedrock players can join directly without needing a Java Edition account. Geyser is pre-configured with Playit's NXS signaling:
   ```yaml
   signaling:
     mode: nxs
