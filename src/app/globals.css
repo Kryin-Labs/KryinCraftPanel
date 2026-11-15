@@ -251,20 +251,3 @@ body {
     max-width: 100% !important;
   }
 }
-
-/* Monetag In-Page Push Bottom-Right Positioning (Smooth slide up from bottom-right) */
-body > div[style*="fixed"][style*="top:"],
-body > div[style*="fixed"][style*="top :"],
-body > div[style*="fixed"][style*="top;"],
-div[id*="monetag"],
-div[class*="monetag"],
-div[class*="ipp-"],
-div[id*="ipp-"],
-div[class*="in-page-push"],
-div[id*="in-page-push"] {
-  top: auto !important;
-  bottom: 24px !important;
-  right: 24px !important;
-  margin-top: auto !important;
-  margin-bottom: 0 !important;
-}

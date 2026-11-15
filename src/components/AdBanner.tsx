@@ -1,129 +1,113 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
-import { ExternalLink, Sparkles, Zap } from 'lucide-react';
+import { ExternalLink, Sparkles, Server, Check, Copy, Flame, Users, Megaphone } from 'lucide-react';
 
-interface AdBannerProps {
-  slotId?: string;
-  format?: 'rectangle' | 'vertical' | 'responsive';
-  client?: string; // e.g. "ca-pub-XXXXXXXXXXXXXXXX"
-  className?: string;
-}
+export const AdSidebar: React.FC = () => {
+  const [copied, setCopied] = useState(false);
 
-export const AdBanner: React.FC<AdBannerProps> = ({
-  slotId,
-  format = 'rectangle',
-  client = process.env.NEXT_PUBLIC_ADSENSE_CLIENT_ID,
-  className = '',
-}) => {
-  useEffect(() => {
-    // If Google AdSense is also configured
-    try {
-      if (typeof window !== 'undefined' && client && slotId) {
-        ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
-      }
-    } catch (e) {
-      console.error('AdSense push error:', e);
-    }
-  }, [client, slotId]);
+  const handleCopyShowcaseIp = () => {
+    navigator.clipboard.writeText('scooter-stuffing.tun.ply.gg');
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
-    <div
-      className={`rounded-2xl bg-white border border-[#1a1522]/10 p-3.5 shadow-xs overflow-hidden flex flex-col font-mono text-[#1a1522] ${className}`}
-    >
-      {/* Ad Header Label */}
-      <div className="flex items-center justify-between text-[10px] text-[#1a1522]/40 pb-2 mb-2 border-b border-[#1a1522]/5 uppercase tracking-wider font-bold">
-        <span>Advertisement</span>
-        <span className="text-[9px] px-1.5 py-0.2 rounded bg-blue-50 text-blue-600 font-semibold">
-          Sponsored
-        </span>
-      </div>
-
-      {/* Ad Content Area */}
-      {client && slotId ? (
-        <div className="w-full flex justify-center items-center overflow-hidden min-h-[250px]">
-          <ins
-            className="adsbygoogle"
-            style={{ display: 'block', width: '100%' }}
-            data-ad-client={client}
-            data-ad-slot={slotId}
-            data-ad-format={format}
-            data-full-width-responsive="true"
-          />
+    <aside className="w-full xl:w-72 2xl:w-80 shrink-0 space-y-4 font-mono text-[#1a1522]">
+      {/* Primary Server Promotion & Showcase Card */}
+      <div className="rounded-2xl bg-white border border-[#1a1522]/10 p-5 shadow-xs overflow-hidden flex flex-col justify-between space-y-4">
+        {/* Header Badge */}
+        <div className="flex items-center justify-between text-[10px] text-[#1a1522]/50 pb-2 border-b border-[#1a1522]/10 uppercase tracking-wider font-bold">
+          <span className="flex items-center gap-1.5 text-blue-700">
+            <Megaphone className="w-3.5 h-3.5 text-blue-600" />
+            Advertisement
+          </span>
+          <span className="text-[9px] px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 font-bold border border-blue-200">
+            SHOWCASE
+          </span>
         </div>
-      ) : (
-        /* Native Sponsor & Ad Zone Container */
-        <div className="flex flex-col justify-between p-4 rounded-xl bg-gradient-to-br from-blue-50/70 via-indigo-50/40 to-white border border-blue-100/80 min-h-[220px]">
-          <div className="space-y-2">
-            <div className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center shadow-xs">
-              <Sparkles className="w-4 h-4" />
-            </div>
-            <div>
-              <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider block">
-                Partner Showcase
-              </span>
-              <h4 className="text-sm font-bold text-[#1a1522] mt-0.5 leading-snug">
-                Featured Partner &amp; In-Page Sponsor
-              </h4>
-            </div>
-            <p className="text-[11px] text-[#1a1522]/70 leading-relaxed font-sans">
-              Discover verified Minecraft community mods, Indian hosting nodes, and custom plugins.
+
+        {/* Content Body */}
+        <div className="space-y-3">
+          <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs">
+            <Sparkles className="w-4 h-4" />
+          </div>
+
+          <div>
+            <h3 className="text-sm font-bold text-[#1a1522] tracking-tight">
+              Promote Your Server
+            </h3>
+            <p className="text-[11px] text-[#1a1522]/70 leading-relaxed font-sans mt-1">
+              Want your Minecraft SMP, mini-games, or community server featured here? Showcase your server to hundreds of active Indian players.
             </p>
           </div>
 
-          <div className="pt-3 border-t border-blue-100/60 mt-2">
-            <Link
-              href="mailto:contact@kryinhost.com?subject=Advertise%20on%20KryinCraftPanel"
-              className="w-full py-2 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold flex items-center justify-center gap-1.5 transition-colors shadow-xs"
-            >
-              <span>Promote Server</span>
-              <ExternalLink className="w-3 h-3" />
-            </Link>
+          {/* Perks list */}
+          <div className="space-y-1.5 pt-1 text-[11px] font-sans text-[#1a1522]/80">
+            <div className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-600 shrink-0"></span>
+              <span>Prime In-Panel Dashboard Visibility</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-600 shrink-0"></span>
+              <span>Java &amp; Bedrock Player Audience</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-600 shrink-0"></span>
+              <span>Direct Join IP &amp; Discord Links</span>
+            </div>
           </div>
         </div>
-      )}
-    </div>
-  );
-};
 
-export const AdSidebar: React.FC = () => {
-  return (
-    <aside className="w-full xl:w-72 2xl:w-80 shrink-0 space-y-4">
-      {/* Top Sidebar Ad (300x250 / Responsive) */}
-      <AdBanner
-        slotId={process.env.NEXT_PUBLIC_AD_SLOT_SIDEBAR_TOP}
-        className="w-full"
-      />
-
-      {/* Pro / Ad-Free Upgrade Card */}
-      <div className="rounded-2xl bg-white border border-[#1a1522]/10 p-4 shadow-xs font-mono space-y-3">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center justify-center">
-            <Zap className="w-3.5 h-3.5" />
-          </div>
-          <div>
-            <span className="text-xs font-bold text-[#1a1522] block">Ad-Free Experience</span>
-            <span className="text-[10px] text-[#1a1522]/50 block">KryinPro Operator</span>
-          </div>
+        {/* Action Button */}
+        <div className="pt-2 border-t border-[#1a1522]/10">
+          <Link
+            href="mailto:contact@kryinhost.com?subject=Minecraft%20Server%20Showcase%20Inquiry"
+            className="w-full py-2.5 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-xs"
+          >
+            <span>Promote Server</span>
+            <ExternalLink className="w-3.5 h-3.5" />
+          </Link>
         </div>
-        <p className="text-[11px] text-[#1a1522]/70 font-sans leading-relaxed">
-          Upgrade to KryinPro to permanently remove ads, unlock instant low-latency Indian tunnels, and get 24/7 dedicated node uptime.
-        </p>
-        <Link
-          href="/#plans"
-          className="w-full py-2 rounded-lg bg-[#f8f9fd] hover:bg-blue-50 text-[#1a1522] hover:text-blue-700 border border-[#1a1522]/10 hover:border-blue-300 text-xs font-bold flex items-center justify-center gap-1.5 transition-all block text-center"
-        >
-          View Pro Plans
-        </Link>
       </div>
 
-      {/* Bottom Sticky Ad Slot */}
-      <div className="xl:sticky xl:top-6 space-y-4">
-        <AdBanner
-          slotId={process.env.NEXT_PUBLIC_AD_SLOT_SIDEBAR_BOTTOM}
-          className="w-full"
-        />
+      {/* Featured Community Server Spotlight (Sticky in view) */}
+      <div className="xl:sticky xl:top-6 rounded-2xl bg-white border border-[#1a1522]/10 p-4 shadow-xs space-y-3">
+        <div className="flex items-center justify-between text-[10px] text-[#1a1522]/50 pb-2 border-b border-[#1a1522]/10 uppercase tracking-wider font-bold">
+          <span className="flex items-center gap-1.5 text-emerald-700">
+            <Flame className="w-3.5 h-3.5 text-emerald-600" />
+            Partner Spotlight
+          </span>
+          <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 font-bold border border-emerald-200">
+            ONLINE
+          </span>
+        </div>
+
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-lg bg-emerald-600 text-white flex items-center justify-center text-[10px] font-bold">
+              K
+            </div>
+            <span className="font-bold text-xs text-[#1a1522]">Kryin Official SMP</span>
+          </div>
+          <p className="text-[11px] text-[#1a1522]/60 font-sans">
+            Indian Survival SMP · Paper 1.21.4 · Java &amp; Bedrock Crossplay
+          </p>
+        </div>
+
+        <div className="p-2 rounded-lg bg-[#f8f9fd] border border-[#1a1522]/10 flex items-center justify-between gap-2 text-xs">
+          <span className="font-mono text-[11px] text-[#1a1522] truncate">
+            scooter-stuffing.tun.ply.gg
+          </span>
+          <button
+            onClick={handleCopyShowcaseIp}
+            className="p-1 rounded text-blue-600 hover:bg-blue-50 transition-colors shrink-0"
+            title="Copy IP"
+          >
+            {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+          </button>
+        </div>
       </div>
     </aside>
   );
