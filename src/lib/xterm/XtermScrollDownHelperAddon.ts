@@ -28,7 +28,11 @@ export class XtermScrollDownHelperAddon implements ITerminalAddon {
       }
     });
 
-    this.show();
+    if (!this.isScrolledDown()) {
+      this.show();
+    } else {
+      this.hide();
+    }
   }
 
   dispose(): void {

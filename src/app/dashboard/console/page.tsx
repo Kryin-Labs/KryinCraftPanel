@@ -250,14 +250,24 @@ export default function DedicatedConsolePage() {
         return true;
       });
 
-      try {
-        fitAddon.fit();
-      } catch (e) {}
-
       terminalInstanceRef.current = term;
       fitAddonRef.current = fitAddon;
       searchAddonRef.current = searchAddon;
       scrollHelperAddonRef.current = scrollHelperAddon;
+
+      // Safe multi-stage layout fitting (guarantees non-zero dimensions after DOM render)
+      const tryFit = () => {
+        try {
+          if (terminalElementRef.current && terminalElementRef.current.clientHeight > 0) {
+            fitAddon.fit();
+          }
+        } catch (e) {}
+      };
+
+      tryFit();
+      requestAnimationFrame(tryFit);
+      setTimeout(tryFit, 50);
+      setTimeout(tryFit, 200);
 
       // Welcome header
       term.writeln(`${TERMINAL_PRELUDE}\u001b[92mConnected to Indian Node (Paper 1.21.4)\u001b[0m`);
@@ -267,7 +277,7 @@ export default function DedicatedConsolePage() {
 
     initXterm();
 
-    // Resize handler with debounce
+    // Resize handler for window and element dimensions
     const handleResize = () => {
       if (fitAddonRef.current && terminalElementRef.current) {
         try {
@@ -278,9 +288,21 @@ export default function DedicatedConsolePage() {
 
     window.addEventListener('resize', handleResize);
 
+    // ResizeObserver ensures terminal refits whenever flex/grid containers resize
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined' && terminalElementRef.current) {
+      resizeObserver = new ResizeObserver(() => {
+        handleResize();
+      });
+      resizeObserver.observe(terminalElementRef.current);
+    }
+
     return () => {
       isMounted = false;
       window.removeEventListener('resize', handleResize);
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+      }
       if (scrollHelperAddonRef.current) {
         scrollHelperAddonRef.current.dispose();
       }
@@ -606,10 +628,14 @@ export default function DedicatedConsolePage() {
         </div>
 
         {/* XTerm.js Terminal Screen Container - Always visible like Pterodactyl */}
-        <div className="relative flex-1 bg-[#0d1117] min-h-[500px]">
+        <div 
+          className="relative w-full bg-[#0d1117] flex-1" 
+          style={{ height: isMaximized ? 'calc(100vh - 160px)' : '520px', minHeight: '420px' }}
+        >
           <div
             ref={terminalElementRef}
-            className="w-full h-full min-h-[500px] p-2.5 sm:p-3 overflow-hidden select-text"
+            className="w-full h-full p-2.5 sm:p-3 overflow-hidden select-text"
+            style={{ height: '100%', minHeight: '100%', width: '100%' }}
           />
         </div>
 

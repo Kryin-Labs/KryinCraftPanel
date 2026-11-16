@@ -373,6 +373,9 @@ def sync_logs():
                     raw = line.strip()
                     if not raw:
                         continue
+                    # Filter out internal RCON handshake noise from Paper
+                    if "Thread RCON Client" in raw or "RCON Listener" in raw:
+                        continue
                     level = "INFO"
                     if "/WARN" in raw or "WARN" in raw:
                         level = "WARN"
