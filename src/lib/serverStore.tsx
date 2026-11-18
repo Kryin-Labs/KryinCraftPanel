@@ -40,7 +40,6 @@ interface ServerStoreContextType {
   activeServerId: string | null;
   setActiveServerId: (id: string) => void;
   refreshServers: () => Promise<void>;
-  addServer: (name: string, deviceName?: string) => Promise<{ success: boolean; agentToken?: string; server?: any; error?: string }>;
   updateServerSettings: (data: { publicTunnelJava?: string; publicTunnelBedrock?: string; ip_endpoints?: ServerIpEndpoint[]; name?: string }) => Promise<{ success: boolean; error?: string }>;
   saveIpEndpoints: (endpoints: ServerIpEndpoint[]) => Promise<{ success: boolean; error?: string }>;
   isLoading: boolean;
@@ -439,40 +438,6 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
       supabase.removeChannel(realtimeChannel);
     };
   }, [activeServerId]);
-
-  const addServer = async (name: string, deviceName?: string) => {
-    try {
-      const res = await fetch('/api/servers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, device_name: deviceName }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        if (res.status === 401 && typeof window !== 'undefined') {
-          window.location.href = '/login?next=/dashboard';
-        }
-        return { success: false, error: data.error || 'Failed to create server' };
-      }
-      if (data.server?.id) {
-        setActiveServerId(data.server.id);
-        setServersList((prev) => [
-          ...prev,
-          {
-            id: data.server.id,
-            name: data.server.name,
-            status: 'offline',
-            device: data.server.device_name,
-            localIp: data.server.local_ip,
-            publicTunnelJava: data.server.public_tunnel_java,
-          },
-        ]);
-      }
-      return { success: true, server: data.server, agentToken: data.agentToken };
-    } catch (err: any) {
-      return { success: false, error: err.message };
-    }
-  };
 
   const refreshServers = async () => {
     try {
@@ -921,7 +886,6 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
         serversList,
         activeServerId,
         setActiveServerId,
-        addServer,
         refreshServers,
         updateServerSettings,
         saveIpEndpoints,

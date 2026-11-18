@@ -57,7 +57,7 @@ export default function ServerSettingsPage() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
       setSaved((previous) => ({ ...previous, ...data.properties }));
-      setNotice('Saved to server.properties. Live MOTD updates require the Paper plugin. Other properties may need a restart.');
+      setNotice('Saved to server.properties. Minecraft loads saved settings on startup.');
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Could not save server.properties.');
     } finally {

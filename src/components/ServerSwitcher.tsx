@@ -1,19 +1,13 @@
 'use client';
 
 import React, { useState } from 'react';
-import { createPortal } from 'react-dom';
 import {
   Server,
   ChevronDown,
   Plus,
   Check,
-  Cpu,
-  Wifi,
-  X,
-  Copy,
-  Terminal,
-  Zap,
 } from 'lucide-react';
+import { ServerCapacityButton } from './ServerCapacity';
 import { useServerStore } from '@/lib/serverStore';
 
 export function ServerSwitcher({ createOnly = false }: { createOnly?: boolean }) {
@@ -22,74 +16,24 @@ export function ServerSwitcher({ createOnly = false }: { createOnly?: boolean })
     serversList,
     activeServerId,
     setActiveServerId,
-    addServer,
   } = useServerStore();
 
   const [isOpen, setIsOpen] = useState(false);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [newServerName, setNewServerName] = useState('');
-  const [newDeviceName, setNewDeviceName] = useState('');
-  const [createError, setCreateError] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [createdResult, setCreatedResult] = useState<{
-    server: any;
-    agentToken: string;
-  } | null>(null);
-  const [copiedToken, setCopiedToken] = useState(false);
-  const [copiedCmd, setCopiedCmd] = useState(false);
 
   const handleSelect = (id: string) => {
     setActiveServerId(id);
     setIsOpen(false);
   };
 
-  const handleCreateServer = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newServerName.trim()) return;
-    setIsSubmitting(true);
-    setCreateError('');
-
-    const res = await addServer(newServerName.trim(), newDeviceName.trim() || 'Secondary Node');
-    setIsSubmitting(false);
-
-    if (res.success && res.server) {
-      setCreatedResult({
-        server: res.server,
-        agentToken: res.agentToken || '',
-      });
-      setNewServerName('');
-      setNewDeviceName('');
-    } else {
-      setCreateError(res.error || 'Could not create the server.');
-    }
-  };
-
-  const copyText = (text: string, type: 'token' | 'cmd') => {
-    navigator.clipboard.writeText(text);
-    if (type === 'token') {
-      setCopiedToken(true);
-      setTimeout(() => setCopiedToken(false), 2000);
-    } else {
-      setCopiedCmd(true);
-      setTimeout(() => setCopiedCmd(false), 2000);
-    }
-  };
-
   const currentServerName = serversList.find((server) => server.id === activeServerId)?.name || serverInfo.name || 'Select a server';
 
-  function openCreateServer() {
-    setIsOpen(false);
-    setShowAddModal(true);
-    setCreatedResult(null);
-    setCreateError('');
-  }
 
   return (
     <div className="relative font-mono">
       {createOnly ? (
-        <button type="button" onClick={openCreateServer} className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white">
+        <ServerCapacityButton className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white">
           Create server
-        </button>
+        </ServerCapacityButton>
       ) : (
       <button
         type="button"
@@ -177,160 +121,18 @@ export function ServerSwitcher({ createOnly = false }: { createOnly?: boolean })
             </div>
 
             <div className="p-2 bg-slate-50/80 border-t border-[#1a1522]/10">
-              <button
-                onClick={openCreateServer}
+              <ServerCapacityButton
+                onOpen={() => setIsOpen(false)}
                 className="w-full py-1.5 px-2.5 rounded-lg bg-white hover:bg-blue-50 border border-blue-200 text-blue-700 text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all shadow-2xs"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Create server</span>
-              </button>
+              </ServerCapacityButton>
             </div>
           </div>
         </>
       )}
 
-      {/* Add Server Node Modal */}
-      {showAddModal && createPortal(
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl border border-[#1a1522]/15 shadow-2xl max-w-md w-full p-6 text-[#1a1522] animate-scale-up space-y-4">
-            <div className="flex items-center justify-between border-b border-[#1a1522]/10 pb-3">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center">
-                  <Server className="w-3.5 h-3.5" />
-                </div>
-                <h3 className="font-bold text-sm">Add New Server Node</h3>
-              </div>
-              <button
-                onClick={() => {
-                  setShowAddModal(false);
-                  setCreatedResult(null);
-                }}
-                className="p-1 rounded-lg hover:bg-slate-100 text-[#1a1522]/50 hover:text-[#1a1522]"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {!createdResult ? (
-              <form onSubmit={handleCreateServer} className="space-y-4 text-xs">
-              {createError && <p role="alert" className="text-xs text-red-700">{createError}</p>}
-                <p className="text-[#1a1522]/70 text-[11px] leading-relaxed">
-                  Register a secondary Android phone, Linux node, or PC. Each server node receives a unique agent token and connects to this unified portal.
-                </p>
-
-                <div className="space-y-1.5">
-                  <label className="font-bold text-[11px] text-[#1a1522]/80 block">
-                    Server Name
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Survival SMP, Modded Realm, Bedwars"
-                    value={newServerName}
-                    onChange={(e) => setNewServerName(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-[#1a1522]/20 focus:border-blue-600 focus:outline-hidden text-xs bg-[#f8f9fd]"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="font-bold text-[11px] text-[#1a1522]/80 block">
-                    Device / Location Label
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Secondary Phone, Home PC, Delhi Node"
-                    value={newDeviceName}
-                    onChange={(e) => setNewDeviceName(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-[#1a1522]/20 focus:border-blue-600 focus:outline-hidden text-xs bg-[#f8f9fd]"
-                  />
-                </div>
-
-                <div className="pt-2 flex justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowAddModal(false)}
-                    className="px-3.5 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-[#1a1522] font-semibold text-xs"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSubmitting || !newServerName.trim()}
-                    className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 disabled:opacity-50"
-                  >
-                    {isSubmitting ? 'Registering...' : 'Register Node'}
-                  </button>
-                </div>
-              </form>
-            ) : (
-              <div className="space-y-4 text-xs">
-                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900 text-xs">
-                  <p className="font-bold">✓ Server Registered Successfully!</p>
-                  <p className="text-[11px] text-emerald-800 mt-0.5">
-                    <strong>{createdResult.server.name}</strong> has been added to your dashboard.
-                  </p>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="font-bold text-[11px] text-[#1a1522]/80 block">
-                    Agent Security Token (Save this)
-                  </label>
-                  <div className="flex items-center gap-1.5">
-                    <input
-                      type="text"
-                      readOnly
-                      value={createdResult.agentToken}
-                      className="w-full px-2.5 py-1.5 rounded-lg border border-[#1a1522]/20 bg-slate-50 font-mono text-[11px]"
-                    />
-                    <button
-                      onClick={() => copyText(createdResult.agentToken, 'token')}
-                      className="px-2.5 py-1.5 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 text-[11px] font-bold flex items-center gap-1"
-                    >
-                      {copiedToken ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="font-bold text-[11px] text-[#1a1522]/80 block">
-                    1-Line Device Launch Command
-                  </label>
-                  <div className="p-2.5 bg-slate-900 text-slate-100 rounded-lg text-[10px] font-mono break-all flex items-start justify-between gap-2">
-                    <code>
-                      python3 agent.py --token {createdResult.agentToken} --server-id {createdResult.server.id}
-                    </code>
-                    <button
-                      onClick={() =>
-                        copyText(
-                          `python3 agent.py --token ${createdResult.agentToken} --server-id ${createdResult.server.id}`,
-                          'cmd'
-                        )
-                      }
-                      className="text-slate-400 hover:text-white flex-shrink-0"
-                      title="Copy command"
-                    >
-                      {copiedCmd ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="pt-2 flex justify-end">
-                  <button
-                    onClick={() => {
-                      setShowAddModal(false);
-                      setCreatedResult(null);
-                    }}
-                    className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs"
-                  >
-                    Done & View Server
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>,
-        document.body
-      )}
     </div>
   );
 }

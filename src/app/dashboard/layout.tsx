@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ServerSwitcher } from '@/components/ServerSwitcher';
 import { UsernameGate } from '@/components/UsernameGate';
@@ -67,7 +68,10 @@ function CreateFirstServer() {
     <section hidden={!show} className="max-w-xl space-y-3 rounded-xl border border-slate-200 bg-white p-6">
       <h1 className="text-xl font-bold">Your servers</h1>
       <p className="text-sm text-slate-600">Create a server or ask a server owner to share access using your username.</p>
-      <ServerSwitcher createOnly />
+      <div className="flex flex-wrap items-center gap-4">
+        <ServerSwitcher createOnly />
+        <Link href="/plans" className="text-sm font-semibold text-blue-800 underline">See plans</Link>
+      </div>
     </section>
   );
 }

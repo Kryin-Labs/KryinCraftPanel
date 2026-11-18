@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { ServerCapacityButton } from '@/components/ServerCapacity';
 import AnimatedConsolePreview from '@/components/AnimatedConsolePreview';
 import {
   Server,
@@ -1514,8 +1515,7 @@ export default function HomePage() {
 
                                   {/* CTA Button */}
                                   <div className="pt-2">
-                                    <Link
-                                      href="/login"
+                                    <ServerCapacityButton
                                       className={`w-full py-2.5 text-center font-mono text-[13px] font-bold rounded flex items-center justify-center gap-1.5 transition-colors ${plan.highlight
                                         ? 'bg-[#eef17c] text-[#1a1522] hover:bg-[#e4e86a]'
                                         : 'bg-[#1a1522] text-white hover:bg-[#2b2438]'
@@ -1523,7 +1523,7 @@ export default function HomePage() {
                                     >
                                       Deploy {plan.ram} Node
                                       <ArrowRight className="w-3.5 h-3.5" />
-                                    </Link>
+                                    </ServerCapacityButton>
                                   </div>
                                 </div>
                               );

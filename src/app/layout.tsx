@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { ServerCapacityProvider } from '@/components/ServerCapacity';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -22,7 +23,7 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-screen bg-white text-[#1a1522] antialiased">
-        {children}
+        <ServerCapacityProvider>{children}</ServerCapacityProvider>
       </body>
     </html>
   );

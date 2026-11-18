@@ -2,6 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { ServerCapacityButton } from '@/components/ServerCapacity';
 import {
   Server,
   Check,
@@ -151,12 +152,11 @@ export default function PlansPage() {
             >
               Control Panel
             </Link>
-            <Link
-              href="/login"
+            <ServerCapacityButton
               className="text-xs font-bold px-4 py-2 rounded-full bg-[#ffffff] hover:bg-[#e2e8f0] text-[#000000] transition-colors shadow-sm"
             >
               Deploy Server
-            </Link>
+            </ServerCapacityButton>
           </div>
         </div>
       </header>
@@ -252,9 +252,7 @@ export default function PlansPage() {
                 </ul>
               </div>
 
-              <Link
-                href="/login"
-                className={`w-full py-2.5 rounded-xl text-xs font-bold text-center transition-all flex items-center justify-center gap-1.5 ${
+              <ServerCapacityButton className={`w-full py-2.5 rounded-xl text-xs font-bold text-center transition-all flex items-center justify-center gap-1.5 ${
                   plan.highlight
                     ? 'bg-[#ffffff] hover:bg-[#e2e8f0] text-[#000000] shadow-md'
                     : 'bg-[#161a26] hover:bg-[#202738] text-[#ffffff] border border-[#1e2433]'
@@ -262,7 +260,7 @@ export default function PlansPage() {
               >
                 <span>Deploy {plan.ram} Server</span>
                 <ArrowRight className="size-3.5" />
-              </Link>
+              </ServerCapacityButton>
             </div>
           ))}
         </div>
