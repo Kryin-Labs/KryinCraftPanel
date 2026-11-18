@@ -42,6 +42,7 @@ export default function PlayerDetailPage() {
   const uuid = rawUuid.toLowerCase();
 
   const {
+    activeServerId,
     players,
     toggleOp,
     toggleWhitelist,
@@ -74,14 +75,20 @@ export default function PlayerDetailPage() {
     }
 
     async function fetchPlayerFromDb() {
+      if (!activeServerId || !/^[a-z0-9_.-]{1,36}$/.test(uuid)) {
+        setLoading(false);
+        return;
+      }
       try {
         const supabase = createClient();
-        const { data, error } = await supabase
+        const records = supabase
           .from('server_players')
           .select('*')
-          .or(`uuid.ilike.${uuid},username.ilike.${uuid}`)
-          .limit(1)
-          .single();
+          .eq('server_id', activeServerId);
+        const query = /^[a-f0-9-]{32,36}$/.test(uuid)
+          ? records.eq('uuid', uuid)
+          : records.ilike('username', uuid.replaceAll('_', '\\_'));
+        const { data, error } = await query.maybeSingle();
 
         if (data && !error) {
           const inv = data.inventory || {};
@@ -89,7 +96,7 @@ export default function PlayerDetailPage() {
             uuid: data.uuid,
             username: data.username,
             isOnline: Boolean(data.is_online),
-            pingMs: data.ping_ms || 0,
+            pingMs: data.is_online && data.ping_ms > 0 && Date.now() - Date.parse(data.updated_at) < 45_000 ? data.ping_ms : undefined,
             health: Number(data.health ?? 20),
             maxHealth: Number(data.max_health ?? 20),
             foodLevel: Number(data.food_level ?? 20),
@@ -136,7 +143,7 @@ export default function PlayerDetailPage() {
     }
 
     fetchPlayerFromDb();
-  }, [uuid, storePlayer]);
+  }, [uuid, storePlayer, activeServerId]);
 
   const player = storePlayer || dbPlayer;
 
@@ -329,7 +336,7 @@ export default function PlayerDetailPage() {
                     : 'bg-[#313c4c] text-slate-300 border border-slate-600/50'
                 }`}
               >
-                {player.isOnline ? 'Online' : 'Offline'}
+                {player.isOnline ? player.pingMs ? 'Online · ' + player.pingMs + ' ms' : 'Online · Ping unavailable' : 'Offline'}
               </span>
             </div>
 

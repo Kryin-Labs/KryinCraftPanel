@@ -121,7 +121,7 @@ export async function GET(req: Request) {
     // 5. Fetch players
     const { data: dbPlayers } = await supabase
       .from('server_players')
-      .select('uuid, username, is_online, ping_ms, health, max_health, food_level, xp_level, gamemode, is_op, is_whitelisted, is_banned, last_seen')
+      .select('uuid, username, is_online, ping_ms, health, max_health, food_level, xp_level, gamemode, is_op, is_whitelisted, is_banned, last_seen, updated_at')
       .eq('server_id', server.id);
 
     // Parse multi-endpoint IP list from database

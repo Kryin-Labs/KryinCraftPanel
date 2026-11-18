@@ -5,6 +5,10 @@ Zero external pip dependencies (Standard Python 3 only)
 """
 
 import os
+import base64
+import binascii
+import re
+import tempfile
 import sys
 import json
 import time
@@ -399,6 +403,15 @@ def sync_logs():
         except Exception:
             pass
 
+def parse_player_pings(output):
+    visible = re.sub(r"\x1b\[[0-9;]*m|§[0-9a-fk-orx]", "", output, flags=re.IGNORECASE)
+    return {
+        match[1].lower(): int(match[2])
+        for match in re.finditer(r"\bPlayer (\S+) has (\d{1,5}) ms ping\b", visible)
+        if 0 < int(match[2]) <= 60000
+    }
+
+
 def sync_players():
     """Syncs real player cache matching opanel approach (usercache, ops, whitelist, bans, playerdata, live RCON)."""
     global last_player_sync, online_players_cache
@@ -441,6 +454,7 @@ def sync_players():
 
     # Query live RCON for connected players
     live_online_names = set()
+    player_pings = {}
     is_running, _ = check_minecraft_process()
     if is_running:
         rcon_ok, rcon_out = send_rcon_command("list")
@@ -451,6 +465,16 @@ def sync_players():
                     clean = p_name.strip()
                     if clean:
                         live_online_names.add(clean.lower())
+
+        # Ask Spark for per-player RTT on the existing Minecraft connection.
+        # Only command-safe names reported by the server are used.
+        names = sorted(name for name in live_online_names if re.fullmatch(r"[.a-z0-9_-]{1,32}", name))
+        for offset in range(0, len(names), 12):
+            arguments = "".join(" --player " + name for name in names[offset:offset + 12])
+            ok, response = send_rcon_command("spark ping" + arguments)
+            if not ok:
+                break
+            player_pings.update(parse_player_pings(response))
 
     online_players_cache = list(live_online_names)
 
@@ -499,6 +523,7 @@ def sync_players():
             "uuid": uuid,
             "username": uname,
             "is_online": is_online,
+            "ping_ms": player_pings.get(uname.lower()) if is_online else None,
             "is_op": uuid in ops_set,
             "is_whitelisted": uuid in wl_set or uname.lower() in wl_names,
             "is_banned": uuid in banned_set,
@@ -776,6 +801,40 @@ def poll_and_execute_commands():
                 except Exception as e:
                     output = f"Failed to save server.properties: {e}"
                     success = False
+
+        elif cmd_type in ("READ_SERVER_ICON", "SAVE_SERVER_ICON"):
+            icon_path = os.path.join(SERVER_DIR, "server-icon.png")
+            temporary_path = None
+            try:
+                if cmd_type == "READ_SERVER_ICON":
+                    if os.path.islink(icon_path):
+                        raise ValueError("Server icon must be a regular file.")
+                    if os.path.isfile(icon_path):
+                        with open(icon_path, "rb") as f:
+                            content = f.read(49501)
+                        output = json.dumps({"icon": base64.b64encode(content).decode("ascii") if len(content) <= 49500 else None})
+                    else:
+                        output = json.dumps({"icon": None})
+                else:
+                    encoded = payload.get("icon")
+                    if not isinstance(encoded, str) or len(encoded) > 66000:
+                        raise ValueError("Invalid icon size.")
+                    content = base64.b64decode(encoded, validate=True)
+                    if (len(content) < 33 or not content.startswith(b"\x89PNG\r\n\x1a\n\x00\x00\x00\x0dIHDR")
+                            or struct.unpack(">II", content[16:24]) != (64, 64)):
+                        raise ValueError("Expected a 64 x 64 PNG.")
+                    with tempfile.NamedTemporaryFile(dir=SERVER_DIR, prefix=".server-icon-", delete=False) as f:
+                        temporary_path = f.name
+                        f.write(content)
+                    os.replace(temporary_path, icon_path)
+                    temporary_path = None
+                    output = json.dumps({"path": "/server-icon.png"})
+            except (OSError, ValueError, binascii.Error) as e:
+                success = False
+                output = str(e)
+            finally:
+                if temporary_path is not None:
+                    os.unlink(temporary_path)
 
         elif cmd_type == "SAVE_FILE":
             rel_path = payload.get("path", "").lstrip("/\\")

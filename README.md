@@ -150,3 +150,9 @@ Legacy servers without an owner need an owner assigned by a database administrat
 Settings reads the selected node’s actual `server.properties`. Saving writes only the fields that changed, including MOTD.
 
 Server creation is paused while capacity is full. Create-server and plan buttons open a dialog that stores waitlist emails in Supabase. To reopen enrollment, remove the capacity gate before offering available plans.
+
+### Server icon and player ping
+
+In Settings, the preview renders MOTD colors and formatting as you edit. The pencil opens the editor and the save icon writes the message to server.properties. Choose an image from the preview icon to crop it to 64 × 64 and upload it as server-icon.png in the Minecraft server root. Minecraft uses the file after its next startup.
+
+The Python node agent supplies each connected player's game round-trip estimate through Paper's Spark command. Players with no current sample show Ping unavailable. The estimate is measured by the game server and is not a hop-by-hop trace. Update the node agent to use the icon upload and ping collection changes.

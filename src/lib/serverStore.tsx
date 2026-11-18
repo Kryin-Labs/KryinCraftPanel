@@ -297,7 +297,7 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
                 uuid: p.uuid,
                 username: p.username,
                 isOnline: Boolean(p.is_online),
-                pingMs: p.ping_ms || 0,
+                pingMs: p.is_online && p.ping_ms > 0 && Date.now() - Date.parse(p.updated_at) < 45_000 ? p.ping_ms : undefined,
                 health: Number(p.health ?? 20),
                 maxHealth: Number(p.max_health ?? 20),
                 foodLevel: Number(p.food_level ?? 20),

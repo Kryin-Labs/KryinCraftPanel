@@ -35,7 +35,7 @@ export function validateServerProperties(input: unknown): ServerProperties | nul
   for (const [key, value] of Object.entries(input)) {
     const field = serverPropertyFields.find((entry) => entry.key === key);
     if (!field || typeof value !== 'string') return null;
-    if (field.kind === 'text' && (value.length > 512 || /[\u0000-\u001f]/.test(value))) return null;
+    if (field.kind === 'text' && (value.length > 512 || /[\u0000-\u0009\u000b-\u001f]/.test(value) || value.split('\n').length > 2)) return null;
     if (field.kind === 'number' && (!/^\d+$/.test(value) || Number(value) < field.min || Number(value) > field.max)) return null;
     if (field.kind === 'select' && !field.options.some((option) => option === value)) return null;
     if (field.kind === 'boolean' && value !== 'true' && value !== 'false') return null;

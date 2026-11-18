@@ -1,6 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { MotdEditor } from '@/components/MotdEditor';
+import { normalizeMotd } from '@/lib/motd';
 import { useServerStore } from '@/lib/serverStore';
 import { serverPropertyFields, type ServerProperties, type ServerPropertyKey } from '@/lib/serverProperties';
 
@@ -14,7 +16,7 @@ export default function ServerSettingsPage() {
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-  const changes = Object.fromEntries(Object.entries(draft).filter(([key, value]) => value !== saved?.[key as ServerPropertyKey]));
+  const changes = Object.fromEntries(Object.entries(draft).filter(([key, value]) => key !== 'motd' && value !== saved?.[key as ServerPropertyKey]));
   const dirty = Object.keys(changes).length > 0;
 
   const load = useCallback(async (signal?: AbortSignal) => {
@@ -42,9 +44,7 @@ export default function ServerSettingsPage() {
     return () => controller.abort();
   }, [load]);
 
-  async function save(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!dirty) return;
+  async function persist(properties: ServerProperties): Promise<boolean> {
     setBusy(true);
     setError('');
     setNotice('');
@@ -52,17 +52,25 @@ export default function ServerSettingsPage() {
       const response = await fetch('/api/server/properties', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ serverId: activeServerId, properties: changes }),
+        body: JSON.stringify({ serverId: activeServerId, properties }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
       setSaved((previous) => ({ ...previous, ...data.properties }));
+      setDraft((previous) => ({ ...previous, ...data.properties }));
       setNotice('Saved to server.properties. Minecraft loads saved settings on startup.');
+      return true;
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Could not save server.properties.');
+      return false;
     } finally {
       setBusy(false);
     }
+  }
+
+  function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (dirty) void persist(changes);
   }
 
   function update(key: ServerPropertyKey, value: string) {
@@ -77,16 +85,21 @@ export default function ServerSettingsPage() {
           <h1 className="text-xl font-bold">Server settings</h1>
           <p className="text-sm text-slate-600">{serverInfo.name}{version ? ' · Minecraft ' + version : ''}</p>
         </div>
-        <button type="button" disabled={busy || dirty} onClick={() => void load()} className="rounded border border-slate-300 px-3 py-2 text-sm disabled:opacity-50">Reload from server</button>
+        <button type="button" disabled={busy || dirty || draft.motd !== saved?.motd} onClick={() => void load()} className="rounded border border-slate-300 px-3 py-2 text-sm disabled:opacity-50">Reload from server</button>
       </div>
       {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
       {notice && <p role="status" className="text-sm text-emerald-800">{notice}</p>}
       {busy && !saved && <p role="status" className="text-sm">Reading server.properties…</p>}
+      {saved && activeServerId && (
+        <MotdEditor serverId={activeServerId} serverName={serverInfo.name} value={draft.motd ?? ''} busy={busy}
+          dirty={draft.motd !== saved.motd} onChange={(value) => update('motd', value)}
+          onSave={() => persist({ motd: normalizeMotd(draft.motd ?? '') })} />
+      )}
       {saved && (
         <form onSubmit={save}>
           <fieldset disabled={busy} className="grid gap-4 sm:grid-cols-2">
-            {serverPropertyFields.map((field) => (
-              <label key={field.key} className={field.kind === 'text' ? 'space-y-1 text-sm sm:col-span-2' : 'space-y-1 text-sm'}>
+            {serverPropertyFields.filter((field) => field.key !== 'motd').map((field) => (
+              <label key={field.key} className="space-y-1 text-sm">
                 <span className="block font-medium">{field.label}</span>
                 {field.kind === 'select' ? (
                   <select className={input} value={draft[field.key] ?? ''} onChange={(event) => update(field.key, event.target.value)}>

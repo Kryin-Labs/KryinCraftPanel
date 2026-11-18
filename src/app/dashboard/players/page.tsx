@@ -20,12 +20,13 @@ export default function PlayersPage() {
   return (
     <section className="space-y-3">
       <h1 className="text-xl font-bold">Players</h1>
+      <p className="text-xs text-slate-600">Ping is measured by the game server over each player’s active connection.</p>
       {!players.length && <p className="text-sm text-slate-600">No player records yet.</p>}
       <ul className="divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white">
         {players.map((player) => (
           <li key={player.uuid} className="flex justify-between gap-2 px-4 py-3 text-sm">
             <span>{player.username}</span>
-            <span className="text-slate-600">{player.isOnline ? 'Online' : 'Offline'}</span>
+            <span className="text-slate-600">{player.isOnline ? player.pingMs ? 'Online · ' + player.pingMs + ' ms' : 'Online · Ping unavailable' : 'Offline'}</span>
           </li>
         ))}
       </ul>
@@ -231,7 +232,7 @@ function PlayerControls() {
 
                       <div className="flex flex-wrap items-center gap-2 mt-1 text-[11px] text-[#1a1522]/50 font-mono">
                         <span className={player.isOnline ? 'text-emerald-700 font-bold' : 'text-[#1a1522]/40'}>
-                          {player.isOnline ? `● Online (${player.pingMs || 18}ms)` : '○ Offline'}
+                          {player.isOnline ? `● Online · ${player.pingMs ? player.pingMs + ' ms' : 'Ping unavailable'}` : '○ Offline'}
                         </span>
                         <span>•</span>
                         <span>UUID: {player.uuid.slice(0, 8)}...</span>

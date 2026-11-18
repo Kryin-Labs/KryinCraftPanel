@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createClient as createServerClient } from '@/lib/supabase/server';
+import { normalizeMotd } from '@/lib/motd';
 import { encodeProperty, validateServerProperties } from '@/lib/serverProperties';
 
 export const maxDuration = 25;
@@ -49,6 +50,11 @@ async function runPropertiesCommand(serverId: string | null, payload: Record<str
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
+  if (searchParams.get('asset') === 'icon') {
+    const result = await runPropertiesCommand(searchParams.get('serverId'), { action: 'READ_SERVER_ICON' });
+    if (result.response) return result.response;
+    return NextResponse.json({ icon: validIcon(result.result?.icon) ? result.result.icon : null });
+  }
   const result = await runPropertiesCommand(searchParams.get('serverId'), {
     action: 'READ_FILE', path: '/server.properties', settings_read: true,
   });
@@ -61,7 +67,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
-  const properties = validateServerProperties(body?.properties);
+  const input = body?.properties;
+  if (typeof input?.motd === 'string') input.motd = normalizeMotd(input.motd);
+  const properties = validateServerProperties(input);
   if (typeof body?.serverId !== 'string' || !properties) {
     return NextResponse.json({ error: 'Enter valid server property values.' }, { status: 400 });
   }
@@ -69,4 +77,25 @@ export async function POST(request: Request) {
   const result = await runPropertiesCommand(body.serverId, { action: 'SAVE_PROPERTIES', properties: encoded });
   if (result.response) return result.response;
   return NextResponse.json({ properties });
+}
+
+function validIcon(value: unknown): value is string {
+  if (typeof value !== 'string' || value.length > 66000 || !/^[A-Za-z0-9+/]+={0,2}$/.test(value)) return false;
+  const bytes = Buffer.from(value, 'base64');
+  return bytes.length >= 33 && bytes.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex'))
+    && bytes.readUInt32BE(8) === 13 && bytes.toString('ascii', 12, 16) === 'IHDR'
+    && bytes.readUInt32BE(16) === 64 && bytes.readUInt32BE(20) === 64;
+}
+
+export async function PUT(request: Request) {
+  const body = await request.json().catch(() => null);
+  if (typeof body?.serverId !== 'string' || !validIcon(body?.icon)) {
+    return NextResponse.json({ error: 'Choose a valid 64 × 64 PNG image.' }, { status: 400 });
+  }
+  const result = await runPropertiesCommand(body.serverId, { action: 'SAVE_SERVER_ICON', icon: body.icon });
+  if (result.response) return result.response;
+  if (result.result?.path !== '/server-icon.png') {
+    return NextResponse.json({ error: 'Update the node agent to enable icon uploads.' }, { status: 502 });
+  }
+  return NextResponse.json({ success: true });
 }

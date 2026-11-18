@@ -22,7 +22,7 @@ export async function POST(req: Request) {
       uuid: (p.uuid || '').toLowerCase(),
       username: p.username || 'Unknown',
       is_online: Boolean(p.is_online),
-      ping_ms: p.ping_ms || 0,
+      ping_ms: p.is_online && Number.isInteger(p.ping_ms) && p.ping_ms > 0 && p.ping_ms <= 60000 ? p.ping_ms : null,
       health: p.health ?? 20.0,
       max_health: p.max_health ?? 20.0,
       food_level: p.food_level ?? 20,
