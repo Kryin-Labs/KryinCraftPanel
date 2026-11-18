@@ -1,5 +1,3 @@
-begin;
-
 create or replace function public.is_server_member(s_id uuid, req_role text default null)
 returns boolean
 language sql stable security definer
@@ -26,6 +24,8 @@ drop policy if exists "Members can view commands" on public.server_commands;
 create policy "Administrators can view commands" on public.server_commands
   for select to authenticated using (public.is_server_member(server_id, 'admin'));
 drop policy if exists "Owners can update servers" on public.servers;
+drop policy if exists "Allow insert profile on signup" on public.profiles;
+revoke insert on public.profiles from public, anon, authenticated;
 drop policy if exists "Users can view profile" on public.profiles;
 create policy "View own profile and server teammates" on public.profiles
   for select to authenticated using (
@@ -148,5 +148,3 @@ revoke all on function public.manage_server_access(uuid, text, uuid, text, text)
 revoke all on function public.accept_server_invitation(text) from public, anon;
 grant execute on function public.manage_server_access(uuid, text, uuid, text, text) to authenticated;
 grant execute on function public.accept_server_invitation(text) to authenticated;
-
-commit;
