@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Server,
   ChevronDown,
@@ -15,7 +16,7 @@ import {
 } from 'lucide-react';
 import { useServerStore } from '@/lib/serverStore';
 
-export const ServerSwitcher: React.FC = () => {
+export function ServerSwitcher({ createOnly = false }: { createOnly?: boolean }) {
   const {
     serverInfo,
     serversList,
@@ -28,6 +29,7 @@ export const ServerSwitcher: React.FC = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [newServerName, setNewServerName] = useState('');
   const [newDeviceName, setNewDeviceName] = useState('');
+  const [createError, setCreateError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [createdResult, setCreatedResult] = useState<{
     server: any;
@@ -45,6 +47,7 @@ export const ServerSwitcher: React.FC = () => {
     e.preventDefault();
     if (!newServerName.trim()) return;
     setIsSubmitting(true);
+    setCreateError('');
 
     const res = await addServer(newServerName.trim(), newDeviceName.trim() || 'Secondary Node');
     setIsSubmitting(false);
@@ -56,6 +59,8 @@ export const ServerSwitcher: React.FC = () => {
       });
       setNewServerName('');
       setNewDeviceName('');
+    } else {
+      setCreateError(res.error || 'Could not create the server.');
     }
   };
 
@@ -70,11 +75,22 @@ export const ServerSwitcher: React.FC = () => {
     }
   };
 
-  const currentServerName = serverInfo.name || (serversList[0]?.name ?? 'Loading Server...');
+  const currentServerName = serversList.find((server) => server.id === activeServerId)?.name || serverInfo.name || 'Select a server';
+
+  function openCreateServer() {
+    setIsOpen(false);
+    setShowAddModal(true);
+    setCreatedResult(null);
+    setCreateError('');
+  }
 
   return (
     <div className="relative font-mono">
-      {/* Switcher Button Trigger */}
+      {createOnly ? (
+        <button type="button" onClick={openCreateServer} className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white">
+          Create server
+        </button>
+      ) : (
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
@@ -110,6 +126,7 @@ export const ServerSwitcher: React.FC = () => {
           }`}
         />
       </button>
+      )}
 
       {/* Dropdown Menu */}
       {isOpen && (
@@ -137,6 +154,7 @@ export const ServerSwitcher: React.FC = () => {
                     <div className="min-w-0 pr-2">
                       <div className="flex items-center gap-1.5">
                         <span className="font-bold truncate">{srv.name}</span>
+                        {srv.shared && <span className="rounded bg-blue-100 px-1 text-[9px] text-blue-800">Shared</span>}
                         <span
                           className={`w-1.5 h-1.5 rounded-full ${
                             srv.status === 'online'
@@ -160,15 +178,11 @@ export const ServerSwitcher: React.FC = () => {
 
             <div className="p-2 bg-slate-50/80 border-t border-[#1a1522]/10">
               <button
-                onClick={() => {
-                  setIsOpen(false);
-                  setShowAddModal(true);
-                  setCreatedResult(null);
-                }}
+                onClick={openCreateServer}
                 className="w-full py-1.5 px-2.5 rounded-lg bg-white hover:bg-blue-50 border border-blue-200 text-blue-700 text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all shadow-2xs"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>+ Add Server Node</span>
+                <span>Create server</span>
               </button>
             </div>
           </div>
@@ -176,7 +190,7 @@ export const ServerSwitcher: React.FC = () => {
       )}
 
       {/* Add Server Node Modal */}
-      {showAddModal && (
+      {showAddModal && createPortal(
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl border border-[#1a1522]/15 shadow-2xl max-w-md w-full p-6 text-[#1a1522] animate-scale-up space-y-4">
             <div className="flex items-center justify-between border-b border-[#1a1522]/10 pb-3">
@@ -199,6 +213,7 @@ export const ServerSwitcher: React.FC = () => {
 
             {!createdResult ? (
               <form onSubmit={handleCreateServer} className="space-y-4 text-xs">
+              {createError && <p role="alert" className="text-xs text-red-700">{createError}</p>}
                 <p className="text-[#1a1522]/70 text-[11px] leading-relaxed">
                   Register a secondary Android phone, Linux node, or PC. Each server node receives a unique agent token and connects to this unified portal.
                 </p>
@@ -313,8 +328,9 @@ export const ServerSwitcher: React.FC = () => {
               </div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
-};
+}

@@ -28,11 +28,14 @@ import {
   tunnelInfo,
 } from './mockData';
 import { createClient } from '@/lib/supabase/client';
+import type { ServerPermission } from './serverPermissions';
 import { parseMinecraftStats } from './minecraftAssets';
 
 interface ServerStoreContextType {
   serverInfo: ServerInfo;
   serverRole: RoleMember['role'] | null;
+  permissions: ServerPermission[];
+  loadError: boolean;
   serversList: ServerSummary[];
   activeServerId: string | null;
   setActiveServerId: (id: string) => void;
@@ -90,8 +93,11 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
 
   const [serversList, setServersList] = useState<ServerSummary[]>([]);
   const [activeServerId, setActiveServerId] = useState<string | null>(null);
-  const [access, setAccess] = useState<{ serverId: string; role: RoleMember['role'] } | null>(null);
-  const serverRole = access && access.serverId === activeServerId ? access.role : null;
+  const [access, setAccess] = useState<{ serverId: string; role: RoleMember['role']; permissions: ServerPermission[] } | null>(null);
+  const selectedAccess = access?.serverId === activeServerId ? access : null;
+  const serverRole = selectedAccess?.role ?? null;
+  const permissions = selectedAccess?.permissions ?? [];
+  const [loadError, setLoadError] = useState(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [isDeviceConnected, setIsDeviceConnected] = useState<boolean>(false);
@@ -187,9 +193,10 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
       try {
         const queryParam = activeServerId ? `?serverId=${encodeURIComponent(activeServerId)}` : '';
         const res = await fetch(`/api/server/live${queryParam}`);
-        if (!res.ok) return;
+        if (!res.ok) throw new Error('Could not load servers');
         const data = await res.json();
         if (!data || !isMounted) return;
+        setLoadError(false);
 
         if (Array.isArray(data.servers)) {
           setServersList(data.servers);
@@ -213,7 +220,7 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
         }
 
         {
-          setAccess(data.role ? { serverId: data.server.id, role: data.role } : null);
+          setAccess(data.role ? { serverId: data.server.id, role: data.role, permissions: data.permissions ?? [] } : null);
           setIsLiveDbConnected(true);
           const devConn = Boolean(data.device_connected ?? data.server.device_connected);
           setIsDeviceConnected(devConn);
@@ -335,6 +342,7 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
           );
         }
       } catch (err) {
+        if (isMounted) setLoadError(true);
         console.warn('Live server sync warning:', err);
       } finally {
         if (isMounted) {
@@ -570,22 +578,23 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
     setAuditLogs((prev) => [newAudit, ...prev]);
   };
 
-  const dispatchServerCommand = async (command_type: string, payload: any = {}) => {
-    try {
-      const res = await fetch('/api/server/command', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          server_id: activeServerId || serverInfo.id,
-          command_type,
-          payload,
-        }),
-      });
-      if (res.status === 401 && typeof window !== 'undefined') {
-        window.location.href = '/login?next=/dashboard';
-      }
-    } catch (e) {
-      console.warn('Command dispatch queued locally:', e);
+  const dispatchServerCommand = async (commandType: string, payload: object = {}) => {
+    const response = await fetch('/api/server/command', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        server_id: activeServerId || serverInfo.id,
+        command_type: commandType,
+        payload,
+      }),
+    });
+    if (response.status === 401) {
+      window.location.assign('/login?next=/dashboard');
+      return;
+    }
+    if (!response.ok) {
+      const data = await response.json().catch(() => null);
+      throw new Error(data?.error || 'Could not send the command.');
     }
   };
 
@@ -907,6 +916,8 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
       value={{
         serverInfo,
         serverRole,
+        permissions,
+        loadError,
         serversList,
         activeServerId,
         setActiveServerId,

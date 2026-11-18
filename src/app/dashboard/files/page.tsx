@@ -24,11 +24,11 @@ import { useServerStore } from '@/lib/serverStore';
 import { ServerFile } from '@/types';
 
 export default function FileManagerPage() {
-  const { activeServerId, serverRole, isLoading } = useServerStore();
+  const { activeServerId, permissions, isLoading } = useServerStore();
 
   if (isLoading) return <p role="status" className="text-sm">Loading server access…</p>;
-  if (serverRole !== 'owner' && serverRole !== 'admin') {
-    return <p className="text-sm">Administrator access is required to manage server files.</p>;
+  if (!permissions.includes('files')) {
+    return <p className="text-sm">File access is required to manage server files.</p>;
   }
 
   return <FileManager key={activeServerId} />;

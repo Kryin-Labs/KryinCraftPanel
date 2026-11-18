@@ -1,6 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { usePanelUsername } from '@/components/UsernameGate';
+import { UsernameSharing } from '@/components/UsernameSharing';
+import { permissionGroups, rolePermissions, type ServerPermission } from '@/lib/serverPermissions';
 import { useServerStore } from '@/lib/serverStore';
 import { createClient } from '@/lib/supabase/client';
 
@@ -9,7 +12,8 @@ type Role = (typeof roles)[number];
 type Member = {
   id: string;
   role: Role | 'owner';
-  profile: { email: string; display_name: string | null } | null;
+  permission_overrides: ServerPermission[] | null;
+  profile: { email: string; display_name: string | null; username: string | null } | null;
 };
 type Invitation = {
   id: string;
@@ -23,8 +27,9 @@ const button = 'rounded-md border border-current/25 px-3 py-2 text-sm hover:bg-c
 const field = 'min-w-0 rounded-md border border-current/25 bg-transparent px-3 py-2 text-sm';
 
 export default function AccessPage() {
+  const username = usePanelUsername();
   const supabase = useMemo(() => createClient(), []);
-  const { activeServerId, setActiveServerId, serverInfo, serverRole } = useServerStore();
+  const { activeServerId, setActiveServerId, serverInfo, serverRole, permissions } = useServerStore();
   const serverId = activeServerId || serverInfo.id;
   const [invite, setInvite] = useState<string | null>(null);
   const [ownerServer, setOwnerServer] = useState<string | null>(null);
@@ -55,7 +60,7 @@ export default function AccessPage() {
       return;
     }
     const [team, links] = await Promise.all([
-      supabase.from('server_members').select('id, role, profile:profiles(email, display_name)').eq('server_id', serverId),
+      supabase.from('server_members').select('id, role, permission_overrides, profile:profiles(email, display_name, username)').eq('server_id', serverId),
       supabase.from('invitations').select('id, invited_email, role, token, expires_at').eq('server_id', serverId)
         .gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false }),
     ]);
@@ -147,6 +152,7 @@ export default function AccessPage() {
     <div className="mx-auto max-w-4xl space-y-6 p-4 sm:p-8">
       <header>
         <h1 className="text-2xl font-semibold">Server access</h1>
+        {username && <p className="mt-1 text-sm text-slate-600">Your username is <strong>@{username}</strong>.</p>}
         {serverRole && <p className="mt-1 text-sm opacity-70">{serverInfo.name} · <span className="capitalize">{serverRole}</span></p>}
       </header>
       {error && <p role="alert" className="text-sm text-red-500">{error}</p>}
@@ -165,8 +171,26 @@ export default function AccessPage() {
         <p className="text-sm opacity-70">{serverId ? 'Only the server owner can manage sharing.' : 'Select a server to manage access.'}</p>
       )}
 
+      {!loading && serverRole && serverRole !== 'owner' && (
+        <section className="rounded-xl border border-slate-200 bg-white p-4">
+          <h2 className="font-semibold">Your permissions</h2>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
+            <li>View overview</li>
+            {permissionGroups.map((group) => group.options
+              .filter(([permission]) => permissions.includes(permission))
+              .map(([permission, label]) => <li key={permission}>{label}</li>))}
+          </ul>
+        </section>
+      )}
+
       {canManage && !loading && (
         <>
+          <UsernameSharing key={serverId} serverId={serverId} onSaved={load}
+            members={members.flatMap((member) => member.role !== 'owner' && member.profile?.username ? [{
+              username: member.profile.username,
+              display_name: member.profile.display_name,
+              permissions: member.permission_overrides ?? rolePermissions(member.role),
+            }] : [])} />
           <section className="space-y-4 rounded-xl border border-current/20 p-4">
             <h2 className="font-semibold">Invite someone</h2>
             <form onSubmit={createInvitation} className="flex flex-wrap items-end gap-3">
@@ -194,11 +218,11 @@ export default function AccessPage() {
             <p className="text-sm">You <span className="opacity-70">· Owner</span></p>
             {members.filter((member) => member.role !== 'owner').map((member) => (
               <div key={member.id} className="flex flex-wrap items-center gap-2 border-t border-current/15 pt-3">
-                <div className="min-w-40 flex-1 break-all text-sm">{member.profile?.email || member.profile?.display_name || 'Member'}</div>
-                <select aria-label={'Role for ' + (member.profile?.email || 'member')} className={field} value={member.role} disabled={busy}
+                <div className="min-w-40 flex-1 break-all text-sm">{member.profile?.username ? '@' + member.profile.username : member.profile?.email || member.profile?.display_name || 'Member'}</div>
+                {member.permission_overrides ? <span className="text-sm text-slate-600">Custom access</span> : <select aria-label={'Role for ' + (member.profile?.email || 'member')} className={field} value={member.role} disabled={busy}
                   onChange={(event) => manage('role', member.id, event.target.value as Role)}>
                   <RoleOptions />
-                </select>
+                </select>}
                 <button type="button" className={button} disabled={busy} onClick={() => manage('remove', member.id)}>Remove</button>
               </div>
             ))}

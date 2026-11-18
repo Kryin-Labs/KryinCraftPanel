@@ -8,7 +8,7 @@ export const AdSidebar: React.FC = () => {
   const [copied, setCopied] = useState(false);
 
   const handleCopyShowcaseIp = () => {
-    navigator.clipboard.writeText('scooter-stuffing.tun.ply.gg');
+    navigator.clipboard.writeText('play.example.com');
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -77,28 +77,28 @@ export const AdSidebar: React.FC = () => {
         <div className="flex items-center justify-between text-[10px] text-[#1a1522]/50 pb-2 border-b border-[#1a1522]/10 uppercase tracking-wider font-bold">
           <span className="flex items-center gap-1.5 text-emerald-700">
             <Flame className="w-3.5 h-3.5 text-emerald-600" />
-            Partner Spotlight
+            Example Server
           </span>
           <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 font-bold border border-emerald-200">
-            ONLINE
+            SAMPLE
           </span>
         </div>
 
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 rounded-lg bg-emerald-600 text-white flex items-center justify-center text-[10px] font-bold">
-              K
+              O
             </div>
-            <span className="font-bold text-xs text-[#1a1522]">Kryin Official SMP</span>
+            <span className="font-bold text-xs text-[#1a1522]">Oakwood Survival</span>
           </div>
           <p className="text-[11px] text-[#1a1522]/60 font-sans">
-            Indian Survival SMP · Paper 1.21.4 · Java &amp; Bedrock Crossplay
+            Survival SMP · Paper · Java &amp; Bedrock Crossplay
           </p>
         </div>
 
         <div className="p-2 rounded-lg bg-[#f8f9fd] border border-[#1a1522]/10 flex items-center justify-between gap-2 text-xs">
           <span className="font-mono text-[11px] text-[#1a1522] truncate">
-            scooter-stuffing.tun.ply.gg
+            play.example.com
           </span>
           <button
             onClick={handleCopyShowcaseIp}

@@ -1,90 +1,45 @@
 import { NextResponse } from 'next/server';
-import { createClient as createServerClient } from '@/lib/supabase/server';
+import { createClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
-export const revalidate = 0;
 
-export async function GET(req: Request) {
-  try {
-    const { searchParams } = new URL(req.url);
-    const requestedServerId = searchParams.get('serverId');
-    const since = searchParams.get('since'); // ISO timestamp string for incremental streaming
-    const limit = Math.min(Number(searchParams.get('limit')) || 150, 300);
+const uuid = /^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i;
+const timestamp = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/i;
 
-    const supabase = await createServerClient();
-    const { data: { user }, error } = await supabase.auth.getUser();
-    if (error || !user) return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
-
-    // 1. Resolve active server safely (validate against live servers)
-    const { data: servers } = await supabase
-      .from('servers')
-      .select('id, status, last_heartbeat')
-      .order('created_at', { ascending: false });
-
-    let targetServerId: string | null = null;
-    const now = Date.now();
-
-    if (requestedServerId && servers?.some((s) => s.id === requestedServerId)) {
-      targetServerId = requestedServerId;
-    } else if (servers && servers.length > 0) {
-      // Prioritize live server with active heartbeat
-      const activeServer = servers.find((s) => {
-        const hb = s.last_heartbeat ? new Date(s.last_heartbeat).getTime() : 0;
-        return now - hb < 45000;
-      });
-      targetServerId = activeServer ? activeServer.id : servers[0].id;
-    }
-
-    if (!targetServerId) {
-      return NextResponse.json({ logs: [], latestTimestamp: null });
-    }
-
-    // 2. Fetch logs (incremental if 'since' provided, else initial batch)
-    if (since) {
-      const { data: newLogs, error } = await supabase
-        .from('server_logs')
-        .select('id, timestamp, level, message, created_at')
-        .eq('server_id', targetServerId)
-        .gt('created_at', since)
-        .order('created_at', { ascending: true })
-        .limit(limit);
-
-      if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
-      }
-
-      const latestTimestamp =
-        newLogs && newLogs.length > 0
-          ? newLogs[newLogs.length - 1].created_at
-          : since;
-
-      return NextResponse.json({
-        logs: newLogs || [],
-        latestTimestamp,
-      });
-    } else {
-      // Initial load: fetch most recent lines and return chronologically
-      const { data: recentLogs, error } = await supabase
-        .from('server_logs')
-        .select('id, timestamp, level, message, created_at')
-        .eq('server_id', targetServerId)
-        .order('created_at', { ascending: false })
-        .limit(limit);
-
-      if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
-      }
-
-      const ordered = (recentLogs || []).reverse();
-      const latestTimestamp =
-        ordered.length > 0 ? ordered[ordered.length - 1].created_at : null;
-
-      return NextResponse.json({
-        logs: ordered,
-        latestTimestamp,
-      });
-    }
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message || 'Console stream error' }, { status: 500 });
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const serverId = searchParams.get('serverId');
+  const since = searchParams.get('since');
+  const afterId = searchParams.get('afterId');
+  const limit = Math.max(1, Math.min(Number.parseInt(searchParams.get('limit') ?? '', 10) || 150, 300));
+  if (!serverId || !uuid.test(serverId)) {
+    return NextResponse.json({ error: 'Select a server to view its console.' }, { status: 400 });
   }
+  if ((since && (!timestamp.test(since) || !Number.isFinite(Date.parse(since)))) || (afterId && (!since || !uuid.test(afterId)))) {
+    return NextResponse.json({ error: 'Invalid log cursor.' }, { status: 400 });
+  }
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'Sign in required.' }, { status: 401 });
+  const { data: permissions, error: accessError } = await supabase.rpc('server_permissions', { target_server: serverId });
+  if (accessError) return NextResponse.json({ error: 'Could not check console access.' }, { status: 503 });
+  if (!permissions?.includes('logs') && !permissions?.includes('console')) {
+    return NextResponse.json({ error: 'Console or log access is required.' }, { status: 403 });
+  }
+
+  let query = supabase.from('server_logs').select('id, timestamp, level, message, created_at').eq('server_id', serverId);
+  if (since) {
+    query = afterId
+      ? query.or(`created_at.gt.${since},and(created_at.eq.${since},id.gt.${afterId})`)
+      : query.gt('created_at', since);
+  }
+  const ascending = Boolean(since);
+  const { data, error } = await query.order('created_at', { ascending }).order('id', { ascending }).limit(limit);
+  if (error) return NextResponse.json({ error: 'Could not load console logs.' }, { status: 502 });
+  const logs = since ? data : data.toReversed();
+  const last = logs.at(-1);
+  return NextResponse.json({ logs, latestTimestamp: last?.created_at ?? since, latestId: last?.id ?? afterId }, {
+    headers: { 'Cache-Control': 'no-store' },
+  });
 }

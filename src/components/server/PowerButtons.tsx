@@ -10,8 +10,10 @@ interface PowerButtonsProps {
 }
 
 export function PowerButtons({ className = '', compact = false }: PowerButtonsProps) {
-  const { serverInfo, startServer, stopServer, restartServer, killServer } = useServerStore();
+  const { serverInfo, permissions, startServer, stopServer, restartServer, killServer } = useServerStore();
   const status = serverInfo.status;
+  const canStart = permissions.includes('start');
+  const canStop = permissions.includes('stop_restart');
 
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -88,7 +90,7 @@ export function PowerButtons({ className = '', compact = false }: PowerButtonsPr
       {/* Start Button */}
       <button
         onClick={handleStart}
-        disabled={status !== 'offline' || Boolean(actionLoading)}
+        disabled={!canStart || status !== 'offline' || Boolean(actionLoading)}
         className={`${btnPadding} rounded-xl font-bold flex items-center justify-center gap-1.5 transition-all shadow-xs ${
           status === 'offline'
             ? 'bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer active:scale-95'
@@ -109,7 +111,7 @@ export function PowerButtons({ className = '', compact = false }: PowerButtonsPr
       {/* Restart Button */}
       <button
         onClick={handleRestart}
-        disabled={status === 'offline' || isStopping || Boolean(actionLoading)}
+        disabled={!canStop || status === 'offline' || isStopping || Boolean(actionLoading)}
         className={`${btnPadding} rounded-xl font-bold flex items-center justify-center gap-1.5 transition-all shadow-xs ${
           status !== 'offline' && !isStopping
             ? 'bg-zinc-800 hover:bg-zinc-700 text-white cursor-pointer active:scale-95'
@@ -124,7 +126,7 @@ export function PowerButtons({ className = '', compact = false }: PowerButtonsPr
       {/* Stop / Kill Button */}
       <button
         onClick={handleStopOrKill}
-        disabled={status === 'offline' && !isStopping}
+        disabled={!canStop || status === 'offline' && !isStopping}
         className={`${btnPadding} rounded-xl font-bold flex items-center justify-center gap-1.5 transition-all shadow-xs ${
           isKillable
             ? 'bg-red-600 hover:bg-red-500 text-white animate-pulse border border-red-500 shadow-md cursor-pointer active:scale-95'

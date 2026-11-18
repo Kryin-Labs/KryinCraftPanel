@@ -61,8 +61,11 @@ const PTERODACTYL_THEME = {
 const TERMINAL_PRELUDE = '\u001b[1m\u001b[33mcontainer@indian-node~ \u001b[0m';
 
 export default function DedicatedConsolePage() {
-  const { logs, serverInfo, sendConsoleCommand, clearLogs } = useServerStore();
+  const { logs, serverInfo, activeServerId, permissions, sendConsoleCommand, clearLogs } = useServerStore();
 
+  const canIssueCommands = permissions.includes('console');
+  const [streamError, setStreamError] = useState('');
+  const [terminalError, setTerminalError] = useState(false);
   const [commandInput, setCommandInput] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [activeTab, setActiveTab] = useState<'paper' | 'world' | 'players' | 'network'>('paper');
@@ -84,70 +87,46 @@ export default function DedicatedConsolePage() {
   const fitAddonRef = useRef<any>(null);
   const searchAddonRef = useRef<any>(null);
   const scrollHelperAddonRef = useRef<XtermScrollDownHelperAddon | null>(null);
-  const writtenLogIdsRef = useRef<Set<string>>(new Set());
   const prevStatusRef = useRef<string>(serverInfo.status);
-  const lastTimestampRef = useRef<string | null>(null);
+  const cursor = useRef<{ timestamp: string; id: string } | null>(null);
 
-  // Dedicated High-Speed (400ms) Console Streamer (Pterodactyl parity)
   useEffect(() => {
-    if (!isTerminalReady) return;
-    let isMounted = true;
-    let isFetching = false;
-
-    async function streamFastLogs() {
-      if (isFetching || !isMounted) return;
-      isFetching = true;
+    if (!activeServerId || !isTerminalReady) return;
+    const controller = new AbortController();
+    let nextPoll: ReturnType<typeof setTimeout>;
+    async function streamLogs() {
       try {
-        const term = terminalInstanceRef.current;
-        if (!term) return;
-
-        const serverParam = serverInfo.id ? `&serverId=${encodeURIComponent(serverInfo.id)}` : '';
-        const sinceParam =
-          lastTimestampRef.current && writtenLogIdsRef.current.size > 0
-            ? `&since=${encodeURIComponent(lastTimestampRef.current)}`
-            : '';
-        const res = await fetch(`/api/server/console?limit=150${serverParam}${sinceParam}`);
-        if (!res.ok) return;
-
-        const data = await res.json();
-        if (!data || !isMounted) return;
-
-        if (Array.isArray(data.logs) && data.logs.length > 0) {
-          let wroteAny = false;
-          for (const log of data.logs) {
-            const logKey = log.id || `${log.timestamp}-${log.message}`;
-            if (!writtenLogIdsRef.current.has(logKey)) {
-              writtenLogIdsRef.current.add(logKey);
-              term.writeln(formatMinecraftLog(log.message));
-              wroteAny = true;
-            }
-          }
-          if (wroteAny) {
-            term.scrollToBottom();
-          }
+        const params = new URLSearchParams({ serverId: activeServerId!, limit: '200' });
+        if (cursor.current) {
+          params.set('since', cursor.current.timestamp);
+          params.set('afterId', cursor.current.id);
         }
+        const response = await fetch('/api/server/console?' + params, { signal: controller.signal });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Could not load the console stream.');
+        if (controller.signal.aborted) return;
 
-        if (data.latestTimestamp) {
-          lastTimestampRef.current = data.latestTimestamp;
+        const terminal = terminalInstanceRef.current;
+        for (const log of data.logs) terminal?.writeln(formatMinecraftLog(log.message));
+        if (data.latestTimestamp && data.latestId) {
+          cursor.current = { timestamp: data.latestTimestamp, id: data.latestId };
         }
-      } catch (err) {
-        // silent fail on transient network errors
+        setStreamError('');
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setStreamError(error instanceof Error ? error.message : 'Could not load the console stream.');
+        }
       } finally {
-        isFetching = false;
+        if (!controller.signal.aborted) nextPoll = setTimeout(streamLogs, 750);
       }
     }
 
-    // Initial instant fetch
-    streamFastLogs();
-
-    // 400ms continuous streaming interval (Pterodactyl speed)
-    const streamInterval = setInterval(streamFastLogs, 400);
-
+    void streamLogs();
     return () => {
-      isMounted = false;
-      clearInterval(streamInterval);
+      controller.abort();
+      clearTimeout(nextPoll);
     };
-  }, [isTerminalReady, serverInfo.id]);
+  }, [isTerminalReady, activeServerId]);
 
   // Smooth Pterodactyl-style status change events in terminal
   useEffect(() => {
@@ -160,9 +139,6 @@ export default function DedicatedConsolePage() {
       prevStatusRef.current = current;
 
       if (current === 'starting') {
-        term.clear();
-        writtenLogIdsRef.current.clear();
-        lastTimestampRef.current = null;
         term.writeln(`${TERMINAL_PRELUDE}\u001b[1m\u001b[33mServer marked as starting...\u001b[0m`);
       } else if (current === 'online') {
         term.writeln(`${TERMINAL_PRELUDE}\u001b[1m\u001b[32mServer marked as running...\u001b[0m`);
@@ -190,6 +166,7 @@ export default function DedicatedConsolePage() {
   // Initialize xterm.js instance
   useEffect(() => {
     let isMounted = true;
+    let stopTouchScroll: (() => void) | undefined;
 
     async function initXterm() {
       if (!terminalElementRef.current || terminalInstanceRef.current) return;
@@ -228,6 +205,29 @@ export default function DedicatedConsolePage() {
       term.loadAddon(scrollHelperAddon);
 
       term.open(terminalElementRef.current);
+      terminalInstanceRef.current = term;
+      const screen = terminalElementRef.current;
+      let lastTouch = 0;
+      function startTouch(event: TouchEvent) {
+        if (event.touches.length === 1) lastTouch = event.touches[0].clientY;
+      }
+      function moveTouch(event: TouchEvent) {
+        if (event.touches.length !== 1) return;
+        const y = event.touches[0].clientY;
+        const lines = Math.trunc((lastTouch - y) / 12);
+        if (event.cancelable) event.preventDefault();
+        event.stopImmediatePropagation();
+        if (lines) {
+          term.scrollLines(lines);
+          lastTouch = y;
+        }
+      }
+      screen.addEventListener('touchstart', startTouch, { passive: true });
+      screen.addEventListener('touchmove', moveTouch, { passive: false, capture: true });
+      stopTouchScroll = () => {
+        screen.removeEventListener('touchstart', startTouch);
+        screen.removeEventListener('touchmove', moveTouch, true);
+      };
       term.unicode.activeVersion = '11';
 
       // Clipboard copy on Ctrl+C / Cmd+C when text is selected
@@ -250,7 +250,6 @@ export default function DedicatedConsolePage() {
         return true;
       });
 
-      terminalInstanceRef.current = term;
       fitAddonRef.current = fitAddon;
       searchAddonRef.current = searchAddon;
       scrollHelperAddonRef.current = scrollHelperAddon;
@@ -270,12 +269,13 @@ export default function DedicatedConsolePage() {
       setTimeout(tryFit, 200);
 
       // Welcome header
-      term.writeln(`${TERMINAL_PRELUDE}\u001b[92mConnected to Indian Node (Paper 1.21.4)\u001b[0m`);
-      term.writeln(`${TERMINAL_PRELUDE}\u001b[90mSession established. Type /help or shortcuts below for commands.\u001b[0m\r\n`);
+      term.writeln(TERMINAL_PRELUDE + "Server console");
       setIsTerminalReady(true);
     }
 
-    initXterm();
+    void initXterm().catch(() => {
+      if (isMounted) setTerminalError(true);
+    });
 
     // Resize handler for window and element dimensions
     const handleResize = () => {
@@ -299,6 +299,7 @@ export default function DedicatedConsolePage() {
 
     return () => {
       isMounted = false;
+      stopTouchScroll?.();
       window.removeEventListener('resize', handleResize);
       if (resizeObserver) {
         resizeObserver.disconnect();
@@ -374,7 +375,7 @@ export default function DedicatedConsolePage() {
   // Execute Console Command
   const executeCommand = async (rawCmd: string) => {
     const cmd = rawCmd.trim();
-    if (!cmd || isSending) return;
+    if (!canIssueCommands || !cmd || isSending) return;
 
     // Update command history (latest first, limit 50)
     const newHistory = [cmd, ...history.filter((c) => c !== cmd)].slice(0, 50);
@@ -389,7 +390,6 @@ export default function DedicatedConsolePage() {
       terminalInstanceRef.current.writeln(
         `${TERMINAL_PRELUDE}\u001b[36;1m${cmd.startsWith('/') ? cmd : `/${cmd}`}\u001b[0m`
       );
-      terminalInstanceRef.current.scrollToBottom();
     }
 
     setCommandInput('');
@@ -397,27 +397,6 @@ export default function DedicatedConsolePage() {
     try {
       await sendConsoleCommand(cmd);
 
-      // Fast-poll output after 200ms and 500ms for instantaneous Pterodactyl response
-      setTimeout(async () => {
-        try {
-          const serverParam = serverInfo.id ? `&serverId=${encodeURIComponent(serverInfo.id)}` : '';
-          const sinceParam = lastTimestampRef.current ? `&since=${encodeURIComponent(lastTimestampRef.current)}` : '';
-          const res = await fetch(`/api/server/console?limit=50${serverParam}${sinceParam}`);
-          if (!res.ok) return;
-          const data = await res.json();
-          if (Array.isArray(data.logs) && data.logs.length > 0 && terminalInstanceRef.current) {
-            for (const log of data.logs) {
-              const logKey = log.id || `${log.timestamp}-${log.message}`;
-              if (!writtenLogIdsRef.current.has(logKey)) {
-                writtenLogIdsRef.current.add(logKey);
-                terminalInstanceRef.current.writeln(formatMinecraftLog(log.message));
-              }
-            }
-            terminalInstanceRef.current.scrollToBottom();
-            if (data.latestTimestamp) lastTimestampRef.current = data.latestTimestamp;
-          }
-        } catch (e) {}
-      }, 250);
     } catch (err: any) {
       if (terminalInstanceRef.current) {
         terminalInstanceRef.current.writeln(
@@ -436,8 +415,6 @@ export default function DedicatedConsolePage() {
 
   const handleClearLogs = () => {
     clearLogs();
-    writtenLogIdsRef.current.clear();
-    lastTimestampRef.current = null;
     if (terminalInstanceRef.current) {
       terminalInstanceRef.current.clear();
       terminalInstanceRef.current.writeln(
@@ -632,15 +609,21 @@ export default function DedicatedConsolePage() {
           className="relative w-full bg-[#0d1117] flex-1" 
           style={{ height: isMaximized ? 'calc(100vh - 160px)' : '520px', minHeight: '420px' }}
         >
+          {streamError && <p role="alert" className="absolute right-2 top-2 z-10 rounded bg-red-950 px-2 py-1 text-xs text-red-100">{streamError}</p>}
+          {terminalError && (
+            <pre aria-label="Recent console logs" className="absolute inset-0 overflow-auto whitespace-pre-wrap p-3 text-xs text-slate-200">
+              {logs.length ? logs.map((log) => log.message).join('\n') : 'No console logs received yet.'}
+            </pre>
+          )}
           <div
             ref={terminalElementRef}
-            className="w-full h-full p-2.5 sm:p-3 overflow-hidden select-text"
+            className="w-full h-full overflow-hidden p-2.5 select-text sm:p-3 [@media(pointer:coarse)]:touch-none"
             style={{ height: '100%', minHeight: '100%', width: '100%' }}
           />
         </div>
 
         {/* Bottom Command Composer Form */}
-        <form onSubmit={handleSubmit} className="p-3 bg-[#161b22] border-t border-white/10 flex items-center gap-2">
+        {canIssueCommands && <form onSubmit={handleSubmit} className="p-3 bg-[#161b22] border-t border-white/10 flex items-center gap-2">
           <span className="text-blue-400 font-bold font-mono pl-2 text-sm select-none">&gt;</span>
           <input
             type="text"
@@ -661,10 +644,10 @@ export default function DedicatedConsolePage() {
             <span>{isSending ? 'Sending...' : 'Send'}</span>
             <Send className="w-3.5 h-3.5" />
           </button>
-        </form>
+        </form>}
 
         {/* Quick Command Suggestions Strip */}
-        <div className="px-4 py-2 bg-[#0d1117] border-t border-white/5 flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-400">
+        {canIssueCommands && <div className="px-4 py-2 bg-[#0d1117] border-t border-white/5 flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-400">
           <span className="font-semibold text-zinc-300">Shortcuts:</span>
           {QUICK_COMMANDS.map((cmd) => (
             <button
@@ -676,7 +659,7 @@ export default function DedicatedConsolePage() {
               /{cmd.replace(/^\//, '')}
             </button>
           ))}
-        </div>
+        </div>}
       </div>
 
       {/* Pterodactyl-Style Rolling 60s Hardware Stat Graphs */}

@@ -24,6 +24,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/api/server/live') ||
     pathname.startsWith('/api/server/console') ||
     pathname.startsWith('/api/server/files') ||
+    pathname.startsWith('/api/server/properties') ||
     pathname.startsWith('/api/server/command') ||
     pathname.startsWith('/api/server/update') ||
     pathname.startsWith('/api/servers');

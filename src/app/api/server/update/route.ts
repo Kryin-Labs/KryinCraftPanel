@@ -56,9 +56,9 @@ export async function POST(req: Request) {
 
     const { data: allowed } = await supabaseUser.rpc('is_server_member', {
       s_id: serverId,
-      req_role: 'admin',
+      req_role: 'owner',
     });
-    if (!allowed) return NextResponse.json({ error: 'Administrator access required' }, { status: 403 });
+    if (!allowed) return NextResponse.json({ error: 'Only the server owner can change its name or addresses' }, { status: 403 });
 
     // 4. Construct sanitized updates (strictly whitelist allowed fields)
     const updates: Record<string, any> = {

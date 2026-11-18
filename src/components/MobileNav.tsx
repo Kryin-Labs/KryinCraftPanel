@@ -13,13 +13,17 @@ import {
   ArrowLeft,
   LogOut,
   Activity,
+  ScrollText,
 } from 'lucide-react';
+import { canVisitDashboardPage } from '@/lib/serverPermissions';
 import { useServerStore } from '@/lib/serverStore';
+import { ServerSwitcher } from './ServerSwitcher';
 import { createClient } from '@/lib/supabase/client';
 
 const navItems = [
   { name: 'Overview', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Console', href: '/dashboard/console', icon: Terminal },
+  { name: 'Logs', href: '/dashboard/logs', icon: ScrollText },
   { name: 'Ping', href: '/dashboard/checker', icon: Activity },
   { name: 'Players', href: '/dashboard/players', icon: Users },
   { name: 'Files', href: '/dashboard/files', icon: FolderTree },
@@ -29,7 +33,7 @@ const navItems = [
 
 export const MobileNav: React.FC = () => {
   const pathname = usePathname();
-  const { serverInfo, players } = useServerStore();
+  const { serverInfo, players, permissions, serverRole } = useServerStore();
   const onlineCount = players.filter((p) => p.isOnline).length;
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
@@ -55,9 +59,7 @@ export const MobileNav: React.FC = () => {
             </div>
             <span className="font-bold text-[#1a1522] text-sm tracking-tight font-mono hidden sm:inline">KryinHost</span>
           </Link>
-          <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-bold border border-blue-200 truncate max-w-[120px]">
-            {serverInfo.name || 'Server'}
-          </span>
+          <ServerSwitcher />
         </div>
 
         <div className="flex items-center gap-2">
@@ -86,8 +88,8 @@ export const MobileNav: React.FC = () => {
       </header>
 
       {/* Bottom Sticky Tab Bar */}
-      <nav className="fixed bottom-0 left-0 right-0 h-16 bg-white/95 backdrop-blur-md border-t border-[#1a1522]/10 px-2 flex items-center justify-around z-40 shadow-lg">
-        {navItems.map((item) => {
+      <nav className="fixed bottom-0 left-0 right-0 h-16 bg-white/95 backdrop-blur-md border-t border-[#1a1522]/10 px-2 flex items-center overflow-x-auto z-40 shadow-lg">
+        {navItems.filter((item) => canVisitDashboardPage(item.href, permissions, serverRole === 'owner')).map((item) => {
           const isActive =
             item.href === '/dashboard'
               ? pathname === '/dashboard'
@@ -98,7 +100,7 @@ export const MobileNav: React.FC = () => {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-col items-center justify-center flex-1 py-1 text-[10px] transition-colors relative ${
+              className={`flex flex-col items-center justify-center min-w-14 flex-1 py-1 text-[10px] transition-colors relative ${
                 isActive ? 'text-blue-700 font-bold' : 'text-[#1a1522]/60 hover:text-[#1a1522]'
               }`}
             >

@@ -17,10 +17,12 @@ export async function GET(req: Request) {
     const requestedServerId = searchParams.get('serverId');
 
     // 1. Fetch available servers
-    const { data: allServers } = await supabase
+    const { data: allServers, error: listError } = await supabase
       .from('servers')
-      .select('id, name, status, device_name, public_tunnel_java, local_ip, last_heartbeat, created_at')
+      .select('id, name, status, device_name, public_tunnel_java, local_ip, last_heartbeat, created_at, owner_id')
       .order('created_at', { ascending: true });
+
+    if (listError) throw listError;
 
     // Prioritize active servers with live heartbeats
     const now = Date.now();
@@ -59,6 +61,7 @@ export async function GET(req: Request) {
       const isFresh = Date.now() - hbTime < 45 * 1000;
       return {
         id: s.id,
+        shared: s.owner_id !== user.id,
         name: s.name,
         status: isFresh && s.status === 'online' ? 'online' : (isFresh ? s.status : 'offline'),
         device: s.device_name || 'Indian Node',
@@ -86,6 +89,8 @@ export async function GET(req: Request) {
       ? { data: null }
       : await supabase.from('server_members').select('role').eq('server_id', server.id).eq('user_id', user.id).maybeSingle();
     const role = server.owner_id === user.id ? 'owner' : membership?.role ?? null;
+    const { data: permissions, error: permissionError } = await supabase.rpc('server_permissions', { target_server: server.id });
+    if (permissionError) throw permissionError;
 
     // Check if agent heartbeat is alive (within last 45 seconds)
     const lastHeartbeatTime = server.last_heartbeat ? new Date(server.last_heartbeat).getTime() : 0;
@@ -161,6 +166,7 @@ export async function GET(req: Request) {
         status: isOnline ? 'online' : isHeartbeatFresh ? server.status : 'offline',
         servers: formattedServers,
         role,
+        permissions,
         server: {
           id: server.id,
           name: server.name,

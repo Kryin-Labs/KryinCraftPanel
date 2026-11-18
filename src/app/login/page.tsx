@@ -31,6 +31,7 @@ export default function LoginPage() {
 
   const [activeTab, setActiveTab] = useState<'signin' | 'signup'>('signin');
   const [fullName, setFullName] = useState('');
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -47,7 +48,9 @@ export default function LoginPage() {
   }
 
   React.useEffect(() => {
-    if (new URLSearchParams(window.location.search).get('error') === 'callback') {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('mode') === 'signup') setActiveTab('signup');
+    if (params.get('error') === 'callback') {
       setErrorMsg('Could not verify the sign-in link. Please try again.');
     }
   }, []);
@@ -105,7 +108,7 @@ export default function LoginPage() {
           email: cleanEmail,
           password,
           options: {
-            data: { full_name: fullName.trim() },
+            data: { full_name: fullName.trim(), preferred_username: username.trim().toLowerCase() },
             emailRedirectTo: callbackUrl(),
           },
         });
@@ -351,7 +354,7 @@ export default function LoginPage() {
             {activeTab === 'signup' && (
               <div>
                 <label className="block font-mono text-[11px] font-bold text-[#1a1522]/80 uppercase tracking-wider mb-1.5">
-                  Full Name / Username
+                  Display name
                 </label>
                 <div className="relative">
                   <User className="w-4 h-4 text-[#1a1522]/40 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -365,6 +368,23 @@ export default function LoginPage() {
                   />
                 </div>
               </div>
+            )}
+
+            {activeTab === 'signup' && (
+              <label className="block space-y-1.5 text-sm font-medium">
+                Username
+                <input
+                  required
+                  autoComplete="username"
+                  minLength={3}
+                  maxLength={30}
+                  pattern="[A-Za-z0-9][A-Za-z0-9_\-]{2,29}"
+                  value={username}
+                  onChange={(event) => setUsername(event.target.value)}
+                  className="w-full rounded-lg border border-[#1a1522]/20 bg-[#fbf9fe] px-3 py-2.5"
+                />
+                <span className="block text-xs font-normal opacity-70">Use 3–30 letters, numbers, hyphens or underscores.</span>
+              </label>
             )}
 
             <div>

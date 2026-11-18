@@ -28,7 +28,7 @@ export async function GET() {
 
     const { data: servers, error } = await supabase
       .from('servers')
-      .select('id, name, status, device_name, public_tunnel_java, local_ip, last_heartbeat, created_at')
+      .select('id, name, status, device_name, public_tunnel_java, local_ip, last_heartbeat, created_at, owner_id')
       .order('created_at', { ascending: true });
 
     if (error) {
@@ -38,6 +38,7 @@ export async function GET() {
     // Strip sensitive fields before returning
     const safeServers = (servers || []).map((s) => ({
       id: s.id,
+      shared: s.owner_id !== user.id,
       name: s.name,
       status: s.status,
       device_name: s.device_name,

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { verifyAgentToken } from '@/lib/agentAuth';
+import { parseServerProperties } from '@/lib/serverProperties';
 
 export async function POST(req: Request) {
   try {
@@ -30,6 +31,19 @@ export async function POST(req: Request) {
 
     if (!command_id) {
       return NextResponse.json({ error: 'Missing command_id' }, { status: 400 });
+    }
+
+    if (typeof finalResult?.content === 'string') {
+      const { data: command, error } = await supabase
+        .from('server_commands')
+        .select('payload')
+        .eq('id', command_id)
+        .eq('server_id', server.id)
+        .maybeSingle();
+      if (error) return NextResponse.json({ error: 'Could not verify the result type.' }, { status: 502 });
+      if (command?.payload?.settings_read === true) {
+        finalResult = { properties: parseServerProperties(finalResult.content) };
+      }
     }
 
     const { error: updateError } = await supabase

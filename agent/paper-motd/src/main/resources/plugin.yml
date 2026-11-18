@@ -1,0 +1,4 @@
+name: KryinLiveMotd
+version: 1.0.0
+main: com.kryinhost.motd.LiveMotdPlugin
+api-version: '1.21'

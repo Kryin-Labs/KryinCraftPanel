@@ -27,11 +27,11 @@ async function checkFileAccess(serverId: unknown) {
   const supabase = await createServerClient();
   const { data: { user }, error } = await supabase.auth.getUser();
   if (error || !user) return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
-  const { data: allowed } = await supabase.rpc('is_server_member', {
-    s_id: serverId,
-    req_role: 'admin',
+  const { data: allowed } = await supabase.rpc('has_server_permission', {
+    target_server: serverId,
+    permission: 'files',
   });
-  if (!allowed) return NextResponse.json({ error: 'Administrator access required' }, { status: 403 });
+  if (!allowed) return NextResponse.json({ error: 'File access is required' }, { status: 403 });
 }
 
 export async function GET(req: Request) {

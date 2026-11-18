@@ -14,7 +14,26 @@ import {
 } from 'lucide-react';
 import { useServerStore } from '@/lib/serverStore';
 
-export default function PlayersManagementPage() {
+export default function PlayersPage() {
+  const { permissions, players } = useServerStore();
+  if (permissions.includes('console')) return <PlayerControls />;
+  return (
+    <section className="space-y-3">
+      <h1 className="text-xl font-bold">Players</h1>
+      {!players.length && <p className="text-sm text-slate-600">No player records yet.</p>}
+      <ul className="divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white">
+        {players.map((player) => (
+          <li key={player.uuid} className="flex justify-between gap-2 px-4 py-3 text-sm">
+            <span>{player.username}</span>
+            <span className="text-slate-600">{player.isOnline ? 'Online' : 'Offline'}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function PlayerControls() {
   const {
     players,
     serverInfo,

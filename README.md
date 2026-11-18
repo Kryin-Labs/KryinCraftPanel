@@ -144,3 +144,7 @@ GitHub creates a portal account on the user's first successful sign-in. From **A
 - **Owner** can also manage sharing.
 
 Legacy servers without an owner need an owner assigned by a database administrator before they appear in the dashboard.
+
+### Live Paper MOTD
+
+The Settings page reads and writes the selected node's actual server.properties. Paper loads most properties on startup. For live Java server-list MOTD updates, build the small plugin with Java 21 and Maven from the repository root using `mvn -f agent/paper-motd/pom.xml package`. Copy `agent/paper-motd/target/kryin-live-motd-1.0.0.jar` into the Minecraft server's `plugins` directory and restart Paper once to load it. After that, the plugin applies saved MOTD changes within a few seconds.

@@ -103,11 +103,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Server ID required' }, { status: 400 });
     }
 
-    const requiredRole = ['START', 'STOP', 'RESTART'].includes(normalizedCmd) ? 'operator' : 'admin';
-    const { data: allowed } = await supabaseUser.rpc('is_server_member', {
-      s_id: server_id,
-      req_role: requiredRole,
-    });
+    const permission = normalizedCmd === 'START' ? 'start'
+      : ['STOP', 'RESTART', 'HIBERNATE', 'KILL', 'KILL_SERVER', 'FORCE_STOP'].includes(normalizedCmd) ? 'stop_restart'
+      : ['CONSOLE_CMD', 'COMMAND', 'KICK', 'BAN', 'UNBAN', 'OP', 'DEOP', 'WHITELIST', 'HEAL', 'FEED', 'STARVE', 'TELEPORT', 'GAMEMODE'].includes(normalizedCmd) ? 'console' : null;
+    const { data: allowed } = permission
+      ? await supabaseUser.rpc('has_server_permission', { target_server: server_id, permission })
+      : await supabaseUser.rpc('is_server_member', { s_id: server_id, req_role: 'owner' });
     if (!allowed) return NextResponse.json({ error: 'Insufficient server permissions' }, { status: 403 });
 
     const { data: targetServer } = await admin.from('servers').select('id, name').eq('id', server_id).single();

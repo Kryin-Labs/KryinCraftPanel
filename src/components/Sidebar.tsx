@@ -12,13 +12,14 @@ import {
   ShieldCheck,
   Copy,
   Check,
-  ExternalLink,
   ArrowLeft,
   Server,
   LogOut,
   User as UserIcon,
   Activity,
+  ScrollText,
 } from 'lucide-react';
+import { canVisitDashboardPage } from '@/lib/serverPermissions';
 import { useServerStore } from '@/lib/serverStore';
 import { StatusBadge } from './StatusBadge';
 import { ServerSwitcher } from './ServerSwitcher';
@@ -27,6 +28,7 @@ import { createClient } from '@/lib/supabase/client';
 const navItems = [
   { name: 'Overview', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Console', href: '/dashboard/console', icon: Terminal },
+  { name: 'Logs', href: '/dashboard/logs', icon: ScrollText },
   { name: 'Ping Checker', href: '/dashboard/checker', icon: Activity },
   { name: 'Players', href: '/dashboard/players', icon: Users },
   { name: 'Files', href: '/dashboard/files', icon: FolderTree },
@@ -36,7 +38,7 @@ const navItems = [
 
 export const Sidebar: React.FC = () => {
   const pathname = usePathname();
-  const { serverInfo, players } = useServerStore();
+  const { serverInfo, players, permissions, serverRole } = useServerStore();
   const [copied, setCopied] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -124,7 +126,7 @@ export const Sidebar: React.FC = () => {
           <p className="text-[10px] uppercase tracking-wider text-[#1a1522]/40 px-2 py-1 font-bold">
             Navigation
           </p>
-          {navItems.map((item) => {
+          {navItems.filter((item) => canVisitDashboardPage(item.href, permissions, serverRole === 'owner')).map((item) => {
             const isActive =
               item.href === '/dashboard'
                 ? pathname === '/dashboard'
@@ -172,20 +174,7 @@ export const Sidebar: React.FC = () => {
           </button>
         </div>
 
-        {/* Back to Home & OPanel Link */}
         <div className="flex flex-col gap-1 text-[11px]">
-          <Link
-            href="http://localhost:3001/panel/terminal"
-            target="_blank"
-            className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-slate-50 text-[#1a1522]/70 hover:text-[#1a1522] transition-colors"
-          >
-            <span className="flex items-center gap-1.5 font-medium">
-              <ExternalLink className="w-3 h-3 text-blue-600" />
-              OPanel Suite
-            </span>
-            <span className="text-[9px] text-blue-600 bg-blue-50 px-1 py-0.2 rounded font-bold">:3001</span>
-          </Link>
-
           <Link
             href="/"
             className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-slate-50 text-[#1a1522]/70 hover:text-[#1a1522] transition-colors font-medium"

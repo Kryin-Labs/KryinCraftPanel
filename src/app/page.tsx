@@ -930,10 +930,10 @@ export default function HomePage() {
                     </p>
                     <div className="w-hero-actions">
                       <a href="#plans" className="w-btn w-btn-solid">
-                        deploy server
+                        See Plans
                       </a>
-                      <Link href="/panel" className="w-btn w-btn-outline">
-                        view console panel
+                      <Link href={isLoggedIn ? "/dashboard" : "/login?mode=signup"} className="w-btn w-btn-outline">
+                        View Console Panel
                       </Link>
                     </div>
                   </div>
@@ -1678,7 +1678,7 @@ export default function HomePage() {
                                 </Link>
                               </li>
                               <li>
-                                <Link href="/panel" className="hover:text-[#1a1522]">
+                                <Link href={isLoggedIn ? "/dashboard" : "/login?mode=signup"} className="hover:text-[#1a1522]">
                                   Live Web Terminal
                                 </Link>
                               </li>

@@ -169,6 +169,7 @@ export interface ServerIpEndpoint {
 }
 
 export interface ServerSummary {
+  shared?: boolean;
   id: string;
   name: string;
   status: ServerStatus;

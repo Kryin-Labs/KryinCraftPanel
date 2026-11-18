@@ -29,6 +29,7 @@ import {
   HeartCrack,
   ArrowRight,
 } from 'lucide-react';
+import { canVisitDashboardPage } from '@/lib/serverPermissions';
 import { useServerStore } from '@/lib/serverStore';
 import { StatusBadge } from '@/components/StatusBadge';
 import { AdSidebar } from '@/components/AdBanner';
@@ -47,7 +48,13 @@ export default function DashboardOverviewPage() {
     isRefreshing,
     refreshStatus,
     saveIpEndpoints,
+    serverRole,
+    permissions,
   } = useServerStore();
+
+  const canEditAddresses = serverRole === 'owner';
+  const canStart = permissions.includes('start');
+  const canStop = permissions.includes('stop_restart');
 
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
@@ -115,7 +122,7 @@ export default function DashboardOverviewPage() {
 
   const handleSaveEndpoint = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!endpointForm.host.trim()) return;
+    if (!canEditAddresses || !endpointForm.host.trim()) return;
 
     let updatedList: ServerIpEndpoint[];
     if (editingEndpointId) {
@@ -424,7 +431,7 @@ export default function DashboardOverviewPage() {
                 <span>Stopping...</span>
               </button>
             ) : !isServerOnline ? (
-              <button
+              canStart && <button
                 onClick={() => handleQuickAction('start')}
                 className="px-5 py-2.5 rounded-xl text-white text-xs font-bold flex items-center gap-2 transition-all shadow-xs bg-emerald-600 hover:bg-emerald-700 cursor-pointer shadow-emerald-600/20 active:scale-95"
                 title="Launch Minecraft Server"
@@ -433,7 +440,7 @@ export default function DashboardOverviewPage() {
                 <span>Start Game</span>
               </button>
             ) : (
-              <button
+              canStop && <button
                 onClick={() => handleQuickAction('restart')}
                 className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-2 transition-all shadow-xs active:scale-95 cursor-pointer"
                 title="Restart Minecraft server"
@@ -443,7 +450,7 @@ export default function DashboardOverviewPage() {
               </button>
             )}
 
-            {isServerOnline && (
+            {canStop && isServerOnline && (
               <button
                 onClick={() => handleQuickAction('stop')}
                 disabled={isStopping || isStarting}
@@ -455,6 +462,7 @@ export default function DashboardOverviewPage() {
               </button>
             )}
 
+            {canStop && (
             <button
               onClick={() => handleQuickAction('hibernate')}
               disabled={!isServerOnline || isStopping || isStarting}
@@ -464,6 +472,7 @@ export default function DashboardOverviewPage() {
               <Moon className="w-3.5 h-3.5" />
               <span>Hibernate</span>
             </button>
+            )}
           </div>
         </div>
       </div>
@@ -515,6 +524,7 @@ export default function DashboardOverviewPage() {
               </p>
             </div>
 
+            {canEditAddresses && (
             <button
               onClick={handleOpenAddModal}
               className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-2xs self-start sm:self-auto"
@@ -522,6 +532,7 @@ export default function DashboardOverviewPage() {
               <Plus className="w-3.5 h-3.5" />
               <span>Add IP & Port</span>
             </button>
+            )}
           </div>
 
           {/* Endpoints List */}
@@ -549,6 +560,7 @@ export default function DashboardOverviewPage() {
                     </span>
 
                     <div className="flex items-center gap-1">
+                      {canEditAddresses && (
                       <button
                         onClick={() => handleOpenEditModal(ep)}
                         className="p-1 rounded-md text-[#1a1522]/50 hover:text-blue-600 hover:bg-blue-50 transition-colors"
@@ -556,7 +568,8 @@ export default function DashboardOverviewPage() {
                       >
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
-                      {endpoints.length > 1 && (
+                      )}
+                      {canEditAddresses && endpoints.length > 1 && (
                         <button
                           onClick={() => handleDeleteEndpoint(ep.id)}
                           className="p-1 rounded-md text-[#1a1522]/50 hover:text-red-600 hover:bg-red-50 transition-colors"
@@ -603,6 +616,7 @@ export default function DashboardOverviewPage() {
         {/* 3. QUICK NAVIGATION SHORTCUTS                                    */}
         {/* ================================================================ */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {canVisitDashboardPage('/dashboard/console', permissions, canEditAddresses) && (
           <Link
             href="/dashboard/console"
             className="p-4 rounded-xl bg-white border border-[#1a1522]/10 hover:border-blue-400 hover:shadow-xs transition-all flex flex-col items-center text-center space-y-1.5 group"
@@ -613,7 +627,9 @@ export default function DashboardOverviewPage() {
             <span className="text-xs font-bold text-[#1a1522]">Live Console</span>
             <span className="text-[10px] text-[#1a1522]/50">RCON Terminal</span>
           </Link>
+          )}
 
+          {canVisitDashboardPage('/dashboard/players', permissions, canEditAddresses) && (
           <Link
             href="/dashboard/players"
             className="p-4 rounded-xl bg-white border border-[#1a1522]/10 hover:border-blue-400 hover:shadow-xs transition-all flex flex-col items-center text-center space-y-1.5 group"
@@ -624,7 +640,9 @@ export default function DashboardOverviewPage() {
             <span className="text-xs font-bold text-[#1a1522]">Players & Ops</span>
             <span className="text-[10px] text-[#1a1522]/50">Whitelist & Bans</span>
           </Link>
+          )}
 
+          {canVisitDashboardPage('/dashboard/files', permissions, canEditAddresses) && (
           <Link
             href="/dashboard/files"
             className="p-4 rounded-xl bg-white border border-[#1a1522]/10 hover:border-blue-400 hover:shadow-xs transition-all flex flex-col items-center text-center space-y-1.5 group"
@@ -635,7 +653,9 @@ export default function DashboardOverviewPage() {
             <span className="text-xs font-bold text-[#1a1522]">File Manager</span>
             <span className="text-[10px] text-[#1a1522]/50">Configs & Worlds</span>
           </Link>
+          )}
 
+          {canVisitDashboardPage('/dashboard/settings', permissions, canEditAddresses) && (
           <Link
             href="/dashboard/settings"
             className="p-4 rounded-xl bg-white border border-[#1a1522]/10 hover:border-blue-400 hover:shadow-xs transition-all flex flex-col items-center text-center space-y-1.5 group"
@@ -646,6 +666,7 @@ export default function DashboardOverviewPage() {
             <span className="text-xs font-bold text-[#1a1522]">Settings</span>
             <span className="text-[10px] text-[#1a1522]/50">Properties & Node</span>
           </Link>
+          )}
         </div>
       </div>
 
@@ -655,7 +676,7 @@ export default function DashboardOverviewPage() {
       {/* ================================================================ */}
       {/* ADD / EDIT IP WITH PORT MODAL                                    */}
       {/* ================================================================ */}
-      {showAddIpModal && (
+      {canEditAddresses && showAddIpModal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl border border-[#1a1522]/15 shadow-2xl max-w-md w-full p-6 text-[#1a1522] animate-scale-up space-y-4">
             <div className="flex items-center justify-between border-b border-[#1a1522]/10 pb-3">
