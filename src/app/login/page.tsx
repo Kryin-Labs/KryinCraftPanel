@@ -12,10 +12,6 @@ import {
   EyeOff,
   CheckCircle2,
   AlertCircle,
-  Terminal,
-  ShieldCheck,
-  Server,
-  Zap,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
@@ -43,7 +39,8 @@ export default function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  const [resetSent, setResetSent] = useState(false);
+  const [verificationEmail, setVerificationEmail] = useState<string | null>(null);
+  const [verificationCode, setVerificationCode] = useState('');
 
   function destination() {
     return authDestination(new URLSearchParams(window.location.search).get('next'));
@@ -61,13 +58,20 @@ export default function LoginPage() {
     return url.toString();
   }
 
-  async function signInWithProvider(provider: 'google' | 'github') {
+  function beginVerification(address: string) {
+    setVerificationEmail(address);
+    setVerificationCode('');
+    setPassword('');
+    setConfirmPassword('');
+  }
+
+  async function signInWithGitHub() {
     setIsSubmitting(true);
     setErrorMsg(null);
     setSuccessMsg(null);
     try {
       const { error } = await supabase.auth.signInWithOAuth({
-        provider,
+        provider: 'github',
         options: { redirectTo: callbackUrl() },
       });
       if (error) throw error;
@@ -89,13 +93,11 @@ export default function LoginPage() {
       if (activeTab === 'signup') {
         if (password.length < 6) {
           setErrorMsg('Password must be at least 6 characters long.');
-          setIsSubmitting(false);
           return;
         }
 
         if (password !== confirmPassword) {
           setErrorMsg('Passwords do not match. Please verify both fields.');
-          setIsSubmitting(false);
           return;
         }
 
@@ -111,37 +113,80 @@ export default function LoginPage() {
         if (error) throw error;
         if (data.session) {
           window.location.assign(destination());
-        } else {
-          setSuccessMsg('Check your email for a confirmation link to finish creating your account.');
-        }
-        return;
-      } else {
-        // Sign In
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: cleanEmail,
-          password,
-        });
-
-        if (error) {
-          const lower = error.message.toLowerCase();
-          if (lower.includes('invalid login credentials')) {
-            setErrorMsg('Invalid email or password. Please verify your credentials and try again.');
-          } else {
-            setErrorMsg(error.message);
-          }
           return;
         }
 
-        // Hard navigate to ensure cookies are sent with all headers
-        window.location.assign(destination());
+        beginVerification(cleanEmail);
         return;
       }
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Authentication error. Please try again.');
+
+      const { error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password });
+      if (error?.code === 'email_not_confirmed') {
+        beginVerification(cleanEmail);
+        return;
+      }
+      if (error?.code === 'invalid_credentials') {
+        setErrorMsg('Invalid email or password.');
+        return;
+      }
+      if (error) throw error;
+
+      window.location.assign(destination());
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : 'Authentication failed. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  async function verifyEmail(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!verificationEmail || !/^\d{6,10}$/.test(verificationCode)) return;
+
+    setIsSubmitting(true);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    try {
+      const { data, error } = await supabase.auth.verifyOtp({
+        email: verificationEmail,
+        token: verificationCode,
+        type: 'email',
+      });
+      if (error?.code === 'otp_expired') {
+        setErrorMsg('That code is invalid or expired. Check it or request a new code.');
+        return;
+      }
+      if (error) throw error;
+      if (!data.session) throw new Error('Your email could not be verified. Please try again.');
+      window.location.assign(destination());
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : 'Could not verify the code.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function resendCode() {
+    if (!verificationEmail) return;
+
+    setIsSubmitting(true);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: verificationEmail,
+        options: { emailRedirectTo: callbackUrl() },
+      });
+      if (error) throw error;
+      setVerificationCode('');
+      setSuccessMsg('Check your inbox for the latest verification code.');
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : 'Could not send a new code.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
 
   const handleResetPassword = async () => {
     const cleanEmail = email.trim().toLowerCase();
@@ -154,7 +199,6 @@ export default function LoginPage() {
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail);
       if (error) throw error;
-      setResetSent(true);
       setSuccessMsg(`Password reset instructions sent to ${cleanEmail}.`);
     } catch (err: any) {
       setErrorMsg(err.message || 'Unable to send password reset email.');
@@ -190,19 +234,22 @@ export default function LoginPage() {
               Indian Datacenter Gateway
             </div>
             <h1 className="font-mono font-bold text-2xl text-[#1a1522] pt-1">
-              {activeTab === 'signin' ? 'Sign in to Console' : 'Create an Account'}
+              {verificationEmail ? 'Verify your email' : activeTab === 'signin' ? 'Sign in to Console' : 'Create an Account'}
             </h1>
             <p className="text-[13px] text-[#1a1522]/70 leading-relaxed font-sans">
-              {activeTab === 'signin'
+              {verificationEmail
+                ? <>Enter the verification code sent to <strong className="break-all">{verificationEmail}</strong>.</>
+                : activeTab === 'signin'
                 ? 'Access your server terminal, live player manager, and file system.'
                 : 'Deploy high-frequency Indian Minecraft nodes and manage your team.'}
             </p>
           </div>
 
           {/* Tab Switcher */}
-          <div className="flex bg-[#f6f5fb] p-1 rounded-lg border border-[#1a1522]/10 font-mono text-[12px]">
+          {!verificationEmail && <div className="flex bg-[#f6f5fb] p-1 rounded-lg border border-[#1a1522]/10 font-mono text-[12px]">
             <button
               type="button"
+              disabled={isSubmitting}
               onClick={() => {
                 setActiveTab('signin');
                 setErrorMsg(null);
@@ -218,6 +265,7 @@ export default function LoginPage() {
             </button>
             <button
               type="button"
+              disabled={isSubmitting}
               onClick={() => {
                 setActiveTab('signup');
                 setErrorMsg(null);
@@ -231,11 +279,11 @@ export default function LoginPage() {
             >
               Create Account
             </button>
-          </div>
+          </div>}
 
           {/* Feedback Alerts */}
           {errorMsg && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2.5 text-[12px] text-red-800">
+            <div role="alert" className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2.5 text-[12px] text-red-800">
               <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
               <div className="flex-1">
                 <span>{errorMsg}</span>
@@ -244,23 +292,52 @@ export default function LoginPage() {
           )}
 
           {successMsg && (
-            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg flex items-start gap-2.5 text-[12px] text-emerald-800">
+            <div role="status" className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg flex items-start gap-2.5 text-[12px] text-emerald-800">
               <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
               <span>{successMsg}</span>
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-2">
-            <button type="button" disabled={isSubmitting} onClick={() => signInWithProvider('google')} className="rounded-lg border border-[#1a1522]/20 p-2.5 text-sm font-medium hover:bg-[#f6f5fb] disabled:opacity-50">
-              Continue with Google
-            </button>
-            <button type="button" disabled={isSubmitting} onClick={() => signInWithProvider('github')} className="rounded-lg border border-[#1a1522]/20 p-2.5 text-sm font-medium hover:bg-[#f6f5fb] disabled:opacity-50">
-              Continue with GitHub
-            </button>
-          </div>
+          {verificationEmail ? (
+            <form onSubmit={verifyEmail} className="space-y-4">
+              <label className="block text-sm font-medium">
+                Verification code
+                <input
+                  autoComplete="one-time-code"
+                  inputMode="numeric"
+                  type="text"
+                  pattern="[0-9]{6,10}"
+                  required
+                  value={verificationCode}
+                  onChange={(event) => setVerificationCode(event.target.value.replace(/\D/g, '').slice(0, 10))}
+                  className="mt-1 w-full rounded-lg border border-[#1a1522]/20 bg-[#fbf9fe] px-3 py-2.5 font-mono"
+                />
+              </label>
+              <button type="submit" disabled={isSubmitting || verificationCode.length < 6} className="w-full rounded-lg bg-[#1a1522] py-3 text-sm font-bold text-white disabled:opacity-50">
+                Verify email
+              </button>
+              <div className="flex flex-wrap justify-between gap-2 text-sm">
+                <button type="button" onClick={resendCode} disabled={isSubmitting} className="underline disabled:opacity-50">
+                  Resend code
+                </button>
+                <button type="button" disabled={isSubmitting} className="underline disabled:opacity-50" onClick={() => {
+                  setVerificationEmail(null);
+                  setVerificationCode('');
+                  setErrorMsg(null);
+                  setSuccessMsg(null);
+                }}>
+                  Back to {activeTab === 'signup' ? 'signup' : 'sign in'}
+                </button>
+              </div>
+            </form>
+          ) : null}
+
+          {!verificationEmail && <button type="button" disabled={isSubmitting} onClick={signInWithGitHub} className="w-full rounded-lg border border-[#1a1522]/20 p-2.5 text-sm font-medium hover:bg-[#f6f5fb] disabled:opacity-50">
+            Continue with GitHub
+          </button>}
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
+          {!verificationEmail && <form onSubmit={handleSubmit} className="space-y-4">
             {activeTab === 'signup' && (
               <div>
                 <label className="block font-mono text-[11px] font-bold text-[#1a1522]/80 uppercase tracking-wider mb-1.5">
@@ -367,12 +444,12 @@ export default function LoginPage() {
                 </>
               ) : (
                 <>
-                  <span>Create Account &amp; Proceed</span>
+                  <span>Send verification code</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}
             </button>
-          </form>
+          </form>}
         </div>
       </div>
 

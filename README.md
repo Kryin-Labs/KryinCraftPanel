@@ -132,9 +132,11 @@ Open [http://localhost:3000](http://localhost:3000) to view the application.
 
 ## Sign-in and server sharing
 
-Apply `supabase/migrations/20261118173818_server_access.sql` after the initial schema. In Supabase Authentication, enable Google and GitHub and supply each provider's OAuth client credentials. Use the Supabase provider callback URL shown in the dashboard when configuring the provider. In Supabase URL Configuration, set the portal's Site URL and allow its `/auth/callback` route, including `http://localhost:3000/auth/callback` for local development. Enable email confirmations for password signup.
+Apply `supabase/migrations/20261118173818_server_access.sql` after the initial schema. In Supabase Authentication, enable GitHub and enter the OAuth app's client ID and secret. Use the Supabase provider callback URL shown in the dashboard when registering the OAuth app. Set the portal's Site URL and allow its `/auth/callback` route, including `http://localhost:3000/auth/callback` for local development.
 
-Google and GitHub create a portal account on the user's first successful sign-in. From **Access**, a server owner can create a single-use invite link for an email address and share it directly. The recipient signs in with the invited email and accepts within seven days.
+For email and password signup, enable email confirmations and include `{{ .Token }}` in the **Confirm sign up** email template. Users enter that code on the signup screen. Supabase's built-in mail service sends only to project team members. Configure custom SMTP for public signup.
+
+GitHub creates a portal account on the user's first successful sign-in. From **Access**, a server owner can create a single-use invite link for an email address and share it directly. The recipient signs in with the invited email and accepts within seven days.
 
 - **Viewer** can view server data and logs.
 - **Operator** can additionally start, stop, and restart the server.
