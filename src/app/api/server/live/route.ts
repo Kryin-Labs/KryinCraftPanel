@@ -1,24 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
-import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-
-function getAdminClient() {
-  const url =
-    process.env.NEXT_PUBLIC_SUPABASE_URL ||
-    'https://qekhtvzzllaufevvljxj.supabase.co';
-  const secretKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.SUPABASE_SECRET_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    '';
-
-  return createClient(url, secretKey, {
-    auth: { persistSession: false },
-  });
-}
 
 // Strictly select only non-secret columns (NEVER select agent_token_hash)
 const SAFE_SERVER_COLUMNS =
@@ -26,19 +10,9 @@ const SAFE_SERVER_COLUMNS =
 
 export async function GET(req: Request) {
   try {
-    // Check if requester has an authenticated session
-    let isAuthenticated = false;
-    try {
-      const supabaseUser = await createServerClient();
-      const {
-        data: { user },
-      } = await supabaseUser.auth.getUser();
-      isAuthenticated = Boolean(user);
-    } catch (e) {
-      isAuthenticated = false;
-    }
-
-    const supabase = getAdminClient();
+    const supabase = await createServerClient();
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !user) return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     const { searchParams } = new URL(req.url);
     const requestedServerId = searchParams.get('serverId');
 
@@ -89,7 +63,7 @@ export async function GET(req: Request) {
         status: isFresh && s.status === 'online' ? 'online' : (isFresh ? s.status : 'offline'),
         device: s.device_name || 'Indian Node',
         deviceConnected: isFresh,
-        localIp: isAuthenticated ? s.local_ip : null,
+        localIp: s.local_ip,
         publicTunnelJava: s.public_tunnel_java,
         lastHeartbeat: s.last_heartbeat,
       };
@@ -107,6 +81,11 @@ export async function GET(req: Request) {
         players: [],
       });
     }
+
+    const { data: membership } = server.owner_id === user.id
+      ? { data: null }
+      : await supabase.from('server_members').select('role').eq('server_id', server.id).eq('user_id', user.id).maybeSingle();
+    const role = server.owner_id === user.id ? 'owner' : membership?.role ?? null;
 
     // Check if agent heartbeat is alive (within last 45 seconds)
     const lastHeartbeatTime = server.last_heartbeat ? new Date(server.last_heartbeat).getTime() : 0;
@@ -126,18 +105,13 @@ export async function GET(req: Request) {
       latestMetrics = metricsData;
     }
 
-    // 4. Fetch latest logs (only for authenticated operators to protect console privacy)
-    let logs: any[] = [];
-    if (isAuthenticated) {
-      const { data: recentLogs } = await supabase
-        .from('server_logs')
-        .select('id, timestamp, level, message, created_at')
-        .eq('server_id', server.id)
-        .order('created_at', { ascending: false })
-        .limit(100);
-
-      logs = (recentLogs || []).reverse();
-    }
+    const { data: recentLogs } = await supabase
+      .from('server_logs')
+      .select('id, timestamp, level, message, created_at')
+      .eq('server_id', server.id)
+      .order('created_at', { ascending: false })
+      .limit(100);
+    const logs = (recentLogs || []).reverse();
 
     // 5. Fetch players
     const { data: dbPlayers } = await supabase
@@ -168,7 +142,7 @@ export async function GET(req: Request) {
           isPrimary: true,
         });
       }
-      if (server.local_ip && isAuthenticated) {
+      if (server.local_ip) {
         ipEndpoints.push({
           id: 'ep-lan-default',
           type: 'lan',
@@ -186,18 +160,19 @@ export async function GET(req: Request) {
         device_connected: isHeartbeatFresh,
         status: isOnline ? 'online' : isHeartbeatFresh ? server.status : 'offline',
         servers: formattedServers,
+        role,
         server: {
           id: server.id,
           name: server.name,
           device: server.device_name || 'Indian Node',
           device_connected: isHeartbeatFresh,
           status: isOnline ? 'online' : isHeartbeatFresh ? server.status : 'offline',
-          pid: isAuthenticated && isOnline ? server.pid : null,
+          pid: isOnline ? server.pid : null,
           tps: isOnline ? Number(server.tps || 20.0) : 0,
           uptime_seconds: isOnline ? server.uptime_seconds || 0 : 0,
           online_players: isOnline ? server.online_players || 0 : 0,
           max_players: server.max_players || 20,
-          local_ip: isAuthenticated ? server.local_ip || null : null,
+          local_ip: server.local_ip || null,
           public_tunnel_java: server.public_tunnel_java || null,
           public_tunnel_bedrock: server.public_tunnel_bedrock || null,
           ip_endpoints: ipEndpoints,

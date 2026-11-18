@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { authDestination } from '@/lib/authDestination';
 import {
   Mail,
   Lock,
@@ -31,7 +31,6 @@ function KryinLogo({ className = 'w-5 h-5' }: { className?: string }) {
 }
 
 export default function LoginPage() {
-  const router = useRouter();
   const supabase = createClient();
 
   const [activeTab, setActiveTab] = useState<'signin' | 'signup'>('signin');
@@ -40,21 +39,43 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [resetSent, setResetSent] = useState(false);
 
-  // If user already has an active persistent session, redirect straight to /dashboard
+  function destination() {
+    return authDestination(new URLSearchParams(window.location.search).get('next'));
+  }
+
   React.useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        window.location.href = '/dashboard';
-      }
-    });
-  }, [supabase]);
+    if (new URLSearchParams(window.location.search).get('error') === 'callback') {
+      setErrorMsg('Could not verify the sign-in link. Please try again.');
+    }
+  }, []);
+
+  function callbackUrl() {
+    const url = new URL('/auth/callback', window.location.origin);
+    url.searchParams.set('next', destination());
+    return url.toString();
+  }
+
+  async function signInWithProvider(provider: 'google' | 'github') {
+    setIsSubmitting(true);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: { redirectTo: callbackUrl() },
+      });
+      if (error) throw error;
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : 'Could not start sign-in.');
+      setIsSubmitting(false);
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,43 +99,21 @@ export default function LoginPage() {
           return;
         }
 
-        // Create user through our server-side endpoint with email auto-confirmed
-        const res = await fetch('/api/auth/signup', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: cleanEmail,
-            password,
-            fullName: fullName.trim(),
-          }),
-        });
-
-        const signupData = await res.json();
-
-        if (!res.ok) {
-          setErrorMsg(signupData.error || 'Failed to create account.');
-          if (res.status === 409) {
-            setActiveTab('signin');
-          }
-          setIsSubmitting(false);
-          return;
-        }
-
-        // Automatically sign in immediately so session cookies are stored permanently
-        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        const { data, error } = await supabase.auth.signUp({
           email: cleanEmail,
           password,
+          options: {
+            data: { full_name: fullName.trim() },
+            emailRedirectTo: callbackUrl(),
+          },
         });
 
-        if (signInError) {
-          setSuccessMsg('Account created successfully! Please sign in below.');
-          setActiveTab('signin');
-          setIsSubmitting(false);
-          return;
+        if (error) throw error;
+        if (data.session) {
+          window.location.assign(destination());
+        } else {
+          setSuccessMsg('Check your email for a confirmation link to finish creating your account.');
         }
-
-        // Hard navigate so layout and cookies initialize fresh
-        window.location.href = '/dashboard';
         return;
       } else {
         // Sign In
@@ -134,7 +133,7 @@ export default function LoginPage() {
         }
 
         // Hard navigate to ensure cookies are sent with all headers
-        window.location.href = '/dashboard';
+        window.location.assign(destination());
         return;
       }
     } catch (err: any) {
@@ -251,6 +250,15 @@ export default function LoginPage() {
             </div>
           )}
 
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" disabled={isSubmitting} onClick={() => signInWithProvider('google')} className="rounded-lg border border-[#1a1522]/20 p-2.5 text-sm font-medium hover:bg-[#f6f5fb] disabled:opacity-50">
+              Continue with Google
+            </button>
+            <button type="button" disabled={isSubmitting} onClick={() => signInWithProvider('github')} className="rounded-lg border border-[#1a1522]/20 p-2.5 text-sm font-medium hover:bg-[#f6f5fb] disabled:opacity-50">
+              Continue with GitHub
+            </button>
+          </div>
+
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
             {activeTab === 'signup' && (
@@ -343,20 +351,6 @@ export default function LoginPage() {
                 </div>
               </div>
             )}
-
-            {/* Remember Me Checkbox */}
-            <div className="flex items-center gap-2 pt-1 font-mono text-[12px] text-[#1a1522]/70">
-              <input
-                type="checkbox"
-                id="remember"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-                className="w-4 h-4 rounded border-[#1a1522]/30 text-[#1a1522] focus:ring-0 cursor-pointer"
-              />
-              <label htmlFor="remember" className="cursor-pointer select-none">
-                Stay signed in on this device (until manually logged out)
-              </label>
-            </div>
 
             {/* Submit Button */}
             <button

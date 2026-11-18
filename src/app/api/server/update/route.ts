@@ -20,9 +20,8 @@ function getAdminClient() {
 export async function POST(req: Request) {
   try {
     // 1. Authenticate user session
-    let user: any = null;
+    const supabaseUser = await createServerClient();
     try {
-      const supabaseUser = await createServerClient();
       const {
         data: { user: sessionUser },
         error: authErr,
@@ -34,7 +33,6 @@ export async function POST(req: Request) {
           { status: 401 }
         );
       }
-      user = sessionUser;
     } catch (e) {
       return NextResponse.json(
         { error: 'Unauthorized: Unable to verify user session' },
@@ -56,33 +54,16 @@ export async function POST(req: Request) {
 
     const admin = getAdminClient();
 
-    // 3. Verify server existence & ownership
-    const { data: server, error: serverErr } = await admin
-      .from('servers')
-      .select('id, owner_id')
-      .eq('id', serverId)
-      .single();
-
-    if (serverErr || !server) {
-      return NextResponse.json({ error: 'Server not found' }, { status: 404 });
-    }
-
-    // Action Protection: Verify ownership
-    if (server.owner_id && server.owner_id !== user.id) {
-      return NextResponse.json(
-        { error: 'Forbidden: You do not have permission to modify this server' },
-        { status: 403 }
-      );
-    }
+    const { data: allowed } = await supabaseUser.rpc('is_server_member', {
+      s_id: serverId,
+      req_role: 'admin',
+    });
+    if (!allowed) return NextResponse.json({ error: 'Administrator access required' }, { status: 403 });
 
     // 4. Construct sanitized updates (strictly whitelist allowed fields)
     const updates: Record<string, any> = {
       updated_at: new Date().toISOString(),
     };
-
-    if (!server.owner_id) {
-      updates.owner_id = user.id;
-    }
 
     if (name !== undefined && typeof name === 'string') {
       const cleanName = name.trim().slice(0, 50);

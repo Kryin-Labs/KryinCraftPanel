@@ -1,3 +1,4 @@
+import { authDestination } from '@/lib/authDestination';
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
@@ -20,6 +21,9 @@ export async function middleware(request: NextRequest) {
   const isLoginPage = pathname === '/login';
   const isDashboardPage = pathname.startsWith('/dashboard');
   const isProtectedApi =
+    pathname.startsWith('/api/server/live') ||
+    pathname.startsWith('/api/server/console') ||
+    pathname.startsWith('/api/server/files') ||
     pathname.startsWith('/api/server/command') ||
     pathname.startsWith('/api/server/update') ||
     pathname.startsWith('/api/servers');
@@ -41,12 +45,7 @@ export async function middleware(request: NextRequest) {
             request,
           });
           cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, {
-              ...options,
-              maxAge: 60 * 60 * 24 * 365,
-              sameSite: 'lax',
-              path: '/',
-            })
+            supabaseResponse.cookies.set(name, value, options)
           );
         },
       },
@@ -59,16 +58,18 @@ export async function middleware(request: NextRequest) {
 
     // Guard 1: Authenticated user trying to access /login -> redirect to /dashboard
     if (user && isLoginPage) {
-      const redirectUrl = request.nextUrl.clone();
-      redirectUrl.pathname = '/dashboard';
-      return NextResponse.redirect(redirectUrl);
+      const destination = authDestination(request.nextUrl.searchParams.get('next'));
+      const response = NextResponse.redirect(new URL(destination, request.url));
+      supabaseResponse.cookies.getAll().forEach((cookie) => response.cookies.set(cookie));
+      return response;
     }
 
     // Guard 2: Unauthenticated user trying to access /dashboard -> redirect to /login
     if (!user && isDashboardPage) {
       const redirectUrl = request.nextUrl.clone();
       redirectUrl.pathname = '/login';
-      redirectUrl.searchParams.set('next', pathname);
+      redirectUrl.search = '';
+      redirectUrl.searchParams.set('next', pathname + request.nextUrl.search);
       return NextResponse.redirect(redirectUrl);
     }
 
@@ -109,9 +110,8 @@ export const config = {
      * - favicon.ico (favicon file)
      * - sw.js (service worker file)
      * - api/agent (Termux node agent polling endpoints with Bearer auth)
-     * - api/server/live (live stats endpoint with public fallback)
      * - static file extensions (svg, png, jpg, jpeg, gif, webp, ico, woff, woff2, js, css, map)
      */
-    '/((?!_next/static|_next/image|favicon.ico|sw\\.js|api/agent|api/server/live|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff|woff2|js|css|map)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|sw\\.js|api/agent|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff|woff2|js|css|map)$).*)',
   ],
 };

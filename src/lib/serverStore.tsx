@@ -32,6 +32,7 @@ import { parseMinecraftStats } from './minecraftAssets';
 
 interface ServerStoreContextType {
   serverInfo: ServerInfo;
+  serverRole: RoleMember['role'] | null;
   serversList: ServerSummary[];
   activeServerId: string | null;
   setActiveServerId: (id: string) => void;
@@ -89,6 +90,8 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
 
   const [serversList, setServersList] = useState<ServerSummary[]>([]);
   const [activeServerId, setActiveServerId] = useState<string | null>(null);
+  const [access, setAccess] = useState<{ serverId: string; role: RoleMember['role'] } | null>(null);
+  const serverRole = access && access.serverId === activeServerId ? access.role : null;
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [isDeviceConnected, setIsDeviceConnected] = useState<boolean>(false);
@@ -168,30 +171,6 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
     return { status: current, clearPending: false };
   };
 
-  // Fast hydrate from localStorage cache immediately on mount (0ms instant render)
-  useEffect(() => {
-    try {
-      const cached = localStorage.getItem('kryin_cached_server');
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (parsed && (parsed.id || parsed.name)) {
-          setServerInfo((prev) => ({ ...prev, ...parsed }));
-          if (parsed.id && !activeServerId) {
-            setActiveServerId(parsed.id);
-          }
-          // If cached within the last 60 seconds, restore device connection instantly with zero lag
-          if (parsed.deviceConnected !== undefined) {
-            const cachedAge = parsed.cachedAt ? Date.now() - Number(parsed.cachedAt) : 0;
-            if (cachedAge < 60 * 1000 && parsed.deviceConnected) {
-              setIsDeviceConnected(true);
-            }
-          }
-          setIsLoading(false);
-        }
-      }
-    } catch (e) {}
-  }, []);
-
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user?.email) {
@@ -212,7 +191,7 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
         const data = await res.json();
         if (!data || !isMounted) return;
 
-        if (Array.isArray(data.servers) && data.servers.length > 0) {
+        if (Array.isArray(data.servers)) {
           setServersList(data.servers);
           // If activeServerId points to a deleted or unknown server, auto-heal to data.server.id
           if (data.server?.id && (!activeServerId || !data.servers.some((s: any) => s.id === activeServerId))) {
@@ -222,7 +201,19 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
           setActiveServerId(data.server.id);
         }
 
-        if (data.server) {
+        if (!data.server) {
+          setAccess(null);
+          setServerInfo(initialServerInfo);
+          setIsDeviceConnected(false);
+          setIsLiveDbConnected(false);
+          setMetrics(initialMetrics);
+          setLogs([]);
+          setPlayers([]);
+          return;
+        }
+
+        {
+          setAccess(data.role ? { serverId: data.server.id, role: data.role } : null);
           setIsLiveDbConnected(true);
           const devConn = Boolean(data.device_connected ?? data.server.device_connected);
           setIsDeviceConnected(devConn);
@@ -261,16 +252,6 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
               ipEndpoints: data.server.ip_endpoints || prev.ipEndpoints,
             };
 
-            try {
-              localStorage.setItem(
-                'kryin_cached_server',
-                JSON.stringify({
-                  ...updatedServerInfo,
-                  cachedAt: Date.now(),
-                })
-              );
-            } catch (e) {}
-
             return updatedServerInfo;
           });
         }
@@ -291,7 +272,7 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
           }));
         }
 
-        if (Array.isArray(data.logs) && data.logs.length > 0) {
+        if (Array.isArray(data.logs)) {
           setLogs(data.logs.map((l: any) => ({
             id: l.id,
             timestamp: l.timestamp ? (l.timestamp.includes('T') ? new Date(l.timestamp).toLocaleTimeString() : l.timestamp) : new Date().toLocaleTimeString(),
@@ -300,7 +281,7 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
           })));
         }
 
-        if (Array.isArray(data.players) && data.players.length > 0) {
+        if (Array.isArray(data.players)) {
           setPlayers(
             data.players.map((p: any) => {
               const inv = p.inventory || {};
@@ -526,9 +507,6 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
             publicTunnelBedrock: resData.server.public_tunnel_bedrock !== undefined ? resData.server.public_tunnel_bedrock : prev.publicTunnelBedrock,
             ipEndpoints: data.ip_endpoints !== undefined ? data.ip_endpoints : (resData.server.ip_endpoints || prev.ipEndpoints),
           };
-          try {
-            localStorage.setItem('kryin_cached_server', JSON.stringify(updated));
-          } catch (e) {}
           return updated;
         });
 
@@ -645,7 +623,10 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
     try {
       const serverParam = activeServerId ? `&serverId=${encodeURIComponent(activeServerId)}` : '';
       const res = await fetch(`/api/server/files?action=list&dir=${encodeURIComponent(dir)}${serverParam}`);
-      if (!res.ok) return files[dir] || [];
+      if (!res.ok) {
+        setFiles((prev) => ({ ...prev, [dir]: [] }));
+        return [];
+      }
       const json = await res.json();
       if (json.success && json.data && Array.isArray(json.data.files)) {
         const fetchedFiles: ServerFile[] = json.data.files;
@@ -662,17 +643,16 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
     try {
       const serverParam = activeServerId ? `&serverId=${encodeURIComponent(activeServerId)}` : '';
       const res = await fetch(`/api/server/files?action=read&path=${encodeURIComponent(path)}${serverParam}`);
-      if (!res.ok) return fileContents[path] || '';
+      if (!res.ok) return '';
       const json = await res.json();
       if (json.success && json.data?.content !== undefined) {
         const content = json.data.content;
-        setFileContents((prev) => ({ ...prev, [path]: content }));
         return content;
       }
     } catch (e) {
       console.warn('File read warning:', e);
     }
-    return fileContents[path] || '';
+    return '';
   };
 
   const sendConsoleCommand = async (cmd: string): Promise<string> => {
@@ -926,6 +906,7 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
     <ServerStoreContext.Provider
       value={{
         serverInfo,
+        serverRole,
         serversList,
         activeServerId,
         setActiveServerId,

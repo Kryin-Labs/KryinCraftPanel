@@ -9,6 +9,7 @@ import {
   Users,
   FolderTree,
   Sliders,
+  ShieldCheck,
   Copy,
   Check,
   ExternalLink,
@@ -29,6 +30,7 @@ const navItems = [
   { name: 'Ping Checker', href: '/dashboard/checker', icon: Activity },
   { name: 'Players', href: '/dashboard/players', icon: Users },
   { name: 'Files', href: '/dashboard/files', icon: FolderTree },
+  { name: 'Access', href: '/dashboard/access', icon: ShieldCheck },
   { name: 'Settings', href: '/dashboard/settings', icon: Sliders },
 ];
 

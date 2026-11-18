@@ -1,24 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
-import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-
-function getAdminClient() {
-  const url =
-    process.env.NEXT_PUBLIC_SUPABASE_URL ||
-    'https://qekhtvzzllaufevvljxj.supabase.co';
-  const secretKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.SUPABASE_SECRET_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    '';
-
-  return createClient(url, secretKey, {
-    auth: { persistSession: false },
-  });
-}
 
 export async function GET(req: Request) {
   try {
@@ -27,7 +11,9 @@ export async function GET(req: Request) {
     const since = searchParams.get('since'); // ISO timestamp string for incremental streaming
     const limit = Math.min(Number(searchParams.get('limit')) || 150, 300);
 
-    const supabase = getAdminClient();
+    const supabase = await createServerClient();
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !user) return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
 
     // 1. Resolve active server safely (validate against live servers)
     const { data: servers } = await supabase

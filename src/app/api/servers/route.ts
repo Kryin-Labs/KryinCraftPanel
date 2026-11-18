@@ -20,36 +20,15 @@ function getAdminClient() {
 
 export async function GET() {
   try {
-    // 1. Authenticate user session
-    let user: any = null;
-    try {
-      const supabaseUser = await createServerClient();
-      const {
-        data: { user: sessionUser },
-        error: authErr,
-      } = await supabaseUser.auth.getUser();
-
-      if (authErr || !sessionUser) {
-        return NextResponse.json(
-          { error: 'Unauthorized: Authentication required to list servers' },
-          { status: 401 }
-        );
-      }
-      user = sessionUser;
-    } catch (e) {
-      return NextResponse.json(
-        { error: 'Unauthorized: Unable to verify user session' },
-        { status: 401 }
-      );
+    const supabase = await createServerClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
 
-    const supabase = getAdminClient();
-
-    // 2. Fetch only servers belonging to the user or unowned legacy servers
     const { data: servers, error } = await supabase
       .from('servers')
-      .select('id, name, status, device_name, public_tunnel_java, local_ip, last_heartbeat, created_at, owner_id')
-      .or(`owner_id.eq.${user.id},owner_id.is.null`)
+      .select('id, name, status, device_name, public_tunnel_java, local_ip, last_heartbeat, created_at')
       .order('created_at', { ascending: true });
 
     if (error) {

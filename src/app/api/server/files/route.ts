@@ -20,6 +20,20 @@ function getAdminClient() {
   });
 }
 
+async function checkFileAccess(serverId: unknown) {
+  if (typeof serverId !== 'string' || !serverId) {
+    return NextResponse.json({ error: 'Server ID required' }, { status: 400 });
+  }
+  const supabase = await createServerClient();
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
+  const { data: allowed } = await supabase.rpc('is_server_member', {
+    s_id: serverId,
+    req_role: 'admin',
+  });
+  if (!allowed) return NextResponse.json({ error: 'Administrator access required' }, { status: 403 });
+}
+
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
@@ -30,23 +44,9 @@ export async function GET(req: Request) {
 
     const admin = getAdminClient();
 
-    // 1. Resolve server
-    let targetServerId = serverId;
-    if (!targetServerId) {
-      const { data: firstServer } = await admin
-        .from('servers')
-        .select('id, last_heartbeat, status')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
-      if (firstServer) {
-        targetServerId = firstServer.id;
-      }
-    }
-
-    if (!targetServerId) {
-      return NextResponse.json({ error: 'Server ID required' }, { status: 400 });
-    }
+    const targetServerId = serverId;
+    const denied = await checkFileAccess(targetServerId);
+    if (denied) return denied;
 
     // Check if device agent is online
     const { data: srv } = await admin
@@ -131,20 +131,9 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}));
     const { action, serverId, path, content, name, directory } = body;
 
-    let targetServerId = serverId;
-    if (!targetServerId) {
-      const { data: firstServer } = await admin
-        .from('servers')
-        .select('id')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
-      if (firstServer) targetServerId = firstServer.id;
-    }
-
-    if (!targetServerId) {
-      return NextResponse.json({ error: 'Server ID required' }, { status: 400 });
-    }
+    const targetServerId = serverId;
+    const denied = await checkFileAccess(targetServerId);
+    if (denied) return denied;
 
     let cmdAction = 'SAVE_FILE';
     let payload: any = {};

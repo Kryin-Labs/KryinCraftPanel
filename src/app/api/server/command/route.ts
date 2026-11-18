@@ -53,9 +53,9 @@ const ALLOWED_COMMANDS = new Set([
 export async function POST(req: Request) {
   try {
     // 1. Authenticate user session
+    const supabaseUser = await createServerClient();
     let user: any = null;
     try {
-      const supabaseUser = await createServerClient();
       const {
         data: { user: sessionUser },
         error: authErr,
@@ -99,49 +99,19 @@ export async function POST(req: Request) {
 
     const admin = getAdminClient();
 
-    // 4. Resolve target server safely (auto-fallback if cached ID is stale or deleted)
-    const { data: allAvailableServers } = await admin
-      .from('servers')
-      .select('id, owner_id, name, last_heartbeat')
-      .order('created_at', { ascending: false });
-
-    let targetServerId = server_id;
-    if (!targetServerId || !allAvailableServers?.some((s) => s.id === targetServerId)) {
-      const now = Date.now();
-      const liveServer = allAvailableServers?.find((s) => {
-        const hb = s.last_heartbeat ? new Date(s.last_heartbeat).getTime() : 0;
-        return now - hb < 45000;
-      });
-      targetServerId = liveServer ? liveServer.id : (allAvailableServers?.[0]?.id || null);
+    if (typeof server_id !== 'string' || !server_id) {
+      return NextResponse.json({ error: 'Server ID required' }, { status: 400 });
     }
 
-    if (!targetServerId) {
-      return NextResponse.json({ error: 'Target server not found or no servers available' }, { status: 400 });
-    }
+    const requiredRole = ['START', 'STOP', 'RESTART'].includes(normalizedCmd) ? 'operator' : 'admin';
+    const { data: allowed } = await supabaseUser.rpc('is_server_member', {
+      s_id: server_id,
+      req_role: requiredRole,
+    });
+    if (!allowed) return NextResponse.json({ error: 'Insufficient server permissions' }, { status: 403 });
 
-    // 5. Fetch target server and check ownership/permission
-    const { data: targetServer, error: serverFetchError } = await admin
-      .from('servers')
-      .select('id, owner_id, name')
-      .eq('id', targetServerId)
-      .single();
-
-    if (serverFetchError || !targetServer) {
-      return NextResponse.json({ error: 'Server not found' }, { status: 404 });
-    }
-
-    // Action Protection: Verify user owns this server or bind owner_id if previously unowned
-    if (targetServer.owner_id && targetServer.owner_id !== user.id) {
-      return NextResponse.json(
-        { error: 'Forbidden: You do not have permission to execute commands on this server' },
-        { status: 403 }
-      );
-    }
-
-    if (!targetServer.owner_id) {
-      // Claim server for this user
-      await admin.from('servers').update({ owner_id: user.id }).eq('id', targetServer.id);
-    }
+    const { data: targetServer } = await admin.from('servers').select('id, name').eq('id', server_id).single();
+    if (!targetServer) return NextResponse.json({ error: 'Server not found' }, { status: 404 });
 
     // 6. Sanitize payload
     const sanitizedPayload: Record<string, any> = {};

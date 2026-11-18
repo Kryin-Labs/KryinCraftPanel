@@ -103,7 +103,7 @@ The node includes a unified command suite in Termux:
 - **`/dashboard/logs`** — Server log inspector with severity filters (`INFO`, `WARN`, `ERROR`, `DEBUG`), search, and `latest.log` download.
 - **`/dashboard/players`** — Online/offline player rosters, Crafatar avatar rendering, coordinates, health, and quick actions.
 - **`/dashboard/players/[uuid]`** — Comprehensive player manager: health/hunger/saturation, XP levels, equipment & 3x9 inventory viewer, live controls (Heal, Feed, Kill, Gamemode, Teleport, Kick, Ban, OP), and lifetime statistics.
-- **`/dashboard/access`** — Role-based access control (`Owner`, `Admin`, `Operator`, `Viewer`), granular permission matrix, invite links, and tamper-evident audit logs.
+- **`/dashboard/access`** — Owner-managed access, role changes, removal, and email-bound invitation links.
 - **`/dashboard/files`** — Web file manager strictly restricted to `~/minecraft/server` with path traversal guards and in-browser config editor.
 - **`/dashboard/connections`** — Java (TCP 25565) and Bedrock (UDP 19132) connection endpoints, tunnel configs, and local direct LAN addresses.
 - **`/dashboard/settings`** — Server properties tuning, agent polling interval adjustments for thermal efficiency, and token management.
@@ -118,13 +118,27 @@ git clone https://github.com/Kryin-Labs/KryinCraftPanel.git
 cd KryinCraftPanel
 
 # Install dependencies
-npm install
+pnpm install --frozen-lockfile
 
 # Configure environment variables
 cp .env.example .env.local
 
 # Start development server
-npm run dev
+pnpm dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) to view the application.
+
+
+## Sign-in and server sharing
+
+Apply `supabase/migrations/20261118_server_access.sql` after the initial schema. In Supabase Authentication, enable Google and GitHub and supply each provider's OAuth client credentials. Use the Supabase provider callback URL shown in the dashboard when configuring the provider. In Supabase URL Configuration, set the portal's Site URL and allow its `/auth/callback` route, including `http://localhost:3000/auth/callback` for local development. Enable email confirmations for password signup.
+
+Google and GitHub create a portal account on the user's first successful sign-in. From **Access**, a server owner can create a single-use invite link for an email address and share it directly. The recipient signs in with the invited email and accepts within seven days.
+
+- **Viewer** can view server data and logs.
+- **Operator** can additionally start, stop, and restart the server.
+- **Admin** can additionally run console commands and manage files, players, and settings.
+- **Owner** can also manage sharing.
+
+Legacy servers without an owner need an owner assigned by a database administrator before they appear in the dashboard.
