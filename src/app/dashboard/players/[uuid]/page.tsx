@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import Image from 'next/image';
+import { useParams } from 'next/navigation';
+
 import Link from 'next/link';
 import {
   ArrowLeft,
@@ -27,7 +27,7 @@ import {
 import { useServerStore } from '@/lib/serverStore';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { InventoryItem, MinecraftPlayer } from '@/types';
-import { createClient } from '@/lib/supabase/client';
+import { formatLastSeen, playerUuid } from '@/lib/playerRecords';
 import {
   getItemIconUrl,
   getMobIconUrl,
@@ -36,13 +36,13 @@ import {
 import { MinecraftHeart, MinecraftDrumstick } from '@/components/MinecraftIcons';
 
 export default function PlayerDetailPage() {
-  const params = useParams();
-  const router = useRouter();
+  const params = useParams<{ uuid: string }>();
   const rawUuid = (params.uuid as string) || '';
-  const uuid = rawUuid.toLowerCase();
+  const uuid = playerUuid(rawUuid);
 
   const {
     activeServerId,
+    permissions,
     players,
     toggleOp,
     toggleWhitelist,
@@ -56,97 +56,62 @@ export default function PlayerDetailPage() {
     teleportPlayer,
   } = useServerStore();
 
-  const [dbPlayer, setDbPlayer] = useState<MinecraftPlayer | null>(null);
+  const [player, setPlayer] = useState<MinecraftPlayer | null>(null);
   const [loading, setLoading] = useState(true);
-
-  // Find player matching UUID (case-insensitive) or username from store
-  const storePlayer = players.find(
-    (p) =>
-      p.uuid.toLowerCase() === uuid ||
-      p.uuid.replace(/-/g, '').toLowerCase() === uuid.replace(/-/g, '') ||
-      p.username.toLowerCase() === uuid
-  );
+  const [loadError, setLoadError] = useState('');
+  const [retry, setRetry] = useState(0);
+  const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
+  const activeIdentity = player ? playerUuid(player.uuid) : uuid;
+  const canControl = permissions.includes('console') && players.some((entry) =>
+    activeIdentity ? playerUuid(entry.uuid) === activeIdentity : entry.uuid === player?.uuid);
 
   useEffect(() => {
-    if (storePlayer) {
-      setDbPlayer(storePlayer);
+    setPlayer(null);
+    setSelectedItem(null);
+    setLoading(true);
+    setLoadError('');
+    if (!activeServerId) {
       setLoading(false);
       return;
     }
+    const controller = new AbortController();
+    const query = new URLSearchParams({ serverId: activeServerId, player: rawUuid });
+    let running = false;
+    let timeout: ReturnType<typeof setTimeout>;
 
-    async function fetchPlayerFromDb() {
-      if (!activeServerId || !/^[a-z0-9_.-]{1,36}$/.test(uuid)) {
-        setLoading(false);
-        return;
-      }
+    async function loadPlayer() {
+      clearTimeout(timeout);
+      if (controller.signal.aborted || running || document.visibilityState === 'hidden') return;
+      running = true;
       try {
-        const supabase = createClient();
-        const records = supabase
-          .from('server_players')
-          .select('*')
-          .eq('server_id', activeServerId);
-        const query = /^[a-f0-9-]{32,36}$/.test(uuid)
-          ? records.eq('uuid', uuid)
-          : records.ilike('username', uuid.replaceAll('_', '\\_'));
-        const { data, error } = await query.maybeSingle();
-
-        if (data && !error) {
-          const inv = data.inventory || {};
-          setDbPlayer({
-            uuid: data.uuid,
-            username: data.username,
-            isOnline: Boolean(data.is_online),
-            pingMs: data.is_online && data.ping_ms > 0 && Date.now() - Date.parse(data.updated_at) < 45_000 ? data.ping_ms : undefined,
-            health: Number(data.health ?? 20),
-            maxHealth: Number(data.max_health ?? 20),
-            foodLevel: Number(data.food_level ?? 20),
-            saturation: Number(data.saturation ?? 5),
-            xpLevel: Number(data.xp_level ?? 0),
-            xpProgress: Number(data.xp_progress ?? 0),
-            gamemode: data.gamemode || 'survival',
-            isOp: Boolean(data.is_op),
-            isWhitelisted: Boolean(data.is_whitelisted),
-            isBanned: Boolean(data.is_banned),
-            coordinates: data.coordinates || {
-              x: 0,
-              y: 64,
-              z: 0,
-              world: 'world',
-              dimension: 'minecraft:overworld',
-            },
-            inventory: {
-              armor: inv.armor || { helmet: null, chestplate: null, leggings: null, boots: null },
-              offhand: inv.offhand || null,
-              main: Array.isArray(inv.main) ? inv.main : new Array(27).fill(null),
-              hotbar: Array.isArray(inv.hotbar) ? inv.hotbar : new Array(9).fill(null),
-            },
-            statistics: {
-              playtimeHours: 0,
-              playerKills: 0,
-              deaths: 0,
-              kdr: 0,
-              distanceTraveledKm: 0,
-              blocksBroken: 0,
-              itemsUsed: 0,
-              entitiesKilled: 0,
-              rawStats: data.statistics || {},
-            },
-            ipAddress: data.ip_address || '',
-            lastSeen: data.last_seen || 'Recently',
-          });
+        const response = await fetch('/api/server/players?' + query, { signal: controller.signal });
+        const data = await response.json();
+        if (controller.signal.aborted) return;
+        if (!response.ok) {
+          if ([400, 401, 403, 404].includes(response.status)) setPlayer(null);
+          throw new Error(data.error || 'Could not load this player.');
         }
-      } catch (err) {
-        console.warn('DB player query error:', err);
+        setPlayer(data.player);
+        setLoadError('');
+      } catch (error) {
+        if (!controller.signal.aborted) setLoadError(error instanceof Error ? error.message : 'Could not load this player.');
       } finally {
-        setLoading(false);
+        running = false;
+        if (!controller.signal.aborted) {
+          setLoading(false);
+          if (document.visibilityState === 'visible') timeout = setTimeout(loadPlayer, 8_000);
+        }
       }
     }
 
-    fetchPlayerFromDb();
-  }, [uuid, storePlayer, activeServerId]);
-
-  const player = storePlayer || dbPlayer;
-
+    void loadPlayer();
+    document.addEventListener('visibilitychange', loadPlayer);
+    return () => {
+      controller.abort();
+      clearTimeout(timeout);
+      document.removeEventListener('visibilitychange', loadPlayer);
+    };
+  }, [activeServerId, rawUuid, retry]);
   const [gamemodeDropdownOpen, setGamemodeDropdownOpen] = useState(false);
   const [hoveredItem, setHoveredItem] = useState<{
     item: InventoryItem;
@@ -189,7 +154,7 @@ export default function PlayerDetailPage() {
     return (
       <div className="p-16 text-center space-y-3">
         <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
-        <p className="text-xs text-slate-400">Loading player statistics...</p>
+        <p className="text-xs text-slate-400">Loading player inventory…</p>
       </div>
     );
   }
@@ -197,10 +162,12 @@ export default function PlayerDetailPage() {
   if (!player) {
     return (
       <div className="p-16 text-center space-y-4 bg-[#111722] border border-slate-800 rounded-2xl max-w-lg mx-auto">
-        <h2 className="text-lg font-bold text-white">Player Not Found</h2>
+        <h2 className="text-lg font-bold text-white">Player inventory unavailable</h2>
         <p className="text-xs text-slate-400">
-          Player with identifier <span className="font-mono text-slate-200">"{rawUuid}"</span> was not found in the server statistics.
+          {loadError || 'The selected server does not have a record for this player.'}
         </p>
+        <button type="button" className="mr-3 text-xs font-semibold text-blue-300 underline"
+          onClick={() => setRetry((value) => value + 1)}>Retry</button>
         <Link
           href="/dashboard/players"
           className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold"
@@ -215,9 +182,13 @@ export default function PlayerDetailPage() {
   const displayUuid = player.uuid.toUpperCase();
 
   // Render Minecraft inventory slot
-  const renderItemSlot = (item: InventoryItem | null, isHotbar = false) => {
+  const renderItemSlot = (item: InventoryItem | null) => {
     return (
-      <div
+      <button
+        type="button"
+        disabled={!item}
+        aria-label={item ? item.displayName + ', ' + item.count : 'Empty inventory slot'}
+        onClick={() => setSelectedItem(item)}
         onMouseEnter={(e) => {
           if (item) {
             const rect = e.currentTarget.getBoundingClientRect();
@@ -229,14 +200,14 @@ export default function PlayerDetailPage() {
           }
         }}
         onMouseLeave={() => setHoveredItem(null)}
-        className="relative w-10 h-10 sm:w-11 sm:h-11 bg-[#273242] border-2 border-t-[#18212e] border-l-[#18212e] border-b-[#3d4c60] border-r-[#3d4c60] flex items-center justify-center select-none cursor-pointer transition-colors hover:bg-[#324054]"
+        className="relative aspect-square w-[clamp(1.45rem,7vw,2.75rem)] bg-[#273242] border-2 border-t-[#18212e] border-l-[#18212e] border-b-[#3d4c60] border-r-[#3d4c60] flex items-center justify-center select-none cursor-pointer transition-colors hover:bg-[#324054]"
       >
         {item && (
           <>
             <img
               src={item.iconUrl || getItemIconUrl(item.name || item.id)}
               alt={item.displayName}
-              className="w-7 h-7 object-contain drop-shadow pointer-events-none"
+              className="h-[72%] w-[72%] object-contain drop-shadow pointer-events-none"
               style={{ imageRendering: 'pixelated' }}
               onError={(e) => {
                 // Fallback to mcasset item texture if block failed
@@ -279,7 +250,7 @@ export default function PlayerDetailPage() {
             )}
           </>
         )}
-      </div>
+      </button>
     );
   };
 
@@ -348,7 +319,7 @@ export default function PlayerDetailPage() {
         </div>
 
         {/* Right: Gamemode Selector Dropdown */}
-        <div className="relative self-end sm:self-center">
+        {canControl && <div className="relative self-end sm:self-center">
           <button
             onClick={() => setGamemodeDropdownOpen(!gamemodeDropdownOpen)}
             className="flex items-center gap-2 px-3 py-1.5 bg-[#2a3444] hover:bg-[#344052] border border-[#3e4d62] text-xs font-semibold text-white rounded-lg transition-all shadow-sm"
@@ -377,7 +348,7 @@ export default function PlayerDetailPage() {
               ))}
             </div>
           )}
-        </div>
+        </div>}
       </div>
 
       {/* ========================================================================= */}
@@ -408,6 +379,7 @@ export default function PlayerDetailPage() {
           {/* Row 1: Kill | 10 Hearts | Heal */}
           <div className="flex items-center justify-between gap-2 pt-1">
             <button
+              hidden={!canControl}
               onClick={() =>
                 setConfirmModal({
                   isOpen: true,
@@ -431,6 +403,7 @@ export default function PlayerDetailPage() {
             </div>
 
             <button
+              hidden={!canControl}
               onClick={() => healPlayer(player.uuid)}
               className="px-4 py-1.5 bg-[#26ba8c] hover:bg-[#209f77] active:scale-95 text-white text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shadow"
             >
@@ -442,6 +415,7 @@ export default function PlayerDetailPage() {
           {/* Row 2: Starve | 10 Food Drumsticks | Feed */}
           <div className="flex items-center justify-between gap-2">
             <button
+              hidden={!canControl}
               onClick={() => starvePlayer(player.uuid)}
               className="px-3.5 py-1.5 bg-[#ea7b5b] hover:bg-[#d96a4a] active:scale-95 text-white text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shadow"
             >
@@ -457,6 +431,7 @@ export default function PlayerDetailPage() {
             </div>
 
             <button
+              hidden={!canControl}
               onClick={() => feedPlayer(player.uuid)}
               className="px-4 py-1.5 bg-[#26ba8c] hover:bg-[#209f77] active:scale-95 text-white text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shadow"
             >
@@ -467,7 +442,7 @@ export default function PlayerDetailPage() {
         </div>
 
         {/* Top-Right Card: Control (5 Cols) */}
-        <div className="lg:col-span-5 bg-[#212c3b] border border-[#2d3a4d] rounded-xl p-4 space-y-2.5 shadow-md flex flex-col justify-between">
+        {canControl && <div className="lg:col-span-5 bg-[#212c3b] border border-[#2d3a4d] rounded-xl p-4 space-y-2.5 shadow-md flex flex-col justify-between">
           <h2 className="text-xs font-bold text-white uppercase tracking-wider mb-1">
             Control
           </h2>
@@ -527,7 +502,7 @@ export default function PlayerDetailPage() {
               {player.isOp ? <Check className="w-4 h-4 stroke-[3]" /> : <X className="w-4 h-4 stroke-[3]" />}
             </button>
           </div>
-        </div>
+        </div>}
       </div>
 
       {/* ========================================================================= */}
@@ -540,56 +515,32 @@ export default function PlayerDetailPage() {
             Inventory
           </h2>
 
-          {/* Minecraft Inventory Frame Layout */}
-          <div className="bg-[#1b232f] border-2 border-[#161d27] rounded-lg p-3 sm:p-4 flex flex-wrap md:flex-nowrap items-start justify-center gap-3 sm:gap-4 overflow-x-auto">
-            {/* 1. Armor Slots (Vertical 4 slots) */}
-            <div className="flex flex-col gap-1.5 shrink-0">
-              {renderItemSlot(player.inventory.armor.helmet)}
-              {renderItemSlot(player.inventory.armor.chestplate)}
-              {renderItemSlot(player.inventory.armor.leggings)}
-              {renderItemSlot(player.inventory.armor.boots)}
-            </div>
-
-            {/* 2. Middle Auxiliary Column (Ender Chest + Offhand) */}
-            <div className="flex flex-col justify-between h-[178px] shrink-0">
-              {/* Top: Ender chest */}
-              <div
-                title="Ender Chest"
-                className="relative w-10 h-10 sm:w-11 sm:h-11 bg-[#273242] border-2 border-t-[#18212e] border-l-[#18212e] border-b-[#3d4c60] border-r-[#3d4c60] flex items-center justify-center cursor-pointer hover:bg-[#324054]"
-              >
-                <img
-                  src="https://minecraft.wiki/images/Invicon_Ender_Chest.png"
-                  alt="Ender Chest"
-                  className="w-7 h-7 object-contain drop-shadow"
-                  style={{ imageRendering: 'pixelated' }}
-                />
-              </div>
-
-              {/* Bottom: Offhand slot */}
-              <div>{renderItemSlot(player.inventory.offhand)}</div>
-            </div>
-
-            {/* 3. Main 3x9 Inventory + Hotbar (1x9) */}
-            <div className="space-y-3 shrink-0">
-              {/* 3x9 Main Inventory Grid */}
-              <div className="grid grid-cols-9 gap-1 sm:gap-1.5">
-                {player.inventory.main.map((item, idx) => (
-                  <React.Fragment key={idx}>{renderItemSlot(item)}</React.Fragment>
-                ))}
-              </div>
-
-              {/* 1x9 Hotbar Grid (Prominent Blue Border Selection) */}
-              <div className="p-0.5 rounded border-2 border-[#38bdf8] bg-sky-500/10 shadow-[0_0_10px_rgba(56,189,248,0.25)]">
-                <div className="grid grid-cols-9 gap-1 sm:gap-1.5">
-                  {player.inventory.hotbar.map((item, idx) => (
-                    <React.Fragment key={idx}>{renderItemSlot(item, true)}</React.Fragment>
-                  ))}
+          {player.inventoryAvailable ? (
+            <>
+              <p className="text-xs text-slate-300">
+                {player.inventorySavedAt ? 'Saved ' + formatLastSeen(player.inventorySavedAt) : 'Last saved inventory'}
+              </p>
+              <div className="flex min-w-0 flex-col items-center gap-3 rounded-lg border border-slate-950 bg-[#1b232f] p-2 sm:flex-row sm:items-start sm:justify-center sm:p-4">
+                <div className="flex shrink-0 flex-wrap justify-center gap-1.5 sm:flex-col">
+                  {renderItemSlot(player.inventory.armor.helmet)}
+                  {renderItemSlot(player.inventory.armor.chestplate)}
+                  {renderItemSlot(player.inventory.armor.leggings)}
+                  {renderItemSlot(player.inventory.armor.boots)}
+                  {renderItemSlot(player.inventory.offhand)}
+                </div>
+                <div className="min-w-0 max-w-full space-y-2 overflow-x-auto">
+                  <div className="grid w-max grid-cols-9 gap-0.5 sm:gap-1">
+                    {player.inventory.main.map((item, idx) => <React.Fragment key={idx}>{renderItemSlot(item)}</React.Fragment>)}
+                  </div>
+                  <div className="grid w-max grid-cols-9 gap-0.5 border-t border-sky-500 pt-2 sm:gap-1">
+                    {player.inventory.hotbar.map((item, idx) => <React.Fragment key={idx}>{renderItemSlot(item)}</React.Fragment>)}
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
+              {selectedItem && <p role="status" className="text-xs font-semibold text-white">{selectedItem.displayName} · {selectedItem.count}</p>}
+            </>
+          ) : <p className="text-sm text-slate-300">Waiting for the device to sync a saved inventory for this player.</p>}
         </div>
-
         {/* Information Card (5 Cols) */}
         <div className="lg:col-span-5 bg-[#212c3b] border border-[#2d3a4d] rounded-xl p-4 space-y-3 shadow-md">
           <h2 className="text-xs font-bold text-white uppercase tracking-wider">
@@ -631,6 +582,7 @@ export default function PlayerDetailPage() {
                   </div>
 
                   <button
+                    hidden={!canControl}
                     onClick={() => {
                       setTpCoords(
                         `${Math.round(player.coordinates.x)} ${Math.round(
@@ -965,7 +917,7 @@ export default function PlayerDetailPage() {
       )}
 
       {/* Teleport Modal */}
-      {tpModalOpen && (
+      {canControl && tpModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
           <div className="bg-[#1b232f] border border-[#2d3a4d] rounded-2xl p-5 max-w-sm w-full space-y-4 shadow-2xl">
             <h3 className="text-sm font-bold text-white flex items-center gap-2">
@@ -1005,7 +957,7 @@ export default function PlayerDetailPage() {
 
       {/* Confirmation Modal */}
       <ConfirmModal
-        isOpen={confirmModal.isOpen}
+        isOpen={canControl && confirmModal.isOpen}
         title={confirmModal.title}
         message={confirmModal.message}
         isDestructive={confirmModal.isDestructive}

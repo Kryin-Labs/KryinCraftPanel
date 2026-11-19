@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 
+import { visiblePlayers } from '@/lib/playerRecords';
+
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
@@ -78,7 +80,7 @@ export async function GET(req: Request) {
       includeLogs ? supabase.from('server_logs').select('id, timestamp, level, message, created_at')
         .eq('server_id', server.id).order('created_at', { ascending: false }).limit(100) : { data: null },
       includePlayers ? supabase.from('server_players')
-        .select('uuid, username, is_online, ping_ms, health, max_health, food_level, xp_level, gamemode, is_op, is_whitelisted, is_banned, last_seen, updated_at')
+        .select('uuid, username, is_online, ping_ms, health, max_health, food_level, xp_level, gamemode, is_op, is_whitelisted, is_banned, coordinates, last_seen, updated_at, inventory_saved_at:inventory->>savedAt')
         .eq('server_id', server.id) : { data: null },
     ]);
     if (membershipError || permissionError) throw membershipError || permissionError;
@@ -168,7 +170,7 @@ export async function GET(req: Request) {
                 powerSource: 'Offline',
               },
         logs: includeLogs ? recentLogs?.reverse() ?? [] : undefined,
-        players: includePlayers ? dbPlayers ?? [] : undefined,
+        players: includePlayers ? visiblePlayers(dbPlayers ?? [], now) : undefined,
       },
       {
         headers: {

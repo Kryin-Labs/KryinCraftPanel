@@ -98,6 +98,8 @@ export interface MinecraftPlayer {
     dimension?: string;
   };
   inventory: PlayerInventory;
+  inventoryAvailable?: boolean;
+  inventorySavedAt?: string;
   statistics: PlayerStatistics;
   lastSeen?: string;
   ipAddress?: string;

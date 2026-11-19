@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import {
   Users,
+  ChevronRight,
   Search,
   Shield,
   Ban,
@@ -13,6 +15,7 @@ import {
   Check
 } from 'lucide-react';
 import { useServerStore } from '@/lib/serverStore';
+import { formatLastSeen } from '@/lib/playerRecords';
 
 export default function PlayersPage() {
   const { permissions, players } = useServerStore();
@@ -24,9 +27,12 @@ export default function PlayersPage() {
       {!players.length && <p className="text-sm text-slate-600">No player records yet.</p>}
       <ul className="divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white">
         {players.map((player) => (
-          <li key={player.uuid} className="flex justify-between gap-2 px-4 py-3 text-sm">
-            <span>{player.username}</span>
+          <li key={player.uuid}>
+            <Link href={'/dashboard/players/' + encodeURIComponent(player.uuid)}
+              className="flex min-h-12 flex-wrap items-center justify-between gap-2 rounded-lg px-4 py-3 text-sm hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-blue-700">
+              <span className="min-w-0 break-all font-semibold">{player.username}</span>
             <span className="text-slate-600">{player.isOnline ? player.pingMs ? 'Online · ' + player.pingMs + ' ms' : 'Online · Ping unavailable' : 'Offline'}</span>
+            </Link>
           </li>
         ))}
       </ul>
@@ -200,7 +206,9 @@ function PlayerControls() {
                   className="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-[#f8f9fd] transition-colors"
                 >
                   {/* Left: Avatar & Identity */}
-                  <div className="flex items-center gap-3.5 min-w-0">
+                  <Link href={'/dashboard/players/' + encodeURIComponent(player.uuid)}
+                    aria-label={'View inventory for ' + player.username}
+                    className="flex min-h-12 min-w-0 flex-1 items-center gap-3 rounded-lg px-1 py-2 hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-blue-700">
                     <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200 text-blue-800 flex items-center justify-center font-bold text-sm flex-shrink-0">
                       {player.username.slice(0, 2).toUpperCase()}
                     </div>
@@ -247,12 +255,13 @@ function PlayerControls() {
                         {player.lastSeen && (
                           <>
                             <span>•</span>
-                            <span>Seen: {player.lastSeen}</span>
+                            <span>Seen: {formatLastSeen(player.lastSeen)}</span>
                           </>
                         )}
                       </div>
                     </div>
-                  </div>
+                    <ChevronRight aria-hidden="true" className="ml-auto h-4 w-4 shrink-0 text-blue-700" />
+                  </Link>
 
                   {/* Right: Gamemode & Controls */}
                   <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">

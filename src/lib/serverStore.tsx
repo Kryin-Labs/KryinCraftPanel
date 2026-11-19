@@ -29,7 +29,7 @@ import { usePathname } from 'next/navigation';
 import { usePanelUser } from '@/components/AuthGuard';
 import { createClient } from '@/lib/supabase/client';
 import type { ServerPermission } from './serverPermissions';
-import { parseMinecraftStats } from './minecraftAssets';
+import { toMinecraftPlayer, type PlayerRecord } from './playerRecords';
 
 interface ServerStoreContextType {
   serverInfo: ServerInfo;
@@ -279,57 +279,8 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
         }
 
         if (Array.isArray(data.players)) {
-          setPlayers(
-            data.players.map((p: any) => {
-              const inv = p.inventory || {};
-              const parsed = parseMinecraftStats(p.statistics);
-
-              return {
-                uuid: p.uuid,
-                username: p.username,
-                isOnline: Boolean(p.is_online),
-                pingMs: p.is_online && p.ping_ms > 0 && Date.now() - Date.parse(p.updated_at) < 45_000 ? p.ping_ms : undefined,
-                health: Number(p.health ?? 20),
-                maxHealth: Number(p.max_health ?? 20),
-                foodLevel: Number(p.food_level ?? 20),
-                saturation: Number(p.saturation ?? 5),
-                xpLevel: Number(p.xp_level ?? 0),
-                xpProgress: Number(p.xp_progress ?? 0),
-                gamemode: p.gamemode || 'survival',
-                isOp: Boolean(p.is_op),
-                isWhitelisted: Boolean(p.is_whitelisted),
-                isBanned: Boolean(p.is_banned),
-                coordinates: p.coordinates || {
-                  x: 0,
-                  y: 64,
-                  z: 0,
-                  world: 'world',
-                  dimension: 'minecraft:overworld',
-                },
-                respawnCoordinates: p.coordinates?.respawn || null,
-                deathCoordinates: p.coordinates?.death || null,
-                inventory: {
-                  armor: inv.armor || { helmet: null, chestplate: null, leggings: null, boots: null },
-                  offhand: inv.offhand || null,
-                  main: Array.isArray(inv.main) ? inv.main : new Array(27).fill(null),
-                  hotbar: Array.isArray(inv.hotbar) ? inv.hotbar : new Array(9).fill(null),
-                },
-                statistics: {
-                  playtimeHours: Math.round((parsed.playtimeTicks / (20 * 3600)) * 10) / 10,
-                  playerKills: parsed.playerKills,
-                  deaths: parsed.deaths,
-                  kdr: Number(parsed.kdr) || 0,
-                  distanceTraveledKm: Math.round((parsed.distanceTotal / 1000) * 10) / 10,
-                  blocksBroken: parsed.blocksBrokenTotal,
-                  itemsUsed: parsed.itemsUsedTotal,
-                  entitiesKilled: parsed.entitiesKilledTotal,
-                  rawStats: p.statistics || {},
-                },
-                ipAddress: p.ip_address || '',
-                lastSeen: p.last_seen || (p.is_online ? 'Online now' : 'Offline'),
-              };
-            })
-          );
+          const now = Date.now();
+          setPlayers(data.players.map((player: PlayerRecord) => toMinecraftPlayer(player, now)));
         }
       } catch (err) {
         if (controller.signal.aborted) return;

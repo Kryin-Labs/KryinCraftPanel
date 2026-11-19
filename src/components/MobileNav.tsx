@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   ArrowLeft,
   LogOut,
+  UserRound,
   Activity,
   ScrollText,
 } from 'lucide-react';
@@ -67,6 +68,11 @@ export const MobileNav: React.FC = () => {
             <span className={`w-1.5 h-1.5 rounded-full ${serverInfo.status === 'online' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
             {serverInfo.status === 'online' ? `${serverInfo.tps.toFixed(1)} TPS` : 'Offline'}
           </span>
+
+          <Link href="/dashboard/account" aria-label="My account" title="My account" aria-current={pathname === '/dashboard/account' ? 'page' : undefined}
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-blue-100 bg-blue-50 text-blue-800">
+            <UserRound aria-hidden="true" className="h-4 w-4" />
+          </Link>
 
           <button
             onClick={handleSignOut}

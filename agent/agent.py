@@ -4,7 +4,13 @@ KryinCraftPanel - Lightweight Python Agent for Android / Termux
 Zero external pip dependencies (Standard Python 3 only)
 """
 
+import gzip
 import hashlib
+import math
+import zlib
+from datetime import datetime, timezone
+from functools import lru_cache
+from uuid import UUID
 import stat
 import os
 import base64
@@ -414,6 +420,159 @@ def parse_player_pings(output):
     }
 
 
+class PlayerNbt:
+    """Read Java Edition's big-endian player save with bounded input and depth."""
+
+    numbers = {1: ">b", 2: ">h", 3: ">i", 4: ">q", 5: ">f", 6: ">d"}
+
+    def __init__(self, data):
+        self.data = memoryview(data)
+        self.offset = 0
+
+    def take(self, size):
+        end = self.offset + size
+        if size < 0 or end > len(self.data):
+            raise ValueError("Truncated player save")
+        value = self.data[self.offset:end]
+        self.offset = end
+        return value
+
+    def number(self, fmt):
+        return struct.unpack(fmt, self.take(struct.calcsize(fmt)))[0]
+
+    def string(self):
+        return bytes(self.take(self.number(">H"))).decode("utf-8", errors="replace")
+
+    def value(self, tag, depth=0):
+        if depth > 40:
+            raise ValueError("Player save nesting limit")
+        if tag in self.numbers:
+            return self.number(self.numbers[tag])
+        if tag in (7, 11, 12):
+            width = {7: 1, 11: 4, 12: 8}[tag]
+            self.take(self.number(">i") * width)
+            return None
+        if tag == 8:
+            return self.string()
+        if tag == 9:
+            child = self.number(">B")
+            count = self.number(">i")
+            if not 0 <= count <= 65536 or (count and not child):
+                raise ValueError("Invalid player save list")
+            return [self.value(child, depth + 1) for _ in range(count)]
+        if tag == 10:
+            values = {}
+            while True:
+                child = self.number(">B")
+                if child == 0:
+                    return values
+                name = self.string()
+                values[name] = self.value(child, depth + 1)
+        raise ValueError("Unknown player save tag")
+
+    def root(self):
+        if self.number(">B") != 10:
+            raise ValueError("Missing player root compound")
+        self.string()
+        return self.value(10)
+
+
+def player_item(stack, slot):
+    item_id = stack.get("id")
+    count = stack.get("count", stack.get("Count", 1))
+    if not isinstance(item_id, str) or len(item_id) > 180 or not re.fullmatch(r"[a-z0-9_.-]+:[a-z0-9_./-]+", item_id):
+        return None
+    if item_id == "minecraft:air" or not isinstance(count, int) or not 0 < count <= 999:
+        return None
+    name = item_id.split(":", 1)[1]
+    return {"id": item_id, "name": name, "displayName": name.rsplit("/", 1)[-1].replace("_", " ").title(),
+            "count": count, "slot": slot}
+
+
+@lru_cache(maxsize=512)
+def read_player_save(path, modified_ns, file_size, world):
+    if file_size > 2 * 1024 * 1024:
+        return {}
+    try:
+        with gzip.open(path, "rb") as handle:
+            data = handle.read(3 * 1024 * 1024 + 1)
+        if len(data) > 3 * 1024 * 1024:
+            return {}
+        saved = PlayerNbt(data).root()
+    except (OSError, ValueError, EOFError, zlib.error):
+        return {}
+
+    timestamp = datetime.fromtimestamp(modified_ns / 1_000_000_000, timezone.utc).isoformat()
+    result = {"last_saved": timestamp}
+    contents = saved.get("Inventory")
+    if isinstance(contents, list):
+        armor = dict.fromkeys(("helmet", "chestplate", "leggings", "boots"))
+        armor_slots = {103: "helmet", 102: "chestplate", 101: "leggings", 100: "boots"}
+        inventory = {"main": [None] * 27, "hotbar": [None] * 9, "armor": armor, "offhand": None, "savedAt": timestamp}
+        for stack in contents:
+            if not isinstance(stack, dict) or not isinstance(stack.get("Slot"), int):
+                continue
+            slot = stack["Slot"] & 255
+            if slot < 9:
+                inventory["hotbar"][slot] = player_item(stack, slot)
+            elif slot < 36:
+                inventory["main"][slot - 9] = player_item(stack, slot)
+            elif slot in armor_slots:
+                armor[armor_slots[slot]] = player_item(stack, 36 + slot - 100)
+            elif slot == 150:
+                inventory["offhand"] = player_item(stack, 40)
+        result["inventory"] = inventory
+
+    position = saved.get("Pos")
+    if isinstance(position, list) and len(position) == 3 and all(isinstance(n, (int, float)) and math.isfinite(n) for n in position):
+        dimension = saved.get("Dimension")
+        result["coordinates"] = {
+            "x": position[0], "y": position[1], "z": position[2], "world": world,
+            "dimension": dimension if isinstance(dimension, str) else "minecraft:overworld",
+        }
+    mode = saved.get("playerGameType")
+    if isinstance(mode, int) and 0 <= mode <= 3:
+        result["gamemode"] = ("survival", "creative", "adventure", "spectator")[mode]
+    for field, key, low, high in (
+        ("health", "Health", 0, 999), ("food_level", "foodLevel", 0, 20),
+        ("saturation", "foodSaturationLevel", 0, 20), ("xp_level", "XpLevel", 0, 2147483647),
+        ("xp_progress", "XpP", 0, 1)
+    ):
+        value = saved.get(key)
+        if isinstance(value, (int, float)) and math.isfinite(value) and low <= value <= high:
+            result[field] = value
+    return result
+
+
+def saved_players():
+    root = os.path.realpath(SERVER_DIR)
+    world = read_server_properties().get("level-name") or "world"
+    base = os.path.realpath(os.path.join(root, world))
+    if os.path.commonpath([root, base]) != root:
+        return {}
+    playerdata = os.path.join(base, "playerdata")
+    if os.path.realpath(playerdata) != playerdata:
+        return {}
+    result = {}
+    try:
+        with os.scandir(playerdata) as entries:
+            for entry in entries:
+                if not entry.name.endswith(".dat") or not entry.is_file(follow_symlinks=False):
+                    continue
+                stem = entry.name[:-4]
+                try:
+                    uuid = str(UUID(stem))
+                    metadata = entry.stat(follow_symlinks=False)
+                    snapshot = read_player_save(entry.path, metadata.st_mtime_ns, metadata.st_size, world)
+                    if snapshot:
+                        result[uuid] = snapshot
+                except (OSError, ValueError):
+                    continue
+    except OSError:
+        pass
+    return result
+
+
 def sync_players():
     """Syncs real player cache matching opanel approach (usercache, ops, whitelist, bans, playerdata, live RCON)."""
     global last_player_sync, online_players_cache
@@ -426,7 +585,6 @@ def sync_players():
     ops_file = os.path.join(SERVER_DIR, "ops.json")
     wl_file = os.path.join(SERVER_DIR, "whitelist.json")
     banned_file = os.path.join(SERVER_DIR, "banned-players.json")
-    playerdata_dir = os.path.join(SERVER_DIR, "world", "playerdata")
 
     ops_set = set()
     wl_set = set()
@@ -480,63 +638,48 @@ def sync_players():
 
     online_players_cache = list(live_online_names)
 
-    # Collect known players by UUID
+    snapshots = saved_players()
     known_players = {}
-
-    # 1. usercache.json
-    if os.path.exists(usercache_file):
+    # Prefer the server's game profile names. A UUID prefix is a display fallback only.
+    for source in (usercache_file, ops_file, wl_file, banned_file):
         try:
-            with open(usercache_file, "r", encoding="utf-8") as f:
-                for entry in json.load(f):
-                    uuid = entry.get("uuid", "").lower()
-                    name = entry.get("name", "Player")
-                    if uuid:
-                        known_players[uuid] = {
-                            "uuid": uuid,
-                            "username": name,
-                            "last_seen": entry.get("expiresOn", "Recently"),
-                        }
-        except Exception:
-            pass
+            with open(source, "r", encoding="utf-8") as handle:
+                for entry in json.load(handle):
+                    if entry.get("name") and entry.get("uuid"):
+                        known_players.setdefault(str(UUID(entry["uuid"])), entry["name"])
+        except (OSError, ValueError, TypeError, AttributeError):
+            continue
 
-    # 2. world/playerdata/*.dat (discover offline players not in usercache)
-    if os.path.isdir(playerdata_dir):
-        try:
-            for fname in os.listdir(playerdata_dir):
-                if fname.endswith(".dat"):
-                    dat_uuid = fname[:-4].lower()
-                    if dat_uuid not in known_players:
-                        dat_path = os.path.join(playerdata_dir, fname)
-                        mtime = time.strftime("%Y-%m-%d %H:%M", time.localtime(os.path.getmtime(dat_path)))
-                        known_players[dat_uuid] = {
-                            "uuid": dat_uuid,
-                            "username": dat_uuid[:8],
-                            "last_seen": mtime,
-                        }
-        except Exception:
-            pass
-
-    # Build unified payload
+    cache_order = {uuid: index for index, uuid in enumerate(known_players)}
+    identities = sorted(
+        set(known_players) | set(snapshots),
+        key=lambda uuid: (snapshots.get(uuid, {}).get("last_saved", ""), -cache_order.get(uuid, len(cache_order)), uuid),
+        reverse=True,
+    )
     players_list = []
-    for uuid, pdata in known_players.items():
-        uname = pdata["username"]
-        is_online = uname.lower() in live_online_names
+    seen_online = set()
+    for uuid in identities:
+        name = known_players.get(uuid, uuid[:8])
+        snapshot = snapshots.get(uuid, {})
+        key = name.lower()
+        is_online = key in live_online_names and key not in seen_online
+        if is_online:
+            seen_online.add(key)
         players_list.append({
             "uuid": uuid,
-            "username": uname,
+            "username": name,
             "is_online": is_online,
-            "ping_ms": player_pings.get(uname.lower()) if is_online else None,
+            "ping_ms": player_pings.get(key) if is_online else None,
             "is_op": uuid in ops_set,
-            "is_whitelisted": uuid in wl_set or uname.lower() in wl_names,
+            "is_whitelisted": uuid in wl_set or key in wl_names,
             "is_banned": uuid in banned_set,
-            "ban_reason": banned_info.get(uuid, None),
-            "health": 20.0,
-            "food_level": 20,
-            "last_seen": "Online now" if is_online else pdata.get("last_seen", "Standby"),
+            "ban_reason": banned_info.get(uuid),
+            "last_seen": "Online now" if is_online else snapshot.get("last_saved"),
+            **{key: value for key, value in snapshot.items() if key != "last_saved"},
         })
 
-    if players_list:
-        api_post("/api/agent/players", {"players": players_list})
+    for offset in range(0, len(players_list), 50):
+        api_post("/api/agent/players", {"players": players_list[offset:offset + 50]})
 
 def poll_and_execute_commands():
     global current_status, transition_start_time, log_file_pos

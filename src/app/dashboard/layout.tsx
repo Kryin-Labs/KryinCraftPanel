@@ -45,15 +45,12 @@ function ServerPageGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { activeServerId, serverRole, permissions, isLoading, serversList, loadError } = useServerStore();
 
-  if (pathname === '/dashboard/access' || pathname === '/dashboard/checker') return children;
+  if (pathname === '/dashboard/access' || pathname === '/dashboard/checker' || pathname === '/dashboard/account') return children;
   if (loadError && !serverRole) return <p role="alert" className="p-4 text-sm">Could not load your servers. The panel will retry automatically.</p>;
   if (isLoading || (activeServerId && serversList.some((server) => server.id === activeServerId) && !serverRole)) {
     return <p role="status" className="p-4 text-sm">Loading server access…</p>;
   }
   if (!serverRole) return null;
-  if (pathname.startsWith('/dashboard/players/') && !permissions.includes('console')) {
-    return <p className="p-4 text-sm">Open Players to view the player list. Player controls require console access.</p>;
-  }
   if (!canVisitDashboardPage(pathname, permissions, serverRole === 'owner')) {
     return <p className="p-4 text-sm">You don’t have permission to open this page for the selected server.</p>;
   }

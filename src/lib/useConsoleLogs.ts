@@ -20,7 +20,7 @@ interface LogPage {
 const pageSize = 200;
 const scrollback = 3000;
 
-export function useConsoleLogs(serverId: string | null) {
+export function useConsoleLogs(serverId: string | null, stream = 'console') {
   const [logs, setLogs] = useState<ConsoleLog[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [subscribed, setSubscribed] = useState(false);
@@ -95,7 +95,7 @@ export function useConsoleLogs(serverId: string | null) {
       }
     }
 
-    const channel = supabase.channel('console:' + server).on(
+    const channel = supabase.channel(stream + ':' + server).on(
       'postgres_changes',
       { event: 'INSERT', schema: 'public', table: 'server_logs', filter: 'server_id=eq.' + server },
       ({ new: row }) => {
@@ -129,7 +129,7 @@ export function useConsoleLogs(serverId: string | null) {
       window.removeEventListener('online', resume);
       void supabase.removeChannel(channel);
     };
-  }, [serverId]);
+  }, [serverId, stream]);
 
   return { logs, loaded, subscribed, error, clear: () => setLogs([]) };
 }

@@ -15,7 +15,6 @@ import {
   ArrowLeft,
   Server,
   LogOut,
-  User as UserIcon,
   Activity,
   ScrollText,
 } from 'lucide-react';
@@ -180,7 +179,7 @@ export const Sidebar: React.FC = () => {
 
         {/* User Account & Logout */}
         <div className="pt-2.5 border-t border-[#1a1522]/10 flex items-center justify-between gap-2 px-1">
-          <div className="flex items-center gap-2 min-w-0">
+          <Link href="/dashboard/account" aria-current={pathname === '/dashboard/account' ? 'page' : undefined} aria-label="My account" className="flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-lg px-1 hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-blue-700">
             <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[11px] font-bold shrink-0">
               {(username || userEmail || 'U').charAt(0).toUpperCase()}
             </div>
@@ -189,10 +188,10 @@ export const Sidebar: React.FC = () => {
                 {username || userEmail?.split('@')[0] || 'Operator'}
               </span>
               <span className="text-[9px] text-[#1a1522]/50 truncate block" title={userEmail || ''}>
-                {userEmail || 'Active Session'}
+                My account
               </span>
             </div>
-          </div>
+          </Link>
           <button
             onClick={handleSignOut}
             disabled={isLoggingOut}
