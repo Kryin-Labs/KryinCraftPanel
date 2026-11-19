@@ -156,3 +156,15 @@ Server creation is paused while capacity is full. Create-server and plan buttons
 In Settings, the preview renders MOTD colors and formatting as you edit. The pencil opens the editor and the save icon writes the message to server.properties. Choose an image from the preview icon to crop it to 64 × 64 and upload it as server-icon.png in the Minecraft server root. Minecraft uses the file after its next startup.
 
 The Python node agent supplies each connected player's game round-trip estimate through Paper's Spark command. Players with no current sample show Ping unavailable. The estimate is measured by the game server and is not a hop-by-hop trace. Update the node agent to use the icon upload and ping collection changes.
+
+### Configuration backups
+
+Owners can open **File Manager → Configuration backups** to pair the current Python agent, create a backup manually and download its ZIP. Backups contain the allowlisted Minecraft server settings, Paper, Spigot and Bukkit config files, and conventional plugin config, settings and language files. World folders, binaries, logs, symlinks, oversized files and configs with recognized credential patterns are excluded. Treat third-party configuration backups as private and review them before sharing. When restoring individual settings from a ZIP, preserve the live server credentials.
+
+1. Update and restart the Python agent on the Minecraft device.
+2. Choose **Pair device** and download the key. Put it at **~/.config/kryin/backup.key** in the agent account's private home and restrict the file to permission **600**.
+3. Wait for **Device connected**, then choose **Back up now**.
+
+To enable Google Drive, enable the Google Drive API and create an OAuth client of type **Web application** in Google Cloud. Add the redirect URI **https://kryincraftpanel.vercel.app/api/server/backups/drive/callback** to that client. In Vercel, set **BACKUP_GOOGLE_CLIENT_ID**, **BACKUP_GOOGLE_CLIENT_SECRET**, **BACKUP_GOOGLE_REDIRECT_URI**, and **BACKUP_ENCRYPTION_KEY** as server environment variables and redeploy. The encryption key is 32 random bytes encoded as 64 hexadecimal characters. Preserve it across deployments to keep existing Drive connections working.
+
+Each owner connects Google Drive for their server from File Manager. Manual backups then also save to Drive. Turn on **Back up on server startup** for one backup per Minecraft process startup observed by the paired device. The Drive connection is separate from panel sign-in and uses Google's **drive.file** scope. If the OAuth consent screen is in Testing and Google expires its refresh token, reconnect Drive before the next upload.

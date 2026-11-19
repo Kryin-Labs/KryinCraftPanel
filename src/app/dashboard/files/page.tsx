@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { useServerStore } from '@/lib/serverStore';
 import { ServerFile } from '@/types';
+import { ConfigBackups } from '@/components/ConfigBackups';
 
 export default function FileManagerPage() {
   const { activeServerId, permissions, isLoading } = useServerStore();
@@ -44,6 +45,8 @@ function FileManager() {
     createFolder,
     createFile,
     serverInfo,
+    activeServerId,
+    serverRole,
   } = useServerStore();
 
   const [currentPath, setCurrentPath] = useState('/');
@@ -233,6 +236,8 @@ function FileManager() {
           </button>
         </div>
       )}
+
+      {serverRole === 'owner' && activeServerId && <ConfigBackups key={activeServerId} serverId={activeServerId} />}
 
       {/* Header Bar */}
       <div className="p-5 sm:p-6 rounded-2xl bg-white border border-[#1a1522]/10 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">

@@ -4,6 +4,8 @@ KryinCraftPanel - Lightweight Python Agent for Android / Termux
 Zero external pip dependencies (Standard Python 3 only)
 """
 
+import hashlib
+import stat
 import os
 import base64
 import binascii
@@ -987,6 +989,145 @@ def command_worker_loop():
             print(f"[!] Command poll error: {e}", flush=True)
         time.sleep(poll_interval)
 
+
+def read_backup_key():
+    # Keep the key in Termux's private home, outside the Minecraft server directory.
+    key_path = os.path.expanduser("~/.config/kryin/backup.key")
+    try:
+        descriptor = os.open(key_path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(descriptor, "r", encoding="ascii") as key_file:
+            metadata = os.fstat(key_file.fileno())
+            if not stat.S_ISREG(metadata.st_mode) or metadata.st_mode & 0o077:
+                return None
+            token = key_file.read(64).strip()
+            return token if re.fullmatch(r"[A-Za-z0-9_-]{43}", token) else None
+    except (OSError, UnicodeError):
+        return None
+
+
+def call_backup_service(token, body):
+    request = urllib.request.Request(
+        f"{BACKEND_URL}/api/agent/backups",
+        data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=12) as response:
+            return json.load(response)
+    except (OSError, ValueError):
+        return {}
+
+
+def backup_startup_key():
+    running, pid = check_minecraft_process()
+    if not running or not pid:
+        return None
+    try:
+        # Start ticks distinguish restarts even if Linux recycles a PID.
+        with open(f"/proc/{int(pid)}/stat", encoding="ascii") as handle:
+            start_ticks = handle.read().rsplit(")", 1)[1].split()[19]
+        boot_id = ""
+        try:
+            with open("/proc/sys/kernel/random/boot_id", encoding="ascii") as handle:
+                boot_id = handle.read().strip()
+        except OSError:
+            pass
+        return hashlib.sha256(f"{boot_id}:{pid}:{start_ticks}".encode("ascii")).hexdigest()
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+def collect_backup_configs(policy):
+    files = []
+    omitted = 0
+    total = 0
+    root = os.path.realpath(SERVER_DIR)
+    plugin_root = os.path.join(root, "plugins")
+    config_root = os.path.join(root, "config")
+    paths = list(policy["rootFiles"])
+    if not os.path.islink(config_root):
+        paths += list(policy["configFiles"])
+    plugin_path = re.compile(policy["pluginPath"], re.IGNORECASE | re.ASCII)
+    sensitive = re.compile(policy["sensitive"], re.IGNORECASE | re.ASCII)
+    try:
+        if not os.path.islink(plugin_root):
+            with os.scandir(plugin_root) as entries:
+                folders = sorted(entry.name for entry in entries if entry.is_dir(follow_symlinks=False))[:400]
+            for name in folders:
+                try:
+                    with os.scandir(os.path.join(plugin_root, name)) as entries:
+                        paths.extend(sorted(
+                            f"plugins/{name}/{entry.name}" for entry in entries
+                            if entry.is_file(follow_symlinks=False) and plugin_path.fullmatch(f"plugins/{name}/{entry.name}")
+                        ))
+                except OSError:
+                    omitted += 1
+    except OSError:
+        pass
+
+    for relative in paths:
+        path = os.path.normpath(os.path.join(root, relative))
+        if not os.path.lexists(path):
+            continue
+        if len(files) >= policy["maxFiles"]:
+            omitted += 1
+            continue
+        try:
+            if os.path.realpath(path) != path:
+                omitted += 1
+                continue
+            descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            with os.fdopen(descriptor, "rb") as handle:
+                if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
+                    omitted += 1
+                    continue
+                content_bytes = handle.read(policy["fileMax"] + 1)
+            if len(content_bytes) > policy["fileMax"]:
+                omitted += 1
+                continue
+            content = content_bytes.decode("utf-8-sig")
+        except (OSError, UnicodeError):
+            omitted += 1
+            continue
+
+        if relative == "server.properties":
+            permitted = set(policy["properties"])
+            safe_lines = []
+            continuing = False
+            for line in content.splitlines():
+                key = re.match(r"^\s*([a-z\d.-]+)(?:\s*[=:]|\s+)", line)
+                continues = bool((len(line) - len(line.rstrip("\\"))) % 2)
+                if not continuing and not continues and key and key[1] in permitted and not sensitive.search(line):
+                    safe_lines.append(line)
+                continuing = continues
+            content = "\n".join(safe_lines) + "\n"
+        size = len(content.encode("utf-8"))
+        if not content.strip() or re.search(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", content) or sensitive.search(content) or total + size > policy["totalMax"]:
+            omitted += 1
+            continue
+        total += size
+        files.append({"path": relative, "content": content})
+    return files, omitted
+
+
+def backup_worker_loop():
+    while True:
+        token = read_backup_key()
+        if token:
+            try:
+                job = call_backup_service(token, {"action": "claim", "startup": backup_startup_key()})
+                if job.get("id") and job.get("lease"):
+                    files, omitted = collect_backup_configs(job["policy"])
+                    call_backup_service(token, {
+                        "action": "complete", "id": job["id"], "lease": job["lease"],
+                        "files": files, "omitted": omitted,
+                    })
+            except (OSError, ValueError, KeyError, TypeError):
+                print("[Backup] Could not collect configuration files. The job will retry.", flush=True)
+        time.sleep(8 if token else 30)
+
+
 def main():
     try:
         subprocess.run(["termux-wake-lock"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -998,6 +1139,7 @@ def main():
     # Launch dedicated command worker thread IMMEDIATELY on boot
     cmd_thread = threading.Thread(target=command_worker_loop, daemon=True, name="KryinCommandWorker")
     cmd_thread.start()
+    threading.Thread(target=backup_worker_loop, daemon=True, name="KryinBackupWorker").start()
 
     print("[Agent] Polling loop running. Press Ctrl+C to stop.", flush=True)
     send_heartbeat()

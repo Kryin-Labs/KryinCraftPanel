@@ -183,13 +183,16 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
     let interval: ReturnType<typeof setTimeout>;
     let inFlight: Promise<void> | undefined;
     let nextServerId = activeServerId;
+    const backupServer = !activeServerId && window.location.pathname === '/dashboard/files'
+      ? new URLSearchParams(window.location.search).get('backupServer') : null;
     async function syncLiveServerData() {
       try {
         const params = new URLSearchParams({
           logs: '0',
           players: includePlayers ? '1' : '0',
         });
-        if (nextServerId) params.set('serverId', nextServerId);
+        const selected = nextServerId || backupServer;
+        if (selected) params.set('serverId', selected);
         const res = await fetch('/api/server/live?' + params, { signal: controller.signal });
         if (!res.ok) throw new Error('Could not load servers');
         const data = await res.json();
