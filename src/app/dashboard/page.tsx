@@ -32,6 +32,7 @@ import {
 import { canVisitDashboardPage } from '@/lib/serverPermissions';
 import { useServerStore } from '@/lib/serverStore';
 import { StatusBadge } from '@/components/StatusBadge';
+import { deviceStatusLabel } from '@/lib/deviceStatus';
 import { AdSidebar } from '@/components/AdBanner';
 import { ServerIpEndpoint } from '@/types';
 
@@ -44,6 +45,8 @@ export default function DashboardOverviewPage() {
     stopServer,
     restartServer,
     isDeviceConnected,
+    deviceState,
+    powerProgress,
     isLoading,
     isRefreshing,
     refreshStatus,
@@ -175,33 +178,40 @@ export default function DashboardOverviewPage() {
   };
 
   const handleQuickAction = async (action: 'start' | 'restart' | 'stop' | 'hibernate') => {
-    if (action === 'start') {
-      setActionNotice(`Starting Paper server ${serverInfo.name}...`);
-      await startServer();
-    } else if (action === 'restart') {
-      setActionNotice(`Gracefully restarting ${serverInfo.name}...`);
-      await restartServer();
-    } else if (action === 'stop') {
-      setActionNotice(`Gracefully stopping ${serverInfo.name}...`);
-      await stopServer();
-    } else if (action === 'hibernate') {
+    if (action === 'start') await startServer();
+    else if (action === 'restart') await restartServer();
+    else if (action === 'stop') await stopServer();
+    else {
       setActionNotice('Server placed in smart hibernation.');
+      setTimeout(() => setActionNotice(null), 4000);
     }
-    setTimeout(() => setActionNotice(null), 4000);
   };
 
+  const powerBusy = powerProgress?.phase === 'busy';
+  const transitionUnconfirmed = powerProgress?.phase === 'failed' &&
+    (serverInfo.status === 'starting' || serverInfo.status === 'stopping');
+  const statusUnknown = serverInfo.status === 'unknown' || transitionUnconfirmed;
   const isCrashed =
     serverInfo.status === 'crashed' ||
     (metrics && metrics.totalRamMb > 0 && metrics.usedRamMb >= metrics.totalRamMb * 0.98);
   const isHibernate = serverInfo.status === 'hibernating';
   const isServerOnline = serverInfo.status === 'online';
-  const isStarting = serverInfo.status === 'starting';
-  const isStopping = serverInfo.status === 'stopping';
+  const isStarting = serverInfo.status === 'starting' && !transitionUnconfirmed;
+  const isStopping = serverInfo.status === 'stopping' && !transitionUnconfirmed;
   const isStopped = !isServerOnline && !isHibernate && !isCrashed && !isStarting && !isStopping;
 
   // Banner color configuration according to server status:
   // Green Online | Red Stopped | Yellow Hibernate | Red with Broken Heart for Crashed/RAM | Grey with moving animation for Starting/Stopping
-  const bannerConfig = isCrashed
+  const bannerConfig = statusUnknown
+    ? {
+        cardBorder: 'border-slate-400 shadow-sm',
+        bannerBg: 'bg-slate-800 text-white',
+        statusLabel: 'MINECRAFT STATUS UNCONFIRMED',
+        icon: <span className="h-2.5 w-2.5 rounded-full bg-amber-300" />,
+        subtext: transitionUnconfirmed ? 'The last request did not confirm a change.' : 'Waiting for a current heartbeat from the device.',
+        isMoving: false,
+      }
+    : isCrashed
     ? {
         cardBorder: 'border-red-500 shadow-xl shadow-red-500/10',
         bannerBg: 'bg-gradient-to-b from-red-600 via-rose-600 to-red-700 text-white',
@@ -328,50 +338,36 @@ export default function DashboardOverviewPage() {
           {/* BOTTOM HALF: CLEAN WHITE BACKGROUND WITH CONTROLS & STATUS BADGES */}
           <div className="p-6 sm:p-7 w-full flex flex-col items-center text-center space-y-5 bg-white">
 
+            {powerProgress && powerProgress.phase !== 'complete' && (
+              <p role={powerProgress.phase === 'failed' ? 'alert' : 'status'}
+                className={'rounded-lg border px-3 py-2 text-xs font-semibold ' +
+                  (powerProgress.phase === 'failed' ? 'border-red-200 bg-red-50 text-red-800' : 'border-blue-200 bg-blue-50 text-blue-800')}>
+                {powerProgress.message}
+              </p>
+            )}
             {/* Dual Status Bar: Device Connection & Minecraft Server State */}
             <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
-              {/* Device Connection Indicator */}
-              {isLoading && !isDeviceConnected ? (
-                <div
-                  className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border text-xs font-bold bg-blue-50 text-blue-800 border-blue-200 shadow-2xs animate-pulse"
-                  title="Checking device connection status..."
-                >
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
-                  <span>Checking Device...</span>
-                </div>
-              ) : isDeviceConnected ? (
-                <div
-                  className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-2xs bg-emerald-50 text-emerald-800 border-emerald-300"
-                  title="Device daemon is online and communicating. Ready to start game!"
-                >
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                  <span>Device: Connected</span>
-                </div>
-              ) : (
-                <div
-                  className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-2xs bg-amber-50 text-amber-800 border-amber-300"
-                  title="Device daemon is offline. Website cannot start game until device connects."
-                >
-                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-                  <span>Device: Not Connected</span>
-                </div>
-              )}
-
+              <div className={'flex items-center gap-2 rounded-xl border px-3.5 py-1.5 text-xs font-bold ' +
+                (isDeviceConnected ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-amber-300 bg-amber-50 text-amber-800')}
+                title={serverInfo.lastHeartbeat ? 'Last device heartbeat ' + new Date(serverInfo.lastHeartbeat).toLocaleString() : 'No device heartbeat received'}>
+                <span aria-hidden="true" className={'h-2.5 w-2.5 rounded-full ' + (isDeviceConnected ? 'bg-emerald-500' : 'bg-amber-500')} />
+                Device {deviceStatusLabel[deviceState]}
+              </div>
               {/* Minecraft Process State Badge */}
               <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold">
                 <span className="text-[#1a1522]/60 font-semibold">Minecraft:</span>
-                {isLoading && serverInfo.status === 'offline' ? (
+                {isLoading && statusUnknown ? (
                   <div className="flex items-center gap-1.5 text-xs text-blue-600 font-semibold">
                     <Loader2 className="w-3 h-3 animate-spin text-blue-600" />
                     <span>Syncing...</span>
                   </div>
-                ) : isCrashed ? (
+                ) : isCrashed && !statusUnknown ? (
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-100 text-red-700 text-xs font-bold border border-red-300">
                     <HeartCrack className="w-3.5 h-3.5 text-red-600" />
                     CRASHED
                   </span>
                 ) : (
-                  <StatusBadge status={isHibernate ? 'hibernating' : serverInfo.status} size="sm" />
+                  <StatusBadge status={statusUnknown ? 'unknown' : serverInfo.status} size="sm" />
                 )}
               </div>
 
@@ -394,7 +390,7 @@ export default function DashboardOverviewPage() {
               ) : (
                 <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-600 text-xs font-semibold">
                   <Users className="w-3.5 h-3.5 text-slate-400" />
-                  <span>0 / {serverInfo.maxPlayers} (Offline)</span>
+                  <span>{statusUnknown ? 'Player count unavailable' : '0 / ' + serverInfo.maxPlayers + ' (Offline)'}</span>
                 </div>
               )}
 
@@ -433,6 +429,7 @@ export default function DashboardOverviewPage() {
             ) : !isServerOnline ? (
               canStart && <button
                 onClick={() => handleQuickAction('start')}
+                disabled={powerBusy || transitionUnconfirmed}
                 className="px-5 py-2.5 rounded-xl text-white text-xs font-bold flex items-center gap-2 transition-all shadow-xs bg-emerald-600 hover:bg-emerald-700 cursor-pointer shadow-emerald-600/20 active:scale-95"
                 title="Launch Minecraft Server"
               >
@@ -442,6 +439,7 @@ export default function DashboardOverviewPage() {
             ) : (
               canStop && <button
                 onClick={() => handleQuickAction('restart')}
+                disabled={powerBusy}
                 className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-2 transition-all shadow-xs active:scale-95 cursor-pointer"
                 title="Restart Minecraft server"
               >
@@ -453,7 +451,7 @@ export default function DashboardOverviewPage() {
             {canStop && isServerOnline && (
               <button
                 onClick={() => handleQuickAction('stop')}
-                disabled={isStopping || isStarting}
+                disabled={powerBusy || isStopping || isStarting}
                 className="px-4 py-2.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer disabled:opacity-50"
                 title="Gracefully stop server"
               >
@@ -465,7 +463,7 @@ export default function DashboardOverviewPage() {
             {canStop && (
             <button
               onClick={() => handleQuickAction('hibernate')}
-              disabled={!isServerOnline || isStopping || isStarting}
+              disabled={powerBusy || !isServerOnline || isStopping || isStarting}
               className="px-4 py-2.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold flex items-center gap-1.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
               title="Hibernate server when idle"
             >

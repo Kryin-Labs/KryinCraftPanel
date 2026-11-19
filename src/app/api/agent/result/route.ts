@@ -54,7 +54,8 @@ export async function POST(req: Request) {
         executed_at: new Date().toISOString(),
       })
       .eq('id', command_id)
-      .eq('server_id', server.id);
+      .eq('server_id', server.id)
+      .eq('status', 'FETCHED');
 
     if (updateError) {
       return NextResponse.json({ error: updateError.message }, { status: 500 });

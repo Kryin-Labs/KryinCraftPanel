@@ -14,7 +14,7 @@ import {
 export const initialServerInfo: ServerInfo = {
   id: '',
   name: '',
-  status: 'offline',
+  status: 'unknown',
   pid: null,
   minecraftVersion: '',
   paperBuild: 0,

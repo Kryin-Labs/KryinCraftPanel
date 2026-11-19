@@ -63,27 +63,33 @@ export async function GET(req: Request) {
   const supabaseUser = await createServerClient();
   const { data: { user }, error: authError } = await supabaseUser.auth.getUser();
   if (authError || !user) return NextResponse.json({ error: 'Sign in required.' }, { status: 401 });
-  const { data: allowed, error: accessError } = await supabaseUser.rpc('has_server_permission', {
-    target_server: serverId,
-    permission: 'console',
-  });
-  if (accessError) return NextResponse.json({ error: 'Could not check command access.' }, { status: 503 });
-  if (!allowed) return NextResponse.json({ error: 'Console access is required.' }, { status: 403 });
 
   const { data: command, error } = await getAdminClient().from('server_commands')
-    .select('status, expires_at, message:result->>message')
-    .eq('id', commandId)
-    .eq('server_id', serverId)
-    .eq('requested_by', user.id)
-    .eq('command_type', 'CONSOLE_CMD')
-    .maybeSingle();
+    .select('id,command_type,status,created_at,expires_at,message:result->>message,minecraft:servers!inner(status,pid,last_heartbeat)')
+    .eq('id', commandId).eq('server_id', serverId).eq('requested_by', user.id).maybeSingle();
   if (error) return NextResponse.json({ error: 'Could not load command status.' }, { status: 502 });
   if (!command) return NextResponse.json({ error: 'Command not found.' }, { status: 404 });
 
-  const expired = command.status === 'PENDING' && Date.parse(command.expires_at) <= Date.now();
+  const permission = command.command_type === 'START' ? 'start'
+    : command.command_type === 'STOP' || command.command_type === 'RESTART' ? 'stop_restart'
+    : command.command_type === 'CONSOLE_CMD' || command.command_type === 'PLAYER_ACTION' ? 'console'
+    : null;
+  const { data: allowed, error: accessError } = permission
+    ? await supabaseUser.rpc('has_server_permission', { target_server: serverId, permission })
+    : await supabaseUser.rpc('is_server_member', { s_id: serverId, req_role: 'owner' });
+  if (accessError) return NextResponse.json({ error: 'Could not check command access.' }, { status: 503 });
+  if (!allowed) return NextResponse.json({ error: 'Command access is required.' }, { status: 403 });
+
+  const now = new Date();
+  const expired = command.status === 'PENDING' && Date.parse(command.expires_at) <= now.getTime();
   return NextResponse.json({
+    command_id: command.id,
     status: expired ? 'EXPIRED' : command.status,
-    message: typeof command.message === 'string' ? command.message.slice(0, 4_000) : undefined,
+    created_at: command.created_at,
+    expires_at: command.expires_at,
+    server_time: now.toISOString(),
+    message: command.command_type === 'CONSOLE_CMD' && typeof command.message === 'string' ? command.message.slice(0, 4_000) : undefined,
+    minecraft: Array.isArray(command.minecraft) ? command.minecraft[0] : command.minecraft,
   }, { headers: { 'Cache-Control': 'no-store' } });
 }
 export async function POST(req: Request) {
@@ -117,7 +123,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid JSON payload' }, { status: 400 });
     }
 
-    const { server_id, command_type, payload = {} } = body;
+    const { server_id, command_type, payload = {}, request_id, retry_window } = body;
 
     if (!command_type || typeof command_type !== 'string') {
       return NextResponse.json({ error: 'Missing or invalid command_type' }, { status: 400 });
@@ -135,10 +141,13 @@ export async function POST(req: Request) {
 
     const admin = getAdminClient();
 
-    if (typeof server_id !== 'string' || !server_id) {
+    if (typeof server_id !== 'string' || !uuid.test(server_id)) {
       return NextResponse.json({ error: 'Server ID required' }, { status: 400 });
     }
 
+    if (request_id !== undefined && (typeof request_id !== 'string' || !uuid.test(request_id))) {
+      return NextResponse.json({ error: 'Invalid command request ID.' }, { status: 400 });
+    }
     const permission = normalizedCmd === 'START' ? 'start'
       : ['STOP', 'RESTART', 'HIBERNATE', 'KILL', 'KILL_SERVER', 'FORCE_STOP'].includes(normalizedCmd) ? 'stop_restart'
       : ['CONSOLE_CMD', 'COMMAND', 'KICK', 'BAN', 'UNBAN', 'OP', 'DEOP', 'WHITELIST', 'HEAL', 'FEED', 'STARVE', 'TELEPORT', 'GAMEMODE'].includes(normalizedCmd) ? 'console' : null;
@@ -217,52 +226,29 @@ export async function POST(req: Request) {
       dbCommandType = 'CONFIG_UPDATE';
     }
 
-    // 7. Queue command into server_commands with 60s expiration
-    const expiresAt = new Date(Date.now() + 60 * 1000).toISOString();
-    const { data: newCmd, error: insertError } = await admin
-      .from('server_commands')
-      .insert({
-        server_id: targetServer.id,
-        requested_by: user.id,
-        command_type: dbCommandType,
-        payload: sanitizedPayload,
-        status: 'PENDING',
-        expires_at: expiresAt,
-      })
-      .select('id, created_at, status')
-      .single();
-
-    if (insertError || !newCmd) {
-      return NextResponse.json(
-        { error: 'Failed to queue command for execution' },
-        { status: 500 }
-      );
+    const command = {
+      server_id: targetServer.id,
+      requested_by: user.id,
+      command_type: dbCommandType,
+      payload: sanitizedPayload,
+    };
+    const queued = request_id
+      ? await admin.rpc('enqueue_panel_command', {
+          command_id: request_id, target_server: command.server_id, requester: command.requested_by,
+          kind: command.command_type, command_payload: command.payload, retry_window: retry_window === true,
+        })
+      : await admin.from('server_commands').insert({
+          ...command, expires_at: new Date(Date.now() + 60_000).toISOString(),
+        }).select('id, created_at, status, expires_at');
+    if (queued.error) {
+      return NextResponse.json({ error: 'Could not queue the device command.' }, { status: 502 });
+    }
+    const newCmd = queued.data?.[0];
+    if (!newCmd) {
+      return NextResponse.json({ error: 'This command request ID is already in use.' }, { status: 409 });
     }
 
-    // Instant state synchronization: update server status in DB so live polling and Realtime never flash stale state
-    const nowIso = new Date().toISOString();
-    if (normalizedCmd === 'START') {
-      await admin.from('servers').update({
-        status: 'starting',
-        last_heartbeat: nowIso,
-        agent_connected: true,
-      }).eq('id', targetServer.id);
-    } else if (normalizedCmd === 'STOP' || normalizedCmd === 'RESTART' || normalizedCmd === 'HIBERNATE') {
-      await admin.from('servers').update({
-        status: 'stopping',
-        last_heartbeat: nowIso,
-      }).eq('id', targetServer.id);
-    } else if (normalizedCmd === 'KILL' || normalizedCmd === 'KILL_SERVER' || normalizedCmd === 'FORCE_STOP') {
-      await admin.from('servers').update({
-        status: 'offline',
-        pid: null,
-        tps: 0.0,
-        last_heartbeat: nowIso,
-      }).eq('id', targetServer.id);
-    }
-
-    // 8. Log into audit_logs (fail-safe)
-    try {
+    if (!request_id || newCmd.inserted) {
       await admin.from('audit_logs').insert({
         server_id: targetServer.id,
         user_id: user.id,
@@ -270,17 +256,17 @@ export async function POST(req: Request) {
         action: normalizedCmd,
         target: sanitizedPayload.command || sanitizedPayload.player || targetServer.name || 'Minecraft Server',
         status: 'success',
-        details: `Dispatched ${normalizedCmd} command (ID: ${newCmd.id}) by ${user.email}`,
+        details: 'Queued command ' + newCmd.id,
       });
-    } catch (auditErr) {
-      console.warn('Non-fatal audit log warning:', auditErr);
     }
 
     return NextResponse.json({
       success: true,
       command_id: newCmd.id,
-      expires_at: expiresAt,
-      status: 'QUEUED',
+      created_at: newCmd.created_at,
+      expires_at: newCmd.expires_at,
+      server_time: new Date().toISOString(),
+      status: request_id ? newCmd.status : 'QUEUED',
     });
   } catch (err: any) {
     return NextResponse.json(

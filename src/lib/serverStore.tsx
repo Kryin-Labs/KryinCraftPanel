@@ -3,7 +3,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import {
   ServerInfo,
-  ServerStatus,
   ServerSummary,
   ServerIpEndpoint,
   HardwareMetrics,
@@ -31,6 +30,15 @@ import { createClient } from '@/lib/supabase/client';
 import type { ServerPermission } from './serverPermissions';
 import { toMinecraftPlayer, type PlayerRecord } from './playerRecords';
 
+import { confirmPowerAction, deliverPanelCommand, type CommandReceipt, type PowerAction } from './commandDelivery';
+import { deviceWindowMs, type DeviceState } from './deviceStatus';
+import { requestJson } from './requestJson';
+
+interface PowerProgress {
+  action: PowerAction;
+  phase: 'busy' | 'failed' | 'complete';
+  message: string;
+}
 interface ServerStoreContextType {
   serverInfo: ServerInfo;
   serverRole: RoleMember['role'] | null;
@@ -45,6 +53,8 @@ interface ServerStoreContextType {
   isLoading: boolean;
   isRefreshing: boolean;
   isDeviceConnected: boolean;
+  deviceState: DeviceState;
+  powerProgress: PowerProgress | null;
   refreshStatus: () => Promise<void>;
   metrics: HardwareMetrics;
   history: MetricHistoryPoint[];
@@ -62,7 +72,7 @@ interface ServerStoreContextType {
   killServer: () => Promise<void>;
   fetchDirectory: (dir: string) => Promise<ServerFile[]>;
   fetchFileContent: (path: string) => Promise<string>;
-  sendConsoleCommand: (cmd: string) => Promise<string>;
+  sendConsoleCommand: (cmd: string, onStage?: (message: string) => void) => Promise<CommandReceipt>;
   kickPlayer: (uuid: string, reason?: string) => Promise<void>;
   banPlayer: (uuid: string, reason?: string) => Promise<void>;
   unbanPlayer: (uuid: string) => Promise<void>;
@@ -100,7 +110,11 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
   const [loadError, setLoadError] = useState(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
-  const [isDeviceConnected, setIsDeviceConnected] = useState<boolean>(false);
+  const [deviceState, setDeviceState] = useState<DeviceState>('checking');
+  const [powerStates, setPowerStates] = useState<Record<string, PowerProgress>>({});
+  const pendingPower = useRef(new Set<string>());
+  const powerProgress = activeServerId ? powerStates[activeServerId] ?? null : null;
+  const isDeviceConnected = deviceState === 'connected';
 
   const [serverInfo, setServerInfo] = useState<ServerInfo>(initialServerInfo);
   const [metrics, setMetrics] = useState<HardwareMetrics>(initialMetrics);
@@ -112,69 +126,6 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(initialAuditLogs);
   const [tunnel] = useState<TunnelConfig>(tunnelInfo);
   const [isLiveDbConnected, setIsLiveDbConnected] = useState<boolean>(false);
-  const pendingTransitionRef = useRef<{
-    type: 'starting' | 'stopping' | 'restarting';
-    startedAt: number;
-  } | null>(null);
-
-  const computeServerStatus = (
-    rawStatus: string | undefined,
-    isFresh: boolean,
-    pending: { type: 'starting' | 'stopping' | 'restarting'; startedAt: number } | null
-  ): { status: ServerStatus; clearPending: boolean } => {
-    const norm = (rawStatus || 'offline').toLowerCase();
-    let current: ServerStatus =
-      norm === 'online' && isFresh
-        ? 'online'
-        : norm === 'starting' || norm === 'stopping' || norm === 'crashed' || norm === 'hibernating'
-        ? (norm as ServerStatus)
-        : 'offline';
-
-    if (!pending) {
-      return { status: current, clearPending: false };
-    }
-
-    const elapsed = Date.now() - pending.startedAt;
-
-    if (pending.type === 'restarting') {
-      // For the first 5 seconds, ignore previous 'online' status to prevent flickering
-      if (elapsed > 5000) {
-        if (current === 'online') {
-          return { status: 'online', clearPending: true };
-        }
-        if (current === 'starting') {
-          return { status: 'starting', clearPending: false };
-        }
-      }
-      if (current === 'stopping' || current === 'starting') {
-        return { status: current, clearPending: false };
-      }
-      return { status: 'stopping', clearPending: false };
-    }
-
-    if (pending.type === 'starting') {
-      if (current === 'online') {
-        return { status: 'online', clearPending: true };
-      }
-      if (elapsed < 90000) {
-        return { status: 'starting', clearPending: false };
-      }
-      return { status: current, clearPending: true };
-    }
-
-    if (pending.type === 'stopping') {
-      if (current === 'offline') {
-        return { status: 'offline', clearPending: true };
-      }
-      if (elapsed < 60000) {
-        return { status: 'stopping', clearPending: false };
-      }
-      return { status: current, clearPending: true };
-    }
-
-    return { status: current, clearPending: false };
-  };
-
   const loadedServerId = useRef<string | null>(null);
   const refreshLiveRef = useRef<() => Promise<void>>(async () => {});
 
@@ -182,6 +133,32 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
     const controller = new AbortController();
     let interval: ReturnType<typeof setTimeout>;
     let inFlight: Promise<void> | undefined;
+    let heartbeatTimers: ReturnType<typeof setTimeout>[] = [];
+    let observedDevice: DeviceState = 'checking';
+
+    function recordDevice(state: DeviceState, age?: number | null) {
+      heartbeatTimers.forEach(clearTimeout);
+      heartbeatTimers = [];
+      observedDevice = state;
+      setDeviceState(state);
+      if (typeof age !== 'number' || !Number.isFinite(age) || age < 0) return;
+      const expire = (next: DeviceState, remaining: number) => {
+        if (remaining <= 0) return;
+        heartbeatTimers.push(setTimeout(() => {
+          if (controller.signal.aborted) return;
+          observedDevice = next;
+          setDeviceState(next);
+          setServerInfo((previous) => ({ ...previous, status: 'unknown', deviceConnected: false, agentConnected: false }));
+        }, remaining));
+      };
+      expire('reconnecting', deviceWindowMs - age);
+      expire('disconnected', deviceWindowMs * 2 - age);
+    }
+
+    if (activeServerId && loadedServerId.current !== activeServerId) {
+      recordDevice('checking');
+      setServerInfo((previous) => ({ ...previous, status: 'unknown', deviceConnected: false, agentConnected: false }));
+    }
     let nextServerId = activeServerId;
     const backupServer = !activeServerId && window.location.pathname === '/dashboard/files'
       ? new URLSearchParams(window.location.search).get('backupServer') : null;
@@ -193,9 +170,22 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
         });
         const selected = nextServerId || backupServer;
         if (selected) params.set('serverId', selected);
-        const res = await fetch('/api/server/live?' + params, { signal: controller.signal });
-        if (!res.ok) throw new Error('Could not load servers');
-        const data = await res.json();
+        const url = '/api/server/live?' + params;
+        let snapshot: Awaited<ReturnType<typeof requestJson>> | undefined;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            snapshot = await requestJson(url, deviceWindowMs, { signal: controller.signal });
+            if ((snapshot.response.ok && snapshot.data) || [401, 403].includes(snapshot.response.status)) break;
+          } catch (error) {
+            if (controller.signal.aborted || attempt === 1) throw error;
+          }
+          if (attempt === 0) {
+            setDeviceState('reconnecting');
+            setServerInfo((previous) => ({ ...previous, status: 'unknown', deviceConnected: false, agentConnected: false }));
+          }
+        }
+        if (!snapshot?.response.ok || !snapshot.data) throw new Error('Could not load servers');
+        const { data } = snapshot;
         if (!data || controller.signal.aborted) return;
         setLoadError(false);
 
@@ -209,7 +199,7 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
           loadedServerId.current = null;
           setAccess(null);
           setServerInfo(initialServerInfo);
-          setIsDeviceConnected(false);
+          recordDevice('disconnected');
           setIsLiveDbConnected(false);
           setMetrics(initialMetrics);
           setPlayers([]);
@@ -219,36 +209,24 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
         {
           if (loadedServerId.current !== data.server.id) {
             loadedServerId.current = data.server.id;
-            pendingTransitionRef.current = null;
             setPlayers([]);
           }
           setAccess(data.role ? { serverId: data.server.id, role: data.role, permissions: data.permissions ?? [] } : null);
           setIsLiveDbConnected(true);
-          const devConn = Boolean(data.device_connected ?? data.server.device_connected);
-          setIsDeviceConnected(devConn);
-
-          const isFresh = Boolean(data.device_connected ?? devConn);
-          const { status: resolvedStatus, clearPending } = computeServerStatus(
-            data.server.status,
-            isFresh,
-            pendingTransitionRef.current
-          );
-          if (clearPending) {
-            pendingTransitionRef.current = null;
-          }
-
+          const devConn = data.device_state === 'connected';
+          recordDevice(data.device_state ?? 'disconnected', data.heartbeat_age_ms);
           setServerInfo((prev) => {
             const updatedServerInfo: ServerInfo = {
               ...prev,
               id: data.server.id,
               name: data.server.name || prev.name,
-              status: resolvedStatus,
+              status: data.server.status ?? 'unknown',
               pid: data.server.pid,
               device: data.server.device || prev.device || 'Indian Node',
-              deviceConnected: devConn || resolvedStatus === 'online' || resolvedStatus === 'starting' || resolvedStatus === 'stopping',
+              deviceConnected: devConn,
               uptimeSeconds: data.server.uptime_seconds ?? prev.uptimeSeconds,
               agentConnected: devConn,
-              lastHeartbeat: data.server.last_heartbeat ? new Date(data.server.last_heartbeat).toLocaleTimeString() : prev.lastHeartbeat,
+              lastHeartbeat: data.server.last_heartbeat ?? '',
               onlinePlayers: data.server.online_players ?? prev.onlinePlayers,
               maxPlayers: data.server.max_players ?? prev.maxPlayers,
               tps: Number(data.server.tps ?? prev.tps),
@@ -285,6 +263,8 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
       } catch (err) {
         if (controller.signal.aborted) return;
         setLoadError(true);
+        recordDevice('unavailable');
+        setServerInfo((previous) => ({ ...previous, status: 'unknown', deviceConnected: false, agentConnected: false }));
         console.warn('Live server sync warning:', err);
       } finally {
         if (!controller.signal.aborted) setIsLoading(false);
@@ -297,7 +277,7 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
       inFlight = syncLiveServerData().finally(() => {
         inFlight = undefined;
         if (!controller.signal.aborted && document.visibilityState === 'visible') {
-          interval = setTimeout(refresh, pendingTransitionRef.current ? 1_000 : 3_000);
+          interval = setTimeout(refresh, observedDevice === 'reconnecting' || (nextServerId && pendingPower.current.has(nextServerId)) ? 1_000 : 3_000);
         }
       });
       return inFlight;
@@ -314,6 +294,7 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
     window.addEventListener('online', onVisibilityChange);
     return () => {
       controller.abort();
+      heartbeatTimers.forEach(clearTimeout);
       clearTimeout(interval);
       document.removeEventListener('visibilitychange', onVisibilityChange);
       window.removeEventListener('online', onVisibilityChange);
@@ -407,57 +388,32 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
     setAuditLogs((prev) => [newAudit, ...prev]);
   };
 
-  const dispatchServerCommand = async (commandType: string, payload: object = {}) => {
-    const response = await fetch('/api/server/command', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        server_id: activeServerId || serverInfo.id,
-        command_type: commandType,
-        payload,
-      }),
-    });
-    if (response.status === 401) {
-      window.location.assign('/login?next=/dashboard');
+  const runPowerAction = async (action: PowerAction) => {
+    const serverId = activeServerId;
+    if (!serverId || pendingPower.current.has(serverId)) return;
+    pendingPower.current.add(serverId);
+    const setProgress = (phase: PowerProgress['phase'], message: string) => {
+      setPowerStates((current) => ({ ...current, [serverId]: { action, phase, message } }));
+    };
+    const onStage = (message: string) => setProgress('busy', message);
+    try {
+      const receipt = await deliverPanelCommand(serverId, action, {}, onStage);
+      await confirmPowerAction(action, serverId, receipt, serverInfo.pid, onStage);
+      const message = action === 'START' || action === 'RESTART' ? 'Minecraft is online.' : 'Minecraft is offline.';
+      setProgress('complete', message);
+      addAudit('SERVER_' + action, serverInfo.name || 'Minecraft Server', message);
+    } catch (error) {
+      setProgress('failed', error instanceof Error ? error.message : 'The device command failed.');
+    } finally {
+      pendingPower.current.delete(serverId);
+      void refreshLiveRef.current();
     }
-    if (!response.ok) {
-      const data = await response.json().catch(() => null);
-      throw new Error(data?.error || 'Could not send the command.');
-    }
-    return await response.json() as { command_id: string };
   };
 
-  const startServer = async () => {
-    pendingTransitionRef.current = { type: 'starting', startedAt: Date.now() };
-    setServerInfo((prev) => ({ ...prev, status: 'starting' }));
-    await dispatchServerCommand('START');
-    void refreshLiveRef.current();
-    addAudit('SERVER_START', serverInfo.name || 'Paper Server', 'Dispatched START signal to node agent');
-  };
-
-  const stopServer = async () => {
-    pendingTransitionRef.current = { type: 'stopping', startedAt: Date.now() };
-    setServerInfo((prev) => ({ ...prev, status: 'stopping' }));
-    await dispatchServerCommand('STOP');
-    void refreshLiveRef.current();
-    addAudit('SERVER_STOP', serverInfo.name || 'Paper Server', 'Dispatched STOP signal to node agent');
-  };
-
-  const restartServer = async () => {
-    pendingTransitionRef.current = { type: 'restarting', startedAt: Date.now() };
-    setServerInfo((prev) => ({ ...prev, status: 'stopping' }));
-    await dispatchServerCommand('RESTART');
-    void refreshLiveRef.current();
-    addAudit('SERVER_RESTART', serverInfo.name || 'Paper Server', 'Dispatched RESTART signal to node agent');
-  };
-
-  const killServer = async () => {
-    pendingTransitionRef.current = null;
-    setServerInfo((prev) => ({ ...prev, status: 'offline', pid: null, tps: 0 }));
-    await dispatchServerCommand('KILL');
-    addAudit('SERVER_KILL', serverInfo.name || 'Paper Server', 'Forcibly sent SIGKILL to node agent');
-  };
-
+  const startServer = () => runPowerAction('START');
+  const stopServer = () => runPowerAction('STOP');
+  const restartServer = () => runPowerAction('RESTART');
+  const killServer = () => runPowerAction('KILL');
   const fetchDirectory = async (dir: string): Promise<ServerFile[]> => {
     try {
       const serverParam = activeServerId ? `&serverId=${encodeURIComponent(activeServerId)}` : '';
@@ -494,15 +450,12 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
     return '';
   };
 
-  const sendConsoleCommand = async (cmd: string): Promise<string> => {
-    const trimmed = cmd.trim();
-    if (!trimmed) return '';
-
-    const receipt = await dispatchServerCommand('CONSOLE_CMD', { command: trimmed });
-    addAudit('CONSOLE_COMMAND', trimmed, 'Queued via operator terminal');
-    return receipt.command_id;
+  const sendConsoleCommand = async (cmd: string, onStage?: (message: string) => void) => {
+    if (!activeServerId || !cmd.trim()) throw new Error('Select a server and enter a command.');
+    const receipt = await deliverPanelCommand(activeServerId, 'CONSOLE_CMD', { command: cmd.trim() }, onStage);
+    if (receipt.status !== 'FAILED') addAudit('CONSOLE_COMMAND', cmd.trim(), 'Delivered to the device');
+    return receipt;
   };
-
   const kickPlayer = async (uuid: string, reason = 'Kicked by administrator') => {
     setPlayers((prev) =>
       prev.map((p) => (p.uuid === uuid ? { ...p, isOnline: false, lastSeen: 'Just now' } : p))
@@ -753,6 +706,8 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
         isLoading,
         isRefreshing,
         isDeviceConnected,
+        deviceState,
+        powerProgress,
         refreshStatus,
         metrics,
         history,

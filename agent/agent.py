@@ -295,7 +295,7 @@ def determine_status():
         if is_mc_running and check_port_open(server_port):
             current_status = "online"
             transition_start_time = 0
-        elif not is_mc_running and transition_start_time > 0 and (now - transition_start_time > 120):
+        elif not is_mc_running and (transition_start_time <= 0 or now - transition_start_time >= 10):
             current_status = "offline"
             transition_start_time = 0
     elif current_status == "stopping":
@@ -681,6 +681,27 @@ def sync_players():
     for offset in range(0, len(players_list), 50):
         api_post("/api/agent/players", {"players": players_list[offset:offset + 50]})
 
+def launch_minecraft():
+    for filename in ("run.sh", "start.sh"):
+        if os.path.isfile(os.path.join(SERVER_DIR, filename)):
+            command = ["bash", filename]
+            break
+    else:
+        jars = sorted(name for name in os.listdir(SERVER_DIR)
+                      if name.endswith(".jar") and ("paper" in name or "server" in name))
+        if not jars:
+            raise FileNotFoundError("No Minecraft startup script or server jar")
+        command = ["java", "-Xms1G", "-Xmx4G", "-Djava.net.preferIPv4Addresses=true", "-jar", jars[0], "--nogui"]
+
+    for attempt in range(2):
+        try:
+            subprocess.Popen(command, cwd=SERVER_DIR, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return
+        except OSError:
+            if attempt:
+                raise
+            time.sleep(0.5)
+
 def poll_and_execute_commands():
     global current_status, transition_start_time, log_file_pos
     res = api_get("/api/agent/commands")
@@ -715,26 +736,13 @@ def poll_and_execute_commands():
                 else:
                     log_file_pos = 0
 
-                run_script = os.path.join(SERVER_DIR, "run.sh")
-                start_script = os.path.join(SERVER_DIR, "start.sh")
-                if os.path.exists(run_script):
-                    subprocess.Popen(["bash", run_script], cwd=SERVER_DIR, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                    output = "Started Paper server via run.sh"
-                elif os.path.exists(start_script):
-                    subprocess.Popen(["bash", start_script], cwd=SERVER_DIR, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                    output = "Started Paper server via start.sh"
-                elif os.path.isdir(SERVER_DIR):
-                    jars = [f for f in os.listdir(SERVER_DIR) if f.endswith(".jar") and ("paper" in f or "server" in f)]
-                    if jars:
-                        subprocess.Popen(["java", "-Xms1G", "-Xmx4G", "-Djava.net.preferIPv4Addresses=true", "-jar", jars[0], "--nogui"], cwd=SERVER_DIR, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                        output = f"Started server using {jars[0]}"
-                    else:
-                        output = f"Could not find startup script or jar in {SERVER_DIR}"
-                        success = False
-                else:
-                    output = f"Server directory {SERVER_DIR} not found"
+                try:
+                    launch_minecraft()
+                    output = "Minecraft process launch requested."
+                except OSError:
                     success = False
-
+                    output = "Could not launch Minecraft. Check the startup script and Java on the device."
+                    send_heartbeat(forced_status="offline")
         elif cmd_type in ("STOP", "STOP_SERVER", "GRACEFUL_STOP", "HIBERNATE"):
             current_status = "stopping"
             transition_start_time = time.time()
@@ -806,17 +814,13 @@ def poll_and_execute_commands():
             transition_start_time = time.time()
             send_heartbeat(forced_status="starting")
 
-            run_script = os.path.join(SERVER_DIR, "run.sh")
-            start_script = os.path.join(SERVER_DIR, "start.sh")
-            if os.path.exists(run_script):
-                subprocess.Popen(["bash", run_script], cwd=SERVER_DIR, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                output = "Restarted server via run.sh."
-            elif os.path.exists(start_script):
-                subprocess.Popen(["bash", start_script], cwd=SERVER_DIR, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                output = "Restarted server via start.sh."
-            else:
-                output = "Stopped server."
-
+            try:
+                launch_minecraft()
+                output = "Minecraft process relaunch requested."
+            except OSError:
+                success = False
+                output = "Could not relaunch Minecraft. Check the startup script and Java on the device."
+                send_heartbeat(forced_status="offline")
         elif cmd_type in ("CONSOLE_CMD", "COMMAND"):
             raw_cmd = payload.get("command", "").strip()
             if raw_cmd.startswith("/"):

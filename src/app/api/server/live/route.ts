@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 
 import { visiblePlayers } from '@/lib/playerRecords';
+import { deviceStateAt, minecraftStateAt } from '@/lib/deviceStatus';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -29,17 +30,16 @@ export async function GET(req: Request) {
 
     const now = Date.now();
     const server = allServers.find((row) => row.id === requestedServerId)
-      ?? (!requestedServerId ? allServers.find((row) => now - Date.parse(row.last_heartbeat ?? '') < 45_000) : undefined)
+      ?? (!requestedServerId ? allServers.find((row) => deviceStateAt(row.last_heartbeat, now) === 'connected') : undefined)
       ?? allServers[0];
     // Format server list with live freshness check
     const formattedServers = allServers.map((s) => {
-      const hbTime = s.last_heartbeat ? new Date(s.last_heartbeat).getTime() : 0;
-      const isFresh = now - hbTime < 45_000;
+      const isFresh = deviceStateAt(s.last_heartbeat, now) === 'connected';
       return {
         id: s.id,
         shared: s.owner_id !== user.id,
         name: s.name,
-        status: isFresh && s.status === 'online' ? 'online' : (isFresh ? s.status : 'offline'),
+        status: minecraftStateAt(s.status, s.last_heartbeat, now),
         device: s.device_name || 'Indian Node',
         deviceConnected: isFresh,
         localIp: s.local_ip,
@@ -52,7 +52,7 @@ export async function GET(req: Request) {
       return NextResponse.json({
         online: false,
         device_connected: false,
-        status: 'offline',
+        status: 'unknown',
         servers: formattedServers,
         server: null,
         metrics: null,
@@ -62,7 +62,9 @@ export async function GET(req: Request) {
     }
 
     const isOwner = server.owner_id === user.id;
-    const isHeartbeatFresh = now - Date.parse(server.last_heartbeat ?? '') < 45_000;
+    const deviceState = deviceStateAt(server.last_heartbeat, now);
+    const isHeartbeatFresh = deviceState === 'connected';
+    const minecraftStatus = minecraftStateAt(server.status, server.last_heartbeat, now);
     const isOnline = isHeartbeatFresh && server.status === 'online';
     const [
       { data: membership, error: membershipError },
@@ -124,7 +126,9 @@ export async function GET(req: Request) {
       {
         online: isOnline,
         device_connected: isHeartbeatFresh,
-        status: isOnline ? 'online' : isHeartbeatFresh ? server.status : 'offline',
+        device_state: deviceState,
+        heartbeat_age_ms: server.last_heartbeat ? now - Date.parse(server.last_heartbeat) : null,
+        status: minecraftStatus,
         servers: formattedServers,
         role,
         permissions,
@@ -133,7 +137,7 @@ export async function GET(req: Request) {
           name: server.name,
           device: server.device_name || 'Indian Node',
           device_connected: isHeartbeatFresh,
-          status: isOnline ? 'online' : isHeartbeatFresh ? server.status : 'offline',
+          status: minecraftStatus,
           pid: isOnline ? server.pid : null,
           tps: isOnline ? Number(server.tps || 20.0) : 0,
           uptime_seconds: isOnline ? server.uptime_seconds || 0 : 0,

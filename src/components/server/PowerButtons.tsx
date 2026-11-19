@@ -10,8 +10,11 @@ interface PowerButtonsProps {
 }
 
 export function PowerButtons({ className = '', compact = false }: PowerButtonsProps) {
-  const { serverInfo, permissions, startServer, stopServer, restartServer, killServer } = useServerStore();
+  const { serverInfo, permissions, powerProgress, startServer, stopServer, restartServer, killServer } = useServerStore();
   const status = serverInfo.status;
+  const startable = status === 'offline' || status === 'unknown';
+  const pending = powerProgress?.phase === 'busy';
+  const starting = status === 'starting' && powerProgress?.phase !== 'failed';
   const canStart = permissions.includes('start');
   const canStop = permissions.includes('stop_restart');
 
@@ -40,7 +43,7 @@ export function PowerButtons({ className = '', compact = false }: PowerButtonsPr
   const isKillable = isStopping || stoppingDuration > 10;
 
   const handleStart = async () => {
-    if (status !== 'offline' || actionLoading) return;
+    if (!startable || pending || actionLoading) return;
     setActionLoading('start');
     try {
       await startServer();
@@ -50,7 +53,7 @@ export function PowerButtons({ className = '', compact = false }: PowerButtonsPr
   };
 
   const handleRestart = async () => {
-    if (status === 'offline' || actionLoading) return;
+    if (startable || pending || actionLoading) return;
     setActionLoading('restart');
     try {
       await restartServer();
@@ -60,7 +63,7 @@ export function PowerButtons({ className = '', compact = false }: PowerButtonsPr
   };
 
   const handleStopOrKill = async () => {
-    if (status === 'offline' || actionLoading) return;
+    if (startable || pending || actionLoading) return;
     if (isKillable) {
       setIsConfirmOpen(true);
       return;
@@ -86,13 +89,13 @@ export function PowerButtons({ className = '', compact = false }: PowerButtonsPr
   const btnPadding = compact ? 'px-2.5 py-1.5 text-xs' : 'px-3.5 py-2 text-xs sm:text-sm';
 
   return (
-    <div className={`flex items-center gap-2 ${className}`}>
+    <div className={`flex flex-wrap items-center gap-2 ${className}`}>
       {/* Start Button */}
       <button
         onClick={handleStart}
-        disabled={!canStart || status !== 'offline' || Boolean(actionLoading)}
+        disabled={!canStart || !startable || pending || Boolean(actionLoading)}
         className={`${btnPadding} rounded-xl font-bold flex items-center justify-center gap-1.5 transition-all shadow-xs ${
-          status === 'offline'
+          startable
             ? 'bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer active:scale-95'
             : status === 'starting'
             ? 'bg-amber-600/90 text-white border border-amber-500 cursor-not-allowed'
@@ -100,20 +103,20 @@ export function PowerButtons({ className = '', compact = false }: PowerButtonsPr
         }`}
         title="Start Minecraft Server"
       >
-        {status === 'starting' || actionLoading === 'start' ? (
+        {starting || actionLoading === 'start' ? (
           <RotateCw className="w-3.5 h-3.5 animate-spin" />
         ) : (
           <Play className="w-3.5 h-3.5 fill-current" />
         )}
-        <span>{status === 'starting' || actionLoading === 'start' ? 'Starting...' : 'Start'}</span>
+        <span>{starting ? 'Starting…' : actionLoading === 'start' ? 'Sending…' : status === 'starting' ? 'Start unconfirmed' : 'Start'}</span>
       </button>
 
       {/* Restart Button */}
       <button
         onClick={handleRestart}
-        disabled={!canStop || status === 'offline' || isStopping || Boolean(actionLoading)}
+        disabled={!canStop || startable || isStopping || pending || Boolean(actionLoading)}
         className={`${btnPadding} rounded-xl font-bold flex items-center justify-center gap-1.5 transition-all shadow-xs ${
-          status !== 'offline' && !isStopping
+          !startable && !isStopping
             ? 'bg-zinc-800 hover:bg-zinc-700 text-white cursor-pointer active:scale-95'
             : 'bg-zinc-100 text-zinc-400 border border-zinc-200 cursor-not-allowed opacity-50'
         }`}
@@ -126,11 +129,11 @@ export function PowerButtons({ className = '', compact = false }: PowerButtonsPr
       {/* Stop / Kill Button */}
       <button
         onClick={handleStopOrKill}
-        disabled={!canStop || status === 'offline' && !isStopping}
+        disabled={!canStop || startable || pending || Boolean(actionLoading)}
         className={`${btnPadding} rounded-xl font-bold flex items-center justify-center gap-1.5 transition-all shadow-xs ${
           isKillable
             ? 'bg-red-600 hover:bg-red-500 text-white animate-pulse border border-red-500 shadow-md cursor-pointer active:scale-95'
-            : status !== 'offline'
+            : !startable
             ? 'bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 cursor-pointer active:scale-95'
             : 'bg-zinc-100 text-zinc-400 border border-zinc-200 cursor-not-allowed opacity-50'
         }`}
@@ -153,6 +156,13 @@ export function PowerButtons({ className = '', compact = false }: PowerButtonsPr
         )}
       </button>
 
+      {powerProgress && powerProgress.phase !== 'complete' && (
+        <p role={powerProgress.phase === 'failed' ? 'alert' : 'status'}
+          className={'basis-full max-w-sm rounded-lg border px-2.5 py-1.5 text-xs ' +
+            (powerProgress.phase === 'failed' ? 'border-red-200 bg-red-50 text-red-800' : 'border-blue-200 bg-blue-50 text-blue-800')}>
+          {powerProgress.message}
+        </p>
+      )}
       {/* Kill Confirmation Modal */}
       {isConfirmOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">

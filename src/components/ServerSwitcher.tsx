@@ -56,7 +56,7 @@ export function ServerSwitcher({ createOnly = false }: { createOnly?: boolean })
                     ? 'bg-emerald-500 animate-pulse'
                     : 'bg-slate-300'
                 }`}
-                title={serverInfo.status === 'online' ? 'Online' : 'Offline'}
+                title={serverInfo.status === 'unknown' ? 'Status unconfirmed' : serverInfo.status}
               />
             </div>
             <p className="text-[10px] text-[#1a1522]/50 truncate">

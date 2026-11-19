@@ -12,7 +12,7 @@ export async function POST(req: Request) {
     const body = await req.json();
 
     const {
-      status = 'online',
+      status,
       pid = null,
       tps = 20.0,
       uptime_seconds = 0,
@@ -21,6 +21,10 @@ export async function POST(req: Request) {
       max_players = 20,
     } = body;
 
+    if (!['online', 'offline', 'starting', 'stopping'].includes(status)) {
+      return NextResponse.json({ error: 'A valid Minecraft status is required.' }, { status: 400 });
+    }
+    const heartbeat = new Date().toISOString();
     const { error: updateError } = await supabase
       .from('servers')
       .update({
@@ -32,8 +36,8 @@ export async function POST(req: Request) {
         online_players,
         max_players,
         agent_connected: true,
-        last_heartbeat: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+        last_heartbeat: heartbeat,
+        updated_at: heartbeat,
       })
       .eq('id', server.id);
 

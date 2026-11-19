@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
+import { minecraftStateAt } from '@/lib/deviceStatus';
 
 export async function GET() {
   try {
@@ -23,7 +24,7 @@ export async function GET() {
       id: s.id,
       shared: s.owner_id !== user.id,
       name: s.name,
-      status: s.status,
+      status: minecraftStateAt(s.status, s.last_heartbeat),
       device_name: s.device_name,
       public_tunnel_java: s.public_tunnel_java,
       local_ip: s.local_ip,

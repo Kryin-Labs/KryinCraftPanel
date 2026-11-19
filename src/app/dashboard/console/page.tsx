@@ -15,6 +15,8 @@ import {
   Minimize2,
 } from 'lucide-react';
 import { useServerStore } from '@/lib/serverStore';
+import { deviceStatusLabel, deviceWindowMs } from '@/lib/deviceStatus';
+import { requestJson } from '@/lib/requestJson';
 import { useConsoleLogs } from '@/lib/useConsoleLogs';
 import { formatMinecraftLog } from '@/lib/xterm/formatMinecraftLog';
 import { XtermScrollDownHelperAddon } from '@/lib/xterm/XtermScrollDownHelperAddon';
@@ -61,12 +63,13 @@ const PTERODACTYL_THEME = {
 const TERMINAL_PRELUDE = '\u001b[1m\u001b[33mcontainer@indian-node~ \u001b[0m';
 
 export default function DedicatedConsolePage() {
-  const { serverInfo, activeServerId, permissions, sendConsoleCommand, loadError } = useServerStore();
+  const { serverInfo, activeServerId, permissions, sendConsoleCommand, deviceState, powerProgress } = useServerStore();
   const { logs, loaded, subscribed, error: streamError, clear } = useConsoleLogs(activeServerId);
 
   const canIssueCommands = permissions.includes('console');
   const [receiptId, setReceiptId] = useState('');
   const [commandStatus, setCommandStatus] = useState('');
+  const [commandFailed, setCommandFailed] = useState(false);
   const [commandReply, setCommandReply] = useState('');
   const [terminalError, setTerminalError] = useState(false);
   const [commandInput, setCommandInput] = useState('');
@@ -108,18 +111,30 @@ export default function DedicatedConsolePage() {
     const params = new URLSearchParams({ serverId: activeServerId, commandId: receiptId });
     const started = Date.now();
     let timer: ReturnType<typeof setTimeout>;
+    let rechecked = false;
 
     async function checkReceipt() {
-      let interval = Date.now() - started < 5_000 ? 600 : 1_500;
+      const elapsed = Date.now() - started;
+      if (elapsed >= deviceWindowMs * 2) {
+        setCommandFailed(true);
+        setCommandStatus('The device received the command. Its result was unconfirmed after two checks.');
+        return;
+      }
+      if (elapsed >= deviceWindowMs && !rechecked) {
+        rechecked = true;
+        setCommandStatus('Checking for the command result again…');
+      }
+      let interval = elapsed < 5_000 ? 600 : 1_500;
       try {
-        const response = await fetch('/api/server/command?' + params, { signal: controller.signal });
+        const { response, data } = await requestJson('/api/server/command?' + params, 2_000, { signal: controller.signal });
         if (controller.signal.aborted) return;
         if ([401, 403, 404].includes(response.status)) {
+          setCommandFailed(true);
           setCommandStatus('Command status unavailable.');
           return;
         }
         if (!response.ok) throw new Error('Command status unavailable.');
-        const receipt: { status: string; message?: string } = await response.json();
+        const receipt: { status: string; message?: string } = data;
         if (controller.signal.aborted) return;
         switch (receipt.status) {
           case 'EXECUTED':
@@ -127,23 +142,21 @@ export default function DedicatedConsolePage() {
             setCommandReply(receipt.message ?? '');
             return;
           case 'FAILED':
+            setCommandFailed(true);
             setCommandStatus('Device reported that the command failed.');
             setCommandReply(receipt.message ?? '');
             return;
           case 'EXPIRED':
+            setCommandFailed(true);
             setCommandStatus('Command expired before the device picked it up.');
             return;
           case 'FETCHED':
-            setCommandStatus('Command received by device.');
+            if (!rechecked) setCommandStatus('Command received by device.');
             break;
         }
       } catch {
         if (controller.signal.aborted) return;
         interval = 1_500;
-      }
-      if (Date.now() - started >= 65_000) {
-        setCommandStatus('Execution could not be confirmed.');
-        return;
       }
       timer = setTimeout(checkReceipt, interval);
     }
@@ -425,12 +438,23 @@ export default function DedicatedConsolePage() {
     setIsSending(true);
     setReceiptId('');
     setCommandReply('');
+    setCommandFailed(false);
     setCommandStatus('Sending command…');
     try {
-      const id = await sendConsoleCommand(cmd);
-      setReceiptId(id);
-      setCommandStatus('Command queued.');
+      const receipt = await sendConsoleCommand(cmd, setCommandStatus);
+      if (receipt.status === 'FAILED') {
+        setCommandFailed(true);
+        setCommandStatus('Device reported that the command failed.');
+        setCommandReply(receipt.message ?? '');
+      } else if (receipt.status === 'EXECUTED') {
+        setCommandStatus('Command executed.');
+        setCommandReply(receipt.message ?? '');
+      } else {
+        setReceiptId(receipt.command_id);
+        setCommandStatus('Command received by device.');
+      }
     } catch (error) {
+      setCommandFailed(true);
       setCommandStatus(error instanceof Error ? error.message : 'Could not send the command.');
     } finally {
       setIsSending(false);
@@ -541,10 +565,10 @@ export default function DedicatedConsolePage() {
           <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
             {/* Device Status */}
             <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-zinc-900 border border-white/10 text-[11px] font-bold">
-              <span className={`w-2 h-2 rounded-full ${serverInfo.agentConnected && !loadError ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+              <span className={`w-2 h-2 rounded-full ${deviceState === 'connected' ? 'bg-emerald-400' : 'bg-amber-400'}`} />
               <span className="text-zinc-400">Device:</span>
-              <span className={serverInfo.agentConnected && !loadError ? 'text-emerald-400' : 'text-amber-400'}>
-                {loadError ? 'Status unavailable' : serverInfo.agentConnected ? 'Connected' : 'Disconnected'}
+              <span className={deviceState === 'connected' ? 'text-emerald-400' : 'text-amber-400'}>
+                {deviceStatusLabel[deviceState]}
               </span>
             </div>
 
@@ -563,10 +587,10 @@ export default function DedicatedConsolePage() {
                 {serverInfo.status === 'online'
                   ? `Online ${serverInfo.onlinePlayers} / ${serverInfo.maxPlayers}`
                   : serverInfo.status === 'starting'
-                  ? `Starting... (0 / ${serverInfo.maxPlayers})`
+                  ? powerProgress?.phase === 'failed' ? 'Startup unconfirmed' : 'Starting…'
                   : serverInfo.status === 'stopping'
-                  ? `Stopping... (0 / ${serverInfo.maxPlayers})`
-                  : `Offline (0 / ${serverInfo.maxPlayers})`}
+                  ? powerProgress?.phase === 'failed' ? 'Shutdown unconfirmed' : 'Stopping…'
+                  : serverInfo.status === 'unknown' ? 'Unconfirmed' : 'Offline'}
               </span>
             </div>
 
@@ -681,7 +705,7 @@ export default function DedicatedConsolePage() {
         </form>}
 
         {commandStatus && (
-          <div role="status" className="px-4 pb-3 text-xs text-zinc-300">
+          <div role={commandFailed ? 'alert' : 'status'} className={'px-4 pb-3 text-xs ' + (commandFailed ? 'text-red-300' : 'text-zinc-300')}>
             <p>{commandStatus}</p>
             {commandReply && <p className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap break-words text-zinc-100">{commandReply}</p>}
           </div>

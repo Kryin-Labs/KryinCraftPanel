@@ -66,7 +66,7 @@ export const MobileNav: React.FC = () => {
         <div className="flex items-center gap-2">
           <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${serverInfo.status === 'online' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-slate-100 border-slate-200 text-slate-600'}`}>
             <span className={`w-1.5 h-1.5 rounded-full ${serverInfo.status === 'online' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
-            {serverInfo.status === 'online' ? `${serverInfo.tps.toFixed(1)} TPS` : 'Offline'}
+            {serverInfo.status === 'online' ? `${serverInfo.tps.toFixed(1)} TPS` : serverInfo.status === 'unknown' ? 'Unknown' : serverInfo.status.charAt(0).toUpperCase() + serverInfo.status.slice(1)}
           </span>
 
           <Link href="/dashboard/account" aria-label="My account" title="My account" aria-current={pathname === '/dashboard/account' ? 'page' : undefined}
