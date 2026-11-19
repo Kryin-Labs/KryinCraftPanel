@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -26,20 +26,15 @@ import {
 import { useServerStore } from '@/lib/serverStore';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { MinecraftItemIcon } from '@/components/MinecraftItemIcon';
+import { InventoryPreviewDialog } from '@/components/InventoryPreviewDialog';
 import { InventoryItem, MinecraftPlayer } from '@/types';
 import { formatLastSeen, playerUuid } from '@/lib/playerRecords';
+import { itemContainerKind, itemInventoryPreview, type InventoryPreview } from '@/lib/inventoryPreview';
 import {
-  isShulkerBox,
   getMobIconUrl,
   parseMinecraftStats,
 } from '@/lib/minecraftAssets';
 import { MinecraftHeart, MinecraftDrumstick } from '@/components/MinecraftIcons';
-
-interface OpenInventory {
-  title: string;
-  slots?: (InventoryItem | null)[];
-  parent?: OpenInventory;
-}
 
 export default function PlayerDetailPage() {
   const params = useParams<{ uuid: string }>();
@@ -67,21 +62,14 @@ export default function PlayerDetailPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [retry, setRetry] = useState(0);
-  const [openInventory, setOpenInventory] = useState<OpenInventory | null>(null);
-  const inventoryDialog = useRef<HTMLDialogElement>(null);
-
-  useEffect(() => {
-    const dialog = inventoryDialog.current;
-    if (openInventory && dialog && !dialog.open) dialog.showModal();
-    else if (!openInventory && dialog?.open) dialog.close();
-  }, [openInventory]);
+  const [openInventories, setOpenInventories] = useState<InventoryPreview[]>([]);
   const activeIdentity = player ? playerUuid(player.uuid) : uuid;
   const canControl = permissions.includes('console') && players.some((entry) =>
     activeIdentity ? playerUuid(entry.uuid) === activeIdentity : entry.uuid === player?.uuid);
 
   useEffect(() => {
     setPlayer(null);
-    setOpenInventory(null);
+    setOpenInventories([]);
     setLoading(true);
     setLoadError('');
     if (!activeServerId) {
@@ -131,6 +119,9 @@ export default function PlayerDetailPage() {
     item: InventoryItem;
     x: number;
     y: number;
+    below: boolean;
+    preview?: InventoryPreview;
+
   } | null>(null);
 
   const [expandedAccordions, setExpandedAccordions] = useState<{
@@ -195,36 +186,38 @@ export default function PlayerDetailPage() {
   // Format UUID for display in uppercase
   const displayUuid = player.uuid.toUpperCase();
 
+  function openPreview(preview: InventoryPreview) {
+    setHoveredItem(null);
+    setOpenInventories((previous) => [...previous, preview]);
+  }
+
+  function showItemPreview(item: InventoryItem, target: HTMLElement, preview?: InventoryPreview) {
+    const rect = target.getBoundingClientRect();
+    const below = rect.top < (preview || itemContainerKind(item.id) ? 210 : 75);
+    const edge = Math.min(108, window.innerWidth / 2);
+    setHoveredItem({
+      item, below, preview,
+      x: Math.max(edge, Math.min(window.innerWidth - edge, rect.left + rect.width / 2)),
+      y: below ? rect.bottom + 8 : rect.top - 8,
+    });
+  }
   // Render Minecraft inventory slot
   const renderItemSlot = (item: InventoryItem | null, compact = false) => {
-    const shulker = Boolean(item && isShulkerBox(item.id));
-    const Slot = shulker ? 'button' : 'div';
+    const canPreview = Boolean(item && itemContainerKind(item.id));
+    const Slot = canPreview ? 'button' : 'div';
     return (
       <Slot
-        type={shulker ? 'button' : undefined}
-        aria-label={item && shulker ? 'Open ' + item.displayName : undefined}
+        type={canPreview ? 'button' : undefined}
+        aria-label={item && canPreview ? 'Open ' + item.displayName : undefined}
         title={item?.displayName}
-        onClick={item && shulker ? () => {
-          setHoveredItem(null);
-          const slots = Array.isArray(item.container) ? Array<InventoryItem | null>(27).fill(null) : undefined;
-          if (slots) {
-            for (const child of item.container ?? []) {
-              if (child && Number.isInteger(child.slot) && child.slot >= 0 && child.slot < slots.length) slots[child.slot] = child;
-            }
-          }
-          setOpenInventory({ title: item.displayName, slots, parent: openInventory ?? undefined });
+        onClick={item && canPreview ? () => {
+          const preview = itemInventoryPreview(item);
+          if (preview) openPreview(preview);
         } : undefined}
-        onMouseEnter={(e) => {
-          if (item) {
-            const rect = e.currentTarget.getBoundingClientRect();
-            setHoveredItem({
-              item,
-              x: rect.left + rect.width / 2,
-              y: rect.top - 8,
-            });
-          }
-        }}
+        onMouseEnter={(event) => { if (item) showItemPreview(item, event.currentTarget); }}
         onMouseLeave={() => setHoveredItem(null)}
+        onFocus={item && canPreview ? (event) => showItemPreview(item, event.currentTarget) : undefined}
+        onBlur={() => setHoveredItem(null)}
         className={(compact ? 'size-8 sm:size-10' : 'w-10 h-10 sm:w-11 sm:h-11') +
           ' relative bg-[#273242] border-2 border-t-[#18212e] border-l-[#18212e] border-b-[#3d4c60] border-r-[#3d4c60] flex items-center justify-center select-none cursor-pointer transition-colors hover:bg-[#324054]'}
       >
@@ -283,6 +276,57 @@ export default function PlayerDetailPage() {
     if (player.foodLevel >= foodVal - 1) return 'half';
     return 'empty';
   });
+
+  const enderPreview = { title: 'Ender Chest', slots: player.inventory.enderChest };
+  const enderIcon = { id: 'minecraft:ender_chest', name: 'ender_chest', displayName: enderPreview.title, count: 1, slot: 0 };
+  const hoveredPreview = hoveredItem ? hoveredItem.preview ?? itemInventoryPreview(hoveredItem.item) : null;
+  const itemTooltip = hoveredItem && (
+    <div
+      className={'fixed pointer-events-none z-50 -translate-x-1/2 rounded border-2 border-[#5000ff] bg-[#100010] px-2.5 py-1 text-white shadow-2xl space-y-0.5 ' +
+        (hoveredItem.below ? '' : '-translate-y-full')}
+      style={{ left: hoveredItem.x, top: hoveredItem.y }}
+    >
+      <div className="text-xs font-bold tracking-wide">
+        {hoveredItem.item.displayName}
+      </div>
+      {hoveredPreview && (
+        hoveredPreview.slots?.some(Boolean) ? (
+          <div className="mt-1 grid grid-cols-9 gap-0.5">
+            {hoveredPreview.slots.slice(0, 27).map((item, index) => (
+              <div key={index} className="relative grid size-5 place-items-center rounded-sm bg-white/10">
+                {item && <MinecraftItemIcon id={item.id} alt={item.displayName} className="size-4 object-contain" />}
+                {item && item.count > 1 && <span className="absolute bottom-0 right-0 text-[8px] font-bold leading-none">{item.count}</span>}
+              </div>
+            ))}
+          </div>
+        ) : <p className="text-[10px] text-slate-300">
+          {hoveredPreview.partial ? 'Contents partly recorded' : hoveredPreview.slots ? 'Empty' : 'Contents awaiting sync'}
+        </p>
+      )}
+      {hoveredPreview?.slots && hoveredPreview.slots.length > 27 && (
+        <p className="text-[10px] text-slate-300">+{hoveredPreview.slots.length - 27} more</p>
+      )}
+      {hoveredItem.item.count > 1 && (
+        <div className="text-[10px] text-slate-400 font-mono">
+          Stack: {hoveredItem.item.count}
+        </div>
+      )}
+      {hoveredItem.item.durability !== undefined && hoveredItem.item.maxDurability && (
+        <div className="text-[10px] text-emerald-400 font-mono">
+          Durability: {hoveredItem.item.durability} / {hoveredItem.item.maxDurability}
+        </div>
+      )}
+      {hoveredItem.item.enchantments && hoveredItem.item.enchantments.length > 0 && (
+        <div className="pt-0.5 border-t border-[#3d0080]/60 space-y-0.5">
+          {hoveredItem.item.enchantments.map((ench, i) => (
+            <div key={i} className="text-[10px] text-[#c084fc]">
+              {ench.name} {ench.level}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className="space-y-4 max-w-7xl mx-auto pb-12 font-sans text-slate-200">
@@ -564,10 +608,11 @@ export default function PlayerDetailPage() {
                 type="button"
                 aria-label="Open Ender Chest"
                 title="Ender Chest"
-                onClick={() => {
-                  setHoveredItem(null);
-                  setOpenInventory({ title: 'Ender Chest', slots: player.inventory.enderChest });
-                }}
+                onClick={() => openPreview(enderPreview)}
+                onMouseEnter={(event) => showItemPreview(enderIcon, event.currentTarget, enderPreview)}
+                onMouseLeave={() => setHoveredItem(null)}
+                onFocus={(event) => showItemPreview(enderIcon, event.currentTarget, enderPreview)}
+                onBlur={() => setHoveredItem(null)}
                 className="relative w-10 h-10 sm:w-11 sm:h-11 bg-[#273242] border-2 border-t-[#18212e] border-l-[#18212e] border-b-[#3d4c60] border-r-[#3d4c60] flex items-center justify-center cursor-pointer hover:bg-[#324054]"
               >
                 <MinecraftItemIcon id="minecraft:ender_chest" alt="Ender Chest" className="w-7 h-7 object-contain drop-shadow" />
@@ -930,65 +975,32 @@ export default function PlayerDetailPage() {
         </div>
       </div>
 
-      {/* ========================================================================= */}
-      {/* FLOATING MINECRAFT TOOLTIP (Purple Box Exact Styling) */}
-      {/* ========================================================================= */}
-      {hoveredItem && (
-        <div
-          className="fixed pointer-events-none z-50 transform -translate-x-1/2 -translate-y-full mb-2 bg-[#100010] border-2 border-[#5000ff] rounded px-2.5 py-1 text-white shadow-2xl space-y-0.5"
-          style={{ left: hoveredItem.x, top: hoveredItem.y }}
-        >
-          <div className="text-xs font-bold tracking-wide">
-            {hoveredItem.item.displayName}
-          </div>
-          {hoveredItem.item.count > 1 && (
-            <div className="text-[10px] text-slate-400 font-mono">
-              Stack: {hoveredItem.item.count}
-            </div>
-          )}
-          {hoveredItem.item.durability !== undefined && hoveredItem.item.maxDurability && (
-            <div className="text-[10px] text-emerald-400 font-mono">
-              Durability: {hoveredItem.item.durability} / {hoveredItem.item.maxDurability}
-            </div>
-          )}
-          {hoveredItem.item.enchantments && hoveredItem.item.enchantments.length > 0 && (
-            <div className="pt-0.5 border-t border-[#3d0080]/60 space-y-0.5">
-              {hoveredItem.item.enchantments.map((ench, i) => (
-                <div key={i} className="text-[10px] text-[#c084fc]">
-                  {ench.name} {ench.level}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      <dialog ref={inventoryDialog} onClose={() => setOpenInventory(null)} aria-labelledby="opened-inventory-title"
-        className="m-auto max-w-[calc(100%-1rem)] rounded-xl border border-[#3a475a] bg-[#1b232f] p-4 text-slate-100 shadow-2xl backdrop:bg-black/60">
-        {openInventory && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <h2 id="opened-inventory-title" className="text-sm font-bold">{openInventory.title}</h2>
-              <form method="dialog">
-                <button type="submit" aria-label="Close inventory" className="rounded-lg p-2 hover:bg-slate-700">
-                  <X aria-hidden="true" className="h-4 w-4" />
-                </button>
-              </form>
-            </div>
-            {openInventory.parent && <button type="button" className="text-xs font-semibold text-sky-300 underline"
-              onClick={() => setOpenInventory(openInventory.parent ?? null)}>Back to {openInventory.parent.title}</button>}
-            {openInventory.slots ? (
-              <div className="max-w-full overflow-x-auto">
-                <div className="grid w-max grid-cols-9 gap-1">
-                  {openInventory.slots.map((item, index) => (
-                    <React.Fragment key={index}>{renderItemSlot(item, true)}</React.Fragment>
-                  ))}
-                </div>
+      {openInventories.length === 0 && itemTooltip}
+      {openInventories.map((preview, depth) => (
+        <InventoryPreviewDialog key={depth} preview={preview} depth={depth}
+          parentTitle={openInventories[depth - 1]?.title}
+          close={() => {
+            setHoveredItem(null);
+            setOpenInventories((previous) => previous.slice(0, depth));
+          }}>
+          {preview.slots?.length ? (
+            <div className="max-h-[46dvh] max-w-full overflow-auto">
+              <div className="grid w-max grid-cols-9 gap-1">
+                {preview.slots.map((item, index) => (
+                  <React.Fragment key={index}>{renderItemSlot(item, true)}</React.Fragment>
+                ))}
               </div>
-            ) : <p className="max-w-xs text-xs text-slate-300">This snapshot does not include these contents. They will appear after the updated agent syncs.</p>}
-          </div>
-        )}
-      </dialog>
+            </div>
+          ) : (
+            <p className="max-w-xs text-xs text-slate-300">
+              {preview.partial ? 'Deeper contents were left out of this snapshot.' : preview.slots ? 'Empty' :
+                'Contents are awaiting a sync from the device.'}
+            </p>
+          )}
+          {preview.partial && Boolean(preview.slots?.length) && <p className="text-xs text-slate-300">Showing the recorded portion of this container.</p>}
+          {depth === openInventories.length - 1 && itemTooltip}
+        </InventoryPreviewDialog>
+      ))}
       {/* Teleport Modal */}
       {canControl && tpModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">

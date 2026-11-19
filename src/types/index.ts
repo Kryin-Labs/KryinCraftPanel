@@ -38,6 +38,7 @@ export interface InventoryItem {
   enchantments?: { name: string; level: number }[];
   iconUrl?: string;
   container?: InventoryItem[];
+  containerPartial?: boolean;
 }
 
 export interface PlayerInventory {

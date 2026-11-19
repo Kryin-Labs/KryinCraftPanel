@@ -477,7 +477,7 @@ class PlayerNbt:
         return self.value(10)
 
 
-def player_item(stack, slot, include_container=True):
+def player_item(stack, slot, depth=0, container_budget=None):
     item_id = stack.get("id")
     count = stack.get("count", stack.get("Count", 1))
     if not isinstance(item_id, str) or len(item_id) > 180 or not re.fullmatch(r"[a-z0-9_.-]+:[a-z0-9_./-]+", item_id):
@@ -487,26 +487,48 @@ def player_item(stack, slot, include_container=True):
     name = item_id.split(":", 1)[1]
     item = {"id": item_id, "name": name, "displayName": name.rsplit("/", 1)[-1].replace("_", " ").title(),
             "count": count, "slot": slot}
-    if include_container and item_id.startswith("minecraft:") and (name == "shulker_box" or name.endswith("_shulker_box")):
-        components = stack.get("components")
-        modern = components.get("minecraft:container") if isinstance(components, dict) else None
-        tag = stack.get("tag")
-        block_entity = tag.get("BlockEntityTag") if isinstance(tag, dict) else None
-        legacy = block_entity.get("Items") if isinstance(block_entity, dict) else None
-        entries = modern if isinstance(modern, list) else legacy
-        slots = {}
-        if isinstance(entries, list):
-            for entry in entries[:27]:
-                if not isinstance(entry, dict):
-                    continue
-                index = entry.get("slot", entry.get("Slot"))
-                child_stack = entry.get("item", entry)
-                if not isinstance(index, int) or not 0 <= index < 27 or not isinstance(child_stack, dict):
-                    continue
-                child = player_item(child_stack, index, include_container=False)
-                if child:
-                    slots[index] = child
-        item["container"] = list(slots.values())
+    bundle = item_id.startswith("minecraft:") and (name == "bundle" or name.endswith("_bundle"))
+    container = item_id.startswith("minecraft:") and (
+        name in ("chest", "trapped_chest", "barrel", "shulker_box") or name.endswith("_shulker_box")
+    )
+    if not (bundle or container):
+        return item
+
+    components = stack.get("components")
+    component = "minecraft:bundle_contents" if bundle else "minecraft:container"
+    modern = components.get(component, components.get(component.split(":", 1)[1])) if isinstance(components, dict) else None
+    tag = stack.get("tag")
+    legacy_parent = tag if bundle else tag.get("BlockEntityTag") if isinstance(tag, dict) else None
+    legacy = legacy_parent.get("Items") if isinstance(legacy_parent, dict) else None
+    entries = modern if isinstance(modern, list) else legacy
+    if not isinstance(entries, list) or not entries:
+        item["container"] = []
+        return item
+    if depth >= 3:
+        item["containerPartial"] = True
+        return item
+
+    budget = container_budget if container_budget is not None else [960]
+    limit = 64 if bundle else 27
+    slots = {}
+    partial = len(entries) > limit
+    for position, entry in enumerate(entries[:limit]):
+        if not isinstance(entry, dict):
+            continue
+        index = position if bundle else entry.get("slot", entry.get("Slot"))
+        child_stack = entry if bundle else entry.get("item", entry)
+        if not isinstance(index, int) or not 0 <= index < limit or not isinstance(child_stack, dict):
+            continue
+        if budget[0] <= 0:
+            partial = True
+            break
+        budget[0] -= 1
+        child = player_item(child_stack, index, depth + 1, budget)
+        if child:
+            slots[index] = child
+    item["container"] = list(slots.values())
+    if partial:
+        item["containerPartial"] = True
     return item
 
 @lru_cache(maxsize=512)
@@ -530,6 +552,7 @@ def read_player_save(path, modified_ns, file_size, world):
         if isinstance(name, str) and 0 < len(name.strip()) <= 64 and name.isprintable():
             result["last_known_name"] = name.strip()
     contents = saved.get("Inventory", [])
+    container_budget = [960]
     if isinstance(contents, list):
         armor = dict.fromkeys(("helmet", "chestplate", "leggings", "boots"))
         armor_slots = {103: "helmet", 102: "chestplate", 101: "leggings", 100: "boots"}
@@ -539,23 +562,23 @@ def read_player_save(path, modified_ns, file_size, world):
                 continue
             slot = stack["Slot"] & 255
             if slot < 9:
-                inventory["hotbar"][slot] = player_item(stack, slot)
+                inventory["hotbar"][slot] = player_item(stack, slot, container_budget=container_budget)
             elif slot < 36:
-                inventory["main"][slot - 9] = player_item(stack, slot)
+                inventory["main"][slot - 9] = player_item(stack, slot, container_budget=container_budget)
             elif slot in armor_slots:
-                armor[armor_slots[slot]] = player_item(stack, 36 + slot - 100)
+                armor[armor_slots[slot]] = player_item(stack, 36 + slot - 100, container_budget=container_budget)
             elif slot == 150:
-                inventory["offhand"] = player_item(stack, 40)
+                inventory["offhand"] = player_item(stack, 40, container_budget=container_budget)
         equipment = saved.get("equipment")
         if isinstance(equipment, dict):
             for name, armor_slot, slot in (("head", "helmet", 39), ("chest", "chestplate", 38),
                                            ("legs", "leggings", 37), ("feet", "boots", 36)):
                 stack = equipment.get(name)
                 if isinstance(stack, dict):
-                    armor[armor_slot] = player_item(stack, slot)
+                    armor[armor_slot] = player_item(stack, slot, container_budget=container_budget)
             offhand = equipment.get("offhand")
             if isinstance(offhand, dict):
-                inventory["offhand"] = player_item(offhand, 40)
+                inventory["offhand"] = player_item(offhand, 40, container_budget=container_budget)
         ender = saved.get("EnderItems", saved.get("ender_items", []))
         if isinstance(ender, list):
             inventory["enderChest"] = [None] * 27
@@ -566,7 +589,7 @@ def read_player_save(path, modified_ns, file_size, world):
                 if isinstance(index, int) and 0 <= index < 27:
                     stack = entry.get("item", entry)
                     if isinstance(stack, dict):
-                        inventory["enderChest"][index] = player_item(stack, index)
+                        inventory["enderChest"][index] = player_item(stack, index, container_budget=container_budget)
         result["inventory"] = inventory
 
     position = saved.get("Pos")
