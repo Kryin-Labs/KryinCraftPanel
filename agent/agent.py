@@ -705,6 +705,7 @@ def poll_and_execute_commands():
                     pass
 
                 if not fallback_success:
+                    success = False
                     output = f"Command failed: {rcon_out}"
                     api_post("/api/agent/logs", {
                         "logs": [{

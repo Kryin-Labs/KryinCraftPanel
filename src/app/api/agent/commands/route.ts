@@ -10,32 +10,16 @@ export async function GET(req: Request) {
 
     const { server, supabase } = authResult;
 
-    // Fetch pending, unexpired commands for this server
     const nowIso = new Date().toISOString();
-    const { data: commands, error: fetchError } = await supabase
-      .from('server_commands')
-      .select('*')
-      .eq('server_id', server.id)
-      .eq('status', 'PENDING')
-      .gt('expires_at', nowIso)
-      .order('created_at', { ascending: true })
-      .limit(10);
+    const { data: commands, error: fetchError } = await supabase.rpc('claim_device_commands', {
+      target_server: server.id,
+    });
 
     if (fetchError) {
-      return NextResponse.json({ error: fetchError.message }, { status: 500 });
+      return NextResponse.json({ error: 'Could not claim queued commands.' }, { status: 502 });
     }
-
-    // Mark fetched commands as FETCHED to avoid duplicate runs
-    if (commands && commands.length > 0) {
-      const ids = commands.map((c) => c.id);
-      await supabase
-        .from('server_commands')
-        .update({ status: 'FETCHED' })
-        .in('id', ids);
-    }
-
     return NextResponse.json({
-      commands: commands || [],
+      commands: (commands || []).map((command: Record<string, unknown>) => ({ ...command, status: 'PENDING' })),
       count: commands ? commands.length : 0,
       timestamp: nowIso,
     });

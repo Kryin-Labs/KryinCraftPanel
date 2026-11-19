@@ -1,111 +1,105 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import { createContext, Fragment, useContext, useEffect, useState, type ReactNode } from 'react';
+import type { User } from '@supabase/supabase-js';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { ShieldCheck, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
-interface AuthGuardProps {
-  children: React.ReactNode;
+const PanelUserContext = createContext<User | null>(null);
+
+export function usePanelUser() {
+  const user = useContext(PanelUserContext);
+  if (!user) throw new Error('Panel user is unavailable');
+  return user;
 }
 
-export function AuthGuard({ children }: AuthGuardProps) {
+export function AuthGuard({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const pathname = usePathname();
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
-  const [checkingAuth, setCheckingAuth] = useState(true);
+  const [user, setUser] = useState<User | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    let isMounted = true;
     const supabase = createClient();
+    let active = true;
+    let revision = 0;
+    let validatedUserId: string | undefined;
 
-    async function checkUserSession() {
+    function goToLogin() {
+      setUser(null);
       try {
-        const {
-          data: { user },
-          error,
-        } = await supabase.auth.getUser();
-
-        if (!isMounted) return;
-
-        if (error || !user) {
-          setIsAuthenticated(false);
-          // Purge cached server data on unauthenticated state for privacy
-          if (typeof window !== 'undefined') {
-            try {
-              localStorage.removeItem('kryin_cached_server');
-            } catch (e) {}
-          }
-          const redirectPath = `/login?next=${encodeURIComponent(pathname || '/dashboard')}`;
-          router.replace(redirectPath);
-        } else {
-          setIsAuthenticated(true);
-        }
-      } catch (err) {
-        if (!isMounted) return;
-        setIsAuthenticated(false);
-        router.replace('/login');
-      } finally {
-        if (isMounted) {
-          setCheckingAuth(false);
-        }
-      }
+        localStorage.removeItem('kryin_cached_server');
+      } catch {}
+      const { pathname, search } = window.location;
+      router.replace('/login?next=' + encodeURIComponent(pathname + search));
     }
 
-    checkUserSession();
-
-    // Listen to real-time auth events (token refresh, logout)
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      if (!isMounted) return;
-
-      if (event === 'SIGNED_OUT' || !session?.user) {
-        setIsAuthenticated(false);
-        if (typeof window !== 'undefined') {
-          try {
-            localStorage.removeItem('kryin_cached_server');
-          } catch (e) {}
+    function verifyUser() {
+      const currentRevision = ++revision;
+      void supabase.auth.getUser().then(({ data, error }) => {
+        if (!active || currentRevision !== revision) return;
+        if (data.user) {
+          validatedUserId = data.user.id;
+          setUser(data.user);
+          setFailed(false);
+        } else if (error && (error.status === undefined || error.status >= 500) && error.name !== 'AuthSessionMissingError') {
+          setFailed(true);
+        } else {
+          goToLogin();
         }
-        router.replace('/login');
-      } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        setIsAuthenticated(true);
+      }).catch(() => {
+        if (active && currentRevision === revision) setFailed(true);
+      });
+    }
+
+    let verifyTimer: ReturnType<typeof setTimeout>;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!active) return;
+      if (event === 'SIGNED_OUT') {
+        clearTimeout(verifyTimer);
+        revision++;
+        validatedUserId = undefined;
+        goToLogin();
+      } else if ((event === 'SIGNED_IN' || event === 'USER_UPDATED') && session?.user && validatedUserId) {
+        if (session.user.id !== validatedUserId) {
+          validatedUserId = undefined;
+          setUser(null);
+          verifyTimer = setTimeout(verifyUser, 0);
+        } else if (event === 'USER_UPDATED') {
+          setUser(session.user);
+        }
       }
     });
-
+    verifyUser();
     return () => {
-      isMounted = false;
+      active = false;
+      clearTimeout(verifyTimer);
       subscription.unsubscribe();
     };
-  }, [pathname, router]);
+  }, [attempt, router]);
 
-  // Loading state while checking authentication
-  if (checkingAuth || isAuthenticated === null) {
+  if (!user) {
     return (
-      <div className="min-h-screen bg-[#f8f9fd] flex items-center justify-center p-4 font-mono">
-        <div className="bg-white border border-blue-100 rounded-2xl shadow-xl shadow-blue-500/5 p-8 max-w-sm w-full text-center flex flex-col items-center">
-          <div className="w-14 h-14 rounded-2xl bg-blue-50 border border-blue-200 flex items-center justify-center mb-4 text-blue-600 shadow-inner">
-            <ShieldCheck className="w-7 h-7" />
-          </div>
-          <h2 className="text-base font-bold text-slate-900 tracking-tight mb-1">
-            Verifying Authentication
-          </h2>
-          <p className="text-xs text-slate-500 mb-6">
-            Confirming cryptographically signed operator session...
-          </p>
-          <div className="flex items-center gap-2 text-xs font-semibold text-blue-600 bg-blue-50/70 border border-blue-100 px-3.5 py-1.5 rounded-full">
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            <span>Validating Guard...</span>
-          </div>
-        </div>
+      <div className="grid min-h-screen place-items-center bg-slate-50 p-4">
+        <section className="flex w-full max-w-sm items-center gap-3 rounded-2xl border border-slate-200 bg-white p-6 text-sm font-medium text-slate-900">
+          {failed ? (
+            <>
+              <p role="alert" className="flex-1">Could not check your session.</p>
+              <button type="button" className="font-semibold text-blue-700" onClick={() => { setFailed(false); setAttempt((value) => value + 1); }}>
+                Retry
+              </button>
+            </>
+          ) : (
+            <p role="status" className="flex items-center gap-3">
+              <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin text-blue-600" />
+              Opening your panel…
+            </p>
+          )}
+        </section>
       </div>
     );
   }
 
-  // Not authenticated
-  if (!isAuthenticated) {
-    return null;
-  }
-
-  return <>{children}</>;
+  return <PanelUserContext.Provider value={user}><Fragment key={user.id}>{children}</Fragment></PanelUserContext.Provider>;
 }

@@ -9,7 +9,6 @@ import {
   HardwareMetrics,
   MetricHistoryPoint,
   MinecraftPlayer,
-  ConsoleLogEntry,
   ServerFile,
   RoleMember,
   AuditLog,
@@ -20,13 +19,14 @@ import {
   initialMetrics,
   metricHistory,
   initialPlayers,
-  initialLogs,
   initialFiles,
   sampleFileContents,
   initialMembers,
   initialAuditLogs,
   tunnelInfo,
 } from './mockData';
+import { usePathname } from 'next/navigation';
+import { usePanelUser } from '@/components/AuthGuard';
 import { createClient } from '@/lib/supabase/client';
 import type { ServerPermission } from './serverPermissions';
 import { parseMinecraftStats } from './minecraftAssets';
@@ -49,7 +49,6 @@ interface ServerStoreContextType {
   metrics: HardwareMetrics;
   history: MetricHistoryPoint[];
   players: MinecraftPlayer[];
-  logs: ConsoleLogEntry[];
   files: Record<string, ServerFile[]>;
   fileContents: Record<string, string>;
   members: RoleMember[];
@@ -64,7 +63,6 @@ interface ServerStoreContextType {
   fetchDirectory: (dir: string) => Promise<ServerFile[]>;
   fetchFileContent: (path: string) => Promise<string>;
   sendConsoleCommand: (cmd: string) => Promise<string>;
-  clearLogs: () => void;
   kickPlayer: (uuid: string, reason?: string) => Promise<void>;
   banPlayer: (uuid: string, reason?: string) => Promise<void>;
   unbanPlayer: (uuid: string) => Promise<void>;
@@ -89,6 +87,9 @@ const ServerStoreContext = createContext<ServerStoreContextType | null>(null);
 
 export function ServerStoreProvider({ children }: { children: React.ReactNode }) {
   const supabase = createClient();
+  const pathname = usePathname();
+  const includePlayers = pathname.startsWith('/dashboard/players') || pathname === '/dashboard';
+  const currentUserEmail = usePanelUser().email ?? 'operator';
 
   const [serversList, setServersList] = useState<ServerSummary[]>([]);
   const [activeServerId, setActiveServerId] = useState<string | null>(null);
@@ -100,13 +101,11 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [isDeviceConnected, setIsDeviceConnected] = useState<boolean>(false);
-  const [currentUserEmail, setCurrentUserEmail] = useState<string>('operator');
 
   const [serverInfo, setServerInfo] = useState<ServerInfo>(initialServerInfo);
   const [metrics, setMetrics] = useState<HardwareMetrics>(initialMetrics);
   const [history, setHistory] = useState<MetricHistoryPoint[]>(metricHistory);
   const [players, setPlayers] = useState<MinecraftPlayer[]>(initialPlayers);
-  const [logs, setLogs] = useState<ConsoleLogEntry[]>(initialLogs);
   const [files, setFiles] = useState<Record<string, ServerFile[]>>(initialFiles);
   const [fileContents, setFileContents] = useState<Record<string, string>>(sampleFileContents);
   const [members, setMembers] = useState<RoleMember[]>(initialMembers);
@@ -176,56 +175,54 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
     return { status: current, clearPending: false };
   };
 
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user?.email) {
-        setCurrentUserEmail(user.email);
-      }
-    });
-  }, [supabase]);
+  const loadedServerId = useRef<string | null>(null);
+  const refreshLiveRef = useRef<() => Promise<void>>(async () => {});
 
-  // Sync with live server API and database
   useEffect(() => {
-    let isMounted = true;
-
+    const controller = new AbortController();
+    let interval: ReturnType<typeof setTimeout>;
+    let inFlight: Promise<void> | undefined;
+    let nextServerId = activeServerId;
     async function syncLiveServerData() {
       try {
-        const queryParam = activeServerId ? `?serverId=${encodeURIComponent(activeServerId)}` : '';
-        const res = await fetch(`/api/server/live${queryParam}`);
+        const params = new URLSearchParams({
+          logs: '0',
+          players: includePlayers ? '1' : '0',
+        });
+        if (nextServerId) params.set('serverId', nextServerId);
+        const res = await fetch('/api/server/live?' + params, { signal: controller.signal });
         if (!res.ok) throw new Error('Could not load servers');
         const data = await res.json();
-        if (!data || !isMounted) return;
+        if (!data || controller.signal.aborted) return;
         setLoadError(false);
 
-        if (Array.isArray(data.servers)) {
-          setServersList(data.servers);
-          // If activeServerId points to a deleted or unknown server, auto-heal to data.server.id
-          if (data.server?.id && (!activeServerId || !data.servers.some((s: any) => s.id === activeServerId))) {
-            setActiveServerId(data.server.id);
-          }
-        } else if (data.server?.id && !activeServerId) {
-          setActiveServerId(data.server.id);
+        if (Array.isArray(data.servers)) setServersList(data.servers);
+        if (data.server?.id && data.server.id !== nextServerId) {
+          const selectedId: string = data.server.id;
+          nextServerId = selectedId;
+          setActiveServerId(selectedId);
         }
-
         if (!data.server) {
+          loadedServerId.current = null;
           setAccess(null);
           setServerInfo(initialServerInfo);
           setIsDeviceConnected(false);
           setIsLiveDbConnected(false);
           setMetrics(initialMetrics);
-          setLogs([]);
           setPlayers([]);
           return;
         }
 
         {
+          if (loadedServerId.current !== data.server.id) {
+            loadedServerId.current = data.server.id;
+            pendingTransitionRef.current = null;
+            setPlayers([]);
+          }
           setAccess(data.role ? { serverId: data.server.id, role: data.role, permissions: data.permissions ?? [] } : null);
           setIsLiveDbConnected(true);
           const devConn = Boolean(data.device_connected ?? data.server.device_connected);
           setIsDeviceConnected(devConn);
-          if (!activeServerId) {
-            setActiveServerId(data.server.id);
-          }
 
           const isFresh = Boolean(data.device_connected ?? devConn);
           const { status: resolvedStatus, clearPending } = computeServerStatus(
@@ -276,15 +273,6 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
             isCharging: data.metrics.isCharging,
             powerSource: data.metrics.powerSource || 'Battery',
           }));
-        }
-
-        if (Array.isArray(data.logs)) {
-          setLogs(data.logs.map((l: any) => ({
-            id: l.id,
-            timestamp: l.timestamp ? (l.timestamp.includes('T') ? new Date(l.timestamp).toLocaleTimeString() : l.timestamp) : new Date().toLocaleTimeString(),
-            level: l.level || 'INFO',
-            message: l.message,
-          })));
         }
 
         if (Array.isArray(data.players)) {
@@ -341,104 +329,42 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
           );
         }
       } catch (err) {
-        if (isMounted) setLoadError(true);
+        if (controller.signal.aborted) return;
+        setLoadError(true);
         console.warn('Live server sync warning:', err);
       } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
+        if (!controller.signal.aborted) setIsLoading(false);
       }
     }
 
-    syncLiveServerData();
-    const interval = setInterval(syncLiveServerData, 1000); // 1-second ultra-responsive polling (Pterodactyl parity)
-
-    // Refresh instantly when user returns to the tab
-    const handleVisibility = () => {
-      if (document.visibilityState === 'visible') {
-        syncLiveServerData();
-      }
-    };
-    window.addEventListener('visibilitychange', handleVisibility);
-    window.addEventListener('focus', syncLiveServerData);
-
-    // Supabase Realtime channel for millisecond log streaming and instant server status updates
-    const currentServerId = activeServerId || serverInfo.id;
-    const realtimeChannel = supabase
-      .channel(`kryin-realtime-${currentServerId || 'global'}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'server_logs',
-        },
-        (payload: any) => {
-          const newRow = payload?.new;
-          if (newRow && (!currentServerId || newRow.server_id === currentServerId)) {
-            setLogs((prev) => {
-              if (prev.some((l) => l.id === newRow.id)) return prev;
-              const formattedTs = newRow.timestamp
-                ? newRow.timestamp.includes('T')
-                  ? new Date(newRow.timestamp).toLocaleTimeString()
-                  : newRow.timestamp
-                : new Date().toLocaleTimeString();
-              return [
-                ...prev,
-                {
-                  id: newRow.id,
-                  timestamp: formattedTs,
-                  level: newRow.level || 'INFO',
-                  message: newRow.message,
-                },
-              ];
-            });
-          }
+    function refresh() {
+      clearTimeout(interval);
+      if (inFlight) return inFlight;
+      inFlight = syncLiveServerData().finally(() => {
+        inFlight = undefined;
+        if (!controller.signal.aborted && document.visibilityState === 'visible') {
+          interval = setTimeout(refresh, pendingTransitionRef.current ? 1_000 : 3_000);
         }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'servers',
-        },
-        (payload: any) => {
-          const updated = payload?.new;
-          if (updated && (!currentServerId || updated.id === currentServerId)) {
-            const hbTime = updated.last_heartbeat ? new Date(updated.last_heartbeat).getTime() : 0;
-            const isFresh = Date.now() - hbTime < 45 * 1000;
-            const { status: resolvedStatus, clearPending } = computeServerStatus(
-              updated.status,
-              isFresh,
-              pendingTransitionRef.current
-            );
-            if (clearPending) {
-              pendingTransitionRef.current = null;
-            }
-            setServerInfo((prev) => ({
-              ...prev,
-              status: resolvedStatus,
-              tps: Number(updated.tps || prev.tps),
-              onlinePlayers: updated.online_players ?? prev.onlinePlayers,
-              maxPlayers: updated.max_players ?? prev.maxPlayers,
-              uptimeSeconds: updated.uptime_seconds ?? prev.uptimeSeconds,
-              deviceConnected: isFresh || resolvedStatus === 'starting' || resolvedStatus === 'stopping' || resolvedStatus === 'online',
-            }));
-          }
-        }
-      )
-      .subscribe();
+      });
+      return inFlight;
+    }
 
+    function onVisibilityChange() {
+      if (document.visibilityState === 'visible') void refresh();
+      else clearTimeout(interval);
+    }
+
+    refreshLiveRef.current = refresh;
+    void refresh();
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('online', onVisibilityChange);
     return () => {
-      isMounted = false;
-      clearInterval(interval);
-      window.removeEventListener('visibilitychange', handleVisibility);
-      window.removeEventListener('focus', syncLiveServerData);
-      supabase.removeChannel(realtimeChannel);
+      controller.abort();
+      clearTimeout(interval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('online', onVisibilityChange);
     };
-  }, [activeServerId]);
-
+  }, [activeServerId, includePlayers]);
   const refreshServers = async () => {
     try {
       const res = await fetch('/api/servers');
@@ -508,27 +434,11 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
   const refreshStatus = async () => {
     setIsRefreshing(true);
     try {
-      const queryParam = activeServerId ? `?serverId=${encodeURIComponent(activeServerId)}` : '';
-      const res = await fetch(`/api/server/live${queryParam}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.server) {
-          const devConn = Boolean(data.device_connected ?? data.server.device_connected);
-          setIsDeviceConnected(devConn);
-          setServerInfo((prev) => ({
-            ...prev,
-            ...data.server,
-            deviceConnected: devConn,
-          }));
-        }
-      }
-    } catch (e) {
-      console.warn('Status refresh warning:', e);
+      await refreshLiveRef.current();
     } finally {
-      setTimeout(() => setIsRefreshing(false), 300);
+      setIsRefreshing(false);
     }
   };
-
   const addAudit = (action: string, target: string, details: string) => {
     const newAudit: AuditLog = {
       id: 'audit-' + Date.now(),
@@ -555,19 +465,19 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
     });
     if (response.status === 401) {
       window.location.assign('/login?next=/dashboard');
-      return;
     }
     if (!response.ok) {
       const data = await response.json().catch(() => null);
       throw new Error(data?.error || 'Could not send the command.');
     }
+    return await response.json() as { command_id: string };
   };
 
   const startServer = async () => {
     pendingTransitionRef.current = { type: 'starting', startedAt: Date.now() };
     setServerInfo((prev) => ({ ...prev, status: 'starting' }));
-    setLogs([]); // Immediately clear console for fresh running Minecraft instance
     await dispatchServerCommand('START');
+    void refreshLiveRef.current();
     addAudit('SERVER_START', serverInfo.name || 'Paper Server', 'Dispatched START signal to node agent');
   };
 
@@ -575,14 +485,15 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
     pendingTransitionRef.current = { type: 'stopping', startedAt: Date.now() };
     setServerInfo((prev) => ({ ...prev, status: 'stopping' }));
     await dispatchServerCommand('STOP');
+    void refreshLiveRef.current();
     addAudit('SERVER_STOP', serverInfo.name || 'Paper Server', 'Dispatched STOP signal to node agent');
   };
 
   const restartServer = async () => {
     pendingTransitionRef.current = { type: 'restarting', startedAt: Date.now() };
     setServerInfo((prev) => ({ ...prev, status: 'stopping' }));
-    setLogs([]); // Immediately clear console for fresh running Minecraft instance
     await dispatchServerCommand('RESTART');
+    void refreshLiveRef.current();
     addAudit('SERVER_RESTART', serverInfo.name || 'Paper Server', 'Dispatched RESTART signal to node agent');
   };
 
@@ -633,13 +544,9 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
     const trimmed = cmd.trim();
     if (!trimmed) return '';
 
-    await dispatchServerCommand('CONSOLE_CMD', { command: trimmed });
-    addAudit('CONSOLE_COMMAND', trimmed, 'Executed via operator terminal');
-    return '';
-  };
-
-  const clearLogs = () => {
-    setLogs([]);
+    const receipt = await dispatchServerCommand('CONSOLE_CMD', { command: trimmed });
+    addAudit('CONSOLE_COMMAND', trimmed, 'Queued via operator terminal');
+    return receipt.command_id;
   };
 
   const kickPlayer = async (uuid: string, reason = 'Kicked by administrator') => {
@@ -896,7 +803,6 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
         metrics,
         history,
         players,
-        logs,
         files,
         fileContents,
         members,
@@ -910,7 +816,6 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
         fetchDirectory,
         fetchFileContent,
         sendConsoleCommand,
-        clearLogs,
         kickPlayer,
         banPlayer,
         unbanPlayer,

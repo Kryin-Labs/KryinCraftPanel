@@ -16,49 +16,23 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const requestedServerId = searchParams.get('serverId');
 
-    // 1. Fetch available servers
+    const includeLogs = searchParams.get('logs') !== '0';
+    const includePlayers = searchParams.get('players') !== '0';
     const { data: allServers, error: listError } = await supabase
       .from('servers')
-      .select('id, name, status, device_name, public_tunnel_java, local_ip, last_heartbeat, created_at, owner_id')
+      .select(SAFE_SERVER_COLUMNS)
       .order('created_at', { ascending: true });
 
     if (listError) throw listError;
 
-    // Prioritize active servers with live heartbeats
     const now = Date.now();
-    let bestServerId = requestedServerId;
-    if (!bestServerId && allServers && allServers.length > 0) {
-      const liveServer = allServers.find((s) => {
-        const hb = s.last_heartbeat ? new Date(s.last_heartbeat).getTime() : 0;
-        return now - hb < 45000;
-      });
-      bestServerId = liveServer ? liveServer.id : allServers[0].id;
-    }
-
-    // 2. Fetch active server with SAFE columns only
-    let server: any = null;
-    if (bestServerId) {
-      const { data: matchedServer } = await supabase
-        .from('servers')
-        .select(SAFE_SERVER_COLUMNS)
-        .eq('id', bestServerId)
-        .single();
-      server = matchedServer;
-    }
-
-    if (!server && allServers && allServers.length > 0) {
-      const { data: fallbackServer } = await supabase
-        .from('servers')
-        .select(SAFE_SERVER_COLUMNS)
-        .eq('id', allServers[0].id)
-        .single();
-      server = fallbackServer;
-    }
-
+    const server = allServers.find((row) => row.id === requestedServerId)
+      ?? (!requestedServerId ? allServers.find((row) => now - Date.parse(row.last_heartbeat ?? '') < 45_000) : undefined)
+      ?? allServers[0];
     // Format server list with live freshness check
-    const formattedServers = (allServers || []).map((s: any) => {
+    const formattedServers = allServers.map((s) => {
       const hbTime = s.last_heartbeat ? new Date(s.last_heartbeat).getTime() : 0;
-      const isFresh = Date.now() - hbTime < 45 * 1000;
+      const isFresh = now - hbTime < 45_000;
       return {
         id: s.id,
         shared: s.owner_id !== user.id,
@@ -85,45 +59,30 @@ export async function GET(req: Request) {
       });
     }
 
-    const { data: membership } = server.owner_id === user.id
-      ? { data: null }
-      : await supabase.from('server_members').select('role').eq('server_id', server.id).eq('user_id', user.id).maybeSingle();
-    const role = server.owner_id === user.id ? 'owner' : membership?.role ?? null;
-    const { data: permissions, error: permissionError } = await supabase.rpc('server_permissions', { target_server: server.id });
-    if (permissionError) throw permissionError;
-
-    // Check if agent heartbeat is alive (within last 45 seconds)
-    const lastHeartbeatTime = server.last_heartbeat ? new Date(server.last_heartbeat).getTime() : 0;
-    const isHeartbeatFresh = Date.now() - lastHeartbeatTime < 45 * 1000;
+    const isOwner = server.owner_id === user.id;
+    const isHeartbeatFresh = now - Date.parse(server.last_heartbeat ?? '') < 45_000;
     const isOnline = isHeartbeatFresh && server.status === 'online';
-
-    // 3. Fetch latest metrics (if server is online)
-    let latestMetrics: any = null;
-    if (isOnline) {
-      const { data: metricsData } = await supabase
-        .from('server_metrics')
+    const [
+      { data: membership, error: membershipError },
+      { data: permissions, error: permissionError },
+      { data: latestMetrics },
+      { data: recentLogs },
+      { data: dbPlayers },
+    ] = await Promise.all([
+      isOwner ? { data: null, error: null } : supabase
+        .from('server_members').select('role').eq('server_id', server.id).eq('user_id', user.id).maybeSingle(),
+      supabase.rpc('server_permissions', { target_server: server.id }),
+      isOnline ? supabase.from('server_metrics')
         .select('total_ram_mb, used_ram_mb, available_ram_mb, java_heap_used_mb, java_heap_max_mb, cpu_usage_percent, cpu_temp_c, battery_percent, is_charging, power_source, created_at')
-        .eq('server_id', server.id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
-      latestMetrics = metricsData;
-    }
-
-    const { data: recentLogs } = await supabase
-      .from('server_logs')
-      .select('id, timestamp, level, message, created_at')
-      .eq('server_id', server.id)
-      .order('created_at', { ascending: false })
-      .limit(100);
-    const logs = (recentLogs || []).reverse();
-
-    // 5. Fetch players
-    const { data: dbPlayers } = await supabase
-      .from('server_players')
-      .select('uuid, username, is_online, ping_ms, health, max_health, food_level, xp_level, gamemode, is_op, is_whitelisted, is_banned, last_seen, updated_at')
-      .eq('server_id', server.id);
-
+        .eq('server_id', server.id).order('created_at', { ascending: false }).limit(1).maybeSingle() : { data: null },
+      includeLogs ? supabase.from('server_logs').select('id, timestamp, level, message, created_at')
+        .eq('server_id', server.id).order('created_at', { ascending: false }).limit(100) : { data: null },
+      includePlayers ? supabase.from('server_players')
+        .select('uuid, username, is_online, ping_ms, health, max_health, food_level, xp_level, gamemode, is_op, is_whitelisted, is_banned, last_seen, updated_at')
+        .eq('server_id', server.id) : { data: null },
+    ]);
+    if (membershipError || permissionError) throw membershipError || permissionError;
+    const role = isOwner ? 'owner' : membership?.role ?? null;
     // Parse multi-endpoint IP list from database
     let ipEndpoints: any[] = [];
     if (
@@ -208,8 +167,8 @@ export async function GET(req: Request) {
                 isCharging: false,
                 powerSource: 'Offline',
               },
-        logs,
-        players: dbPlayers || [],
+        logs: includeLogs ? recentLogs?.reverse() ?? [] : undefined,
+        players: includePlayers ? dbPlayers ?? [] : undefined,
       },
       {
         headers: {

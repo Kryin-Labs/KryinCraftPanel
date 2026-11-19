@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -33,8 +33,8 @@ const navItems = [
 
 export const MobileNav: React.FC = () => {
   const pathname = usePathname();
-  const { serverInfo, players, permissions, serverRole } = useServerStore();
-  const onlineCount = players.filter((p) => p.isOnline).length;
+  const { serverInfo, permissions, serverRole, isLoading, loadError } = useServerStore();
+  const onlineCount = serverInfo.onlinePlayers;
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const handleSignOut = async () => {

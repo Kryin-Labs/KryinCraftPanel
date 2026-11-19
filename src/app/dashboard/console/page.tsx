@@ -8,7 +8,6 @@ import {
   Search,
   Download,
   Radio,
-  Power,
   ChevronUp,
   ChevronDown,
   X,
@@ -16,6 +15,7 @@ import {
   Minimize2,
 } from 'lucide-react';
 import { useServerStore } from '@/lib/serverStore';
+import { useConsoleLogs } from '@/lib/useConsoleLogs';
 import { formatMinecraftLog } from '@/lib/xterm/formatMinecraftLog';
 import { XtermScrollDownHelperAddon } from '@/lib/xterm/XtermScrollDownHelperAddon';
 import { PowerButtons } from '@/components/server/PowerButtons';
@@ -61,14 +61,16 @@ const PTERODACTYL_THEME = {
 const TERMINAL_PRELUDE = '\u001b[1m\u001b[33mcontainer@indian-node~ \u001b[0m';
 
 export default function DedicatedConsolePage() {
-  const { logs, serverInfo, activeServerId, permissions, sendConsoleCommand, clearLogs } = useServerStore();
+  const { serverInfo, activeServerId, permissions, sendConsoleCommand, loadError } = useServerStore();
+  const { logs, loaded, subscribed, error: streamError, clear } = useConsoleLogs(activeServerId);
 
   const canIssueCommands = permissions.includes('console');
-  const [streamError, setStreamError] = useState('');
+  const [receiptId, setReceiptId] = useState('');
+  const [commandStatus, setCommandStatus] = useState('');
+  const [commandReply, setCommandReply] = useState('');
   const [terminalError, setTerminalError] = useState(false);
   const [commandInput, setCommandInput] = useState('');
   const [isSending, setIsSending] = useState(false);
-  const [activeTab, setActiveTab] = useState<'paper' | 'world' | 'players' | 'network'>('paper');
   const [isMaximized, setIsMaximized] = useState(false);
   const [isTerminalReady, setIsTerminalReady] = useState(false);
 
@@ -88,46 +90,70 @@ export default function DedicatedConsolePage() {
   const searchAddonRef = useRef<any>(null);
   const scrollHelperAddonRef = useRef<XtermScrollDownHelperAddon | null>(null);
   const prevStatusRef = useRef<string>(serverInfo.status);
-  const cursor = useRef<{ timestamp: string; id: string } | null>(null);
+  const lastRenderedLog = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!activeServerId || !isTerminalReady) return;
-    const controller = new AbortController();
-    let nextPoll: ReturnType<typeof setTimeout>;
-    async function streamLogs() {
-      try {
-        const params = new URLSearchParams({ serverId: activeServerId!, limit: '200' });
-        if (cursor.current) {
-          params.set('since', cursor.current.timestamp);
-          params.set('afterId', cursor.current.id);
-        }
-        const response = await fetch('/api/server/console?' + params, { signal: controller.signal });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Could not load the console stream.');
-        if (controller.signal.aborted) return;
+    const terminal = terminalInstanceRef.current;
+    if (!isTerminalReady || !terminal || !logs.length) return;
+    const lastIndex = logs.findIndex((log) => log.id === lastRenderedLog.current);
+    const next = logs.slice(lastIndex + 1);
+    if (!next.length) return;
+    terminal.write(next.map((log) => formatMinecraftLog(log.message)).join('\r\n') + '\r\n');
+    lastRenderedLog.current = next[next.length - 1].id;
+  }, [logs, isTerminalReady]);
 
-        const terminal = terminalInstanceRef.current;
-        for (const log of data.logs) terminal?.writeln(formatMinecraftLog(log.message));
-        if (data.latestTimestamp && data.latestId) {
-          cursor.current = { timestamp: data.latestTimestamp, id: data.latestId };
+  useEffect(() => {
+    if (!receiptId || !activeServerId) return;
+    const controller = new AbortController();
+    const params = new URLSearchParams({ serverId: activeServerId, commandId: receiptId });
+    const started = Date.now();
+    let timer: ReturnType<typeof setTimeout>;
+
+    async function checkReceipt() {
+      let interval = Date.now() - started < 5_000 ? 600 : 1_500;
+      try {
+        const response = await fetch('/api/server/command?' + params, { signal: controller.signal });
+        if (controller.signal.aborted) return;
+        if ([401, 403, 404].includes(response.status)) {
+          setCommandStatus('Command status unavailable.');
+          return;
         }
-        setStreamError('');
-      } catch (error) {
-        if (!controller.signal.aborted) {
-          setStreamError(error instanceof Error ? error.message : 'Could not load the console stream.');
+        if (!response.ok) throw new Error('Command status unavailable.');
+        const receipt: { status: string; message?: string } = await response.json();
+        if (controller.signal.aborted) return;
+        switch (receipt.status) {
+          case 'EXECUTED':
+            setCommandStatus('Command executed.');
+            setCommandReply(receipt.message ?? '');
+            return;
+          case 'FAILED':
+            setCommandStatus('Device reported that the command failed.');
+            setCommandReply(receipt.message ?? '');
+            return;
+          case 'EXPIRED':
+            setCommandStatus('Command expired before the device picked it up.');
+            return;
+          case 'FETCHED':
+            setCommandStatus('Command received by device.');
+            break;
         }
-      } finally {
-        if (!controller.signal.aborted) nextPoll = setTimeout(streamLogs, 750);
+      } catch {
+        if (controller.signal.aborted) return;
+        interval = 1_500;
       }
+      if (Date.now() - started >= 65_000) {
+        setCommandStatus('Execution could not be confirmed.');
+        return;
+      }
+      timer = setTimeout(checkReceipt, interval);
     }
 
-    void streamLogs();
+    timer = setTimeout(checkReceipt, 350);
     return () => {
       controller.abort();
-      clearTimeout(nextPoll);
+      clearTimeout(timer);
     };
-  }, [isTerminalReady, activeServerId]);
-
+  }, [receiptId, activeServerId]);
   // Smooth Pterodactyl-style status change events in terminal
   useEffect(() => {
     const term = terminalInstanceRef.current;
@@ -171,12 +197,15 @@ export default function DedicatedConsolePage() {
     async function initXterm() {
       if (!terminalElementRef.current || terminalInstanceRef.current) return;
 
-      const { Terminal } = await import('@xterm/xterm');
-      const { FitAddon } = await import('@xterm/addon-fit');
-      const { SearchAddon } = await import('@xterm/addon-search');
-      const { WebLinksAddon } = await import('@xterm/addon-web-links');
-      const { Unicode11Addon } = await import('@xterm/addon-unicode11');
-
+      const [
+        { Terminal }, { FitAddon }, { SearchAddon }, { WebLinksAddon }, { Unicode11Addon },
+      ] = await Promise.all([
+        import('@xterm/xterm'),
+        import('@xterm/addon-fit'),
+        import('@xterm/addon-search'),
+        import('@xterm/addon-web-links'),
+        import('@xterm/addon-unicode11'),
+      ]);
       if (!isMounted || !terminalElementRef.current) return;
 
       const term = new Terminal({
@@ -394,27 +423,27 @@ export default function DedicatedConsolePage() {
 
     setCommandInput('');
     setIsSending(true);
+    setReceiptId('');
+    setCommandReply('');
+    setCommandStatus('Sending command…');
     try {
-      await sendConsoleCommand(cmd);
-
-    } catch (err: any) {
-      if (terminalInstanceRef.current) {
-        terminalInstanceRef.current.writeln(
-          `\u001b[91m[Command Error: ${err?.message || err}]\u001b[0m`
-        );
-      }
+      const id = await sendConsoleCommand(cmd);
+      setReceiptId(id);
+      setCommandStatus('Command queued.');
+    } catch (error) {
+      setCommandStatus(error instanceof Error ? error.message : 'Could not send the command.');
     } finally {
       setIsSending(false);
     }
   };
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     executeCommand(commandInput);
   };
 
   const handleClearLogs = () => {
-    clearLogs();
+    clear();
+    lastRenderedLog.current = null;
     if (terminalInstanceRef.current) {
       terminalInstanceRef.current.clear();
       terminalInstanceRef.current.writeln(
@@ -447,7 +476,7 @@ export default function DedicatedConsolePage() {
               Live Minecraft Terminal
             </h1>
             <p className="text-xs text-[#1a1522]/60 mt-0.5">
-              Interactive low-latency xterm.js console for {serverInfo.name || 'Minecraft Server'} on Indian Node.
+              {serverInfo.name || 'Minecraft Server'}
             </p>
           </div>
 
@@ -512,10 +541,10 @@ export default function DedicatedConsolePage() {
           <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
             {/* Device Status */}
             <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-zinc-900 border border-white/10 text-[11px] font-bold">
-              <span className={`w-2 h-2 rounded-full ${serverInfo.deviceConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+              <span className={`w-2 h-2 rounded-full ${serverInfo.agentConnected && !loadError ? 'bg-emerald-400' : 'bg-amber-400'}`} />
               <span className="text-zinc-400">Device:</span>
-              <span className={serverInfo.deviceConnected ? 'text-emerald-400' : 'text-amber-400'}>
-                {serverInfo.deviceConnected ? 'Connected' : 'Connecting...'}
+              <span className={serverInfo.agentConnected && !loadError ? 'text-emerald-400' : 'text-amber-400'}>
+                {loadError ? 'Status unavailable' : serverInfo.agentConnected ? 'Connected' : 'Disconnected'}
               </span>
             </div>
 
@@ -540,6 +569,10 @@ export default function DedicatedConsolePage() {
                   : `Offline (0 / ${serverInfo.maxPlayers})`}
               </span>
             </div>
+
+            <span role="status" className={subscribed && loaded && !streamError ? 'text-emerald-400' : 'text-zinc-300'} title={streamError || undefined}>
+              {streamError ? 'Retrying logs…' : !loaded ? 'Loading logs…' : subscribed ? 'Live logs' : 'Polling for logs'}
+            </span>
 
             {/* TPS */}
             <div className="flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-zinc-900 border border-white/10 text-[11px] font-bold text-zinc-300">
@@ -607,18 +640,18 @@ export default function DedicatedConsolePage() {
         {/* XTerm.js Terminal Screen Container - Always visible like Pterodactyl */}
         <div 
           className="relative w-full bg-[#0d1117] flex-1" 
-          style={{ height: isMaximized ? 'calc(100vh - 160px)' : '520px', minHeight: '420px' }}
+          style={{ height: isMaximized ? 'calc(100dvh - 190px)' : 'clamp(300px, 60dvh, 520px)', minHeight: isMaximized ? '0' : '300px' }}
         >
           {streamError && <p role="alert" className="absolute right-2 top-2 z-10 rounded bg-red-950 px-2 py-1 text-xs text-red-100">{streamError}</p>}
-          {terminalError && (
+          {(!isTerminalReady || terminalError) && (
             <pre aria-label="Recent console logs" className="absolute inset-0 overflow-auto whitespace-pre-wrap p-3 text-xs text-slate-200">
-              {logs.length ? logs.map((log) => log.message).join('\n') : 'No console logs received yet.'}
+              {logs.length ? logs.map((log) => log.message).join('\n') : loaded ? 'No console logs received yet.' : 'Loading console history…'}
             </pre>
           )}
           <div
             ref={terminalElementRef}
             className="w-full h-full overflow-hidden p-2.5 select-text sm:p-3 [@media(pointer:coarse)]:touch-none"
-            style={{ height: '100%', minHeight: '100%', width: '100%' }}
+            style={{ visibility: isTerminalReady ? 'visible' : 'hidden' }}
           />
         </div>
 
@@ -630,8 +663,9 @@ export default function DedicatedConsolePage() {
             value={commandInput}
             onChange={(e) => setCommandInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Type a Minecraft server command... (Press Up/Down for history)"
-            className="flex-1 bg-[#0d1117] border border-white/10 rounded-xl px-3.5 py-2 text-xs text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-blue-500 font-mono shadow-inner transition-colors"
+            aria-label="Minecraft command"
+            placeholder="Minecraft command"
+            className="min-w-0 flex-1 bg-[#0d1117] border border-white/10 rounded-xl px-3.5 py-2 text-xs text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-blue-500 font-mono shadow-inner transition-colors"
             disabled={isSending}
             autoCorrect="off"
             autoCapitalize="none"
@@ -645,6 +679,13 @@ export default function DedicatedConsolePage() {
             <Send className="w-3.5 h-3.5" />
           </button>
         </form>}
+
+        {commandStatus && (
+          <div role="status" className="px-4 pb-3 text-xs text-zinc-300">
+            <p>{commandStatus}</p>
+            {commandReply && <p className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap break-words text-zinc-100">{commandReply}</p>}
+          </div>
+        )}
 
         {/* Quick Command Suggestions Strip */}
         {canIssueCommands && <div className="px-4 py-2 bg-[#0d1117] border-t border-white/5 flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-400">

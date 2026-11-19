@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { usePanelUser } from './AuthGuard';
 
 const UsernameContext = createContext<string | null>(null);
 
@@ -10,6 +11,10 @@ export function usePanelUsername() {
 }
 
 export function UsernameGate({ children }: { children: ReactNode }) {
+  const { id: userId, user_metadata } = usePanelUser();
+  const preferredUsername = user_metadata.preferred_username;
+  const githubUsername = user_metadata.user_name;
+  const [attempt, setAttempt] = useState(0);
   const [username, setUsername] = useState<string | null>(null);
   const [needsUsername, setNeedsUsername] = useState(false);
   const [candidate, setCandidate] = useState('');
@@ -20,18 +25,16 @@ export function UsernameGate({ children }: { children: ReactNode }) {
     let cancelled = false;
     const supabase = createClient();
     async function loadProfile() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user || cancelled) return;
-      const { data, error } = await supabase.from('profiles').select('username').eq('id', user.id).single();
+      const { data, error } = await supabase.from('profiles').select('username').eq('id', userId).single();
       if (cancelled) return;
       if (error) throw error;
       if (data.username) {
         setUsername(data.username);
         return;
       }
-      const preferred = user.user_metadata.preferred_username ?? user.user_metadata.user_name ?? '';
+      const preferred = preferredUsername ?? githubUsername ?? '';
       if (typeof preferred === 'string' && /^[a-z0-9][a-z0-9_-]{2,29}$/i.test(preferred)) {
-        if (user.user_metadata.preferred_username) {
+        if (preferredUsername) {
           const result = await supabase.rpc('claim_panel_username', { candidate: preferred });
           if (cancelled) return;
           if (!result.error) {
@@ -45,10 +48,10 @@ export function UsernameGate({ children }: { children: ReactNode }) {
       setNeedsUsername(true);
     }
     void loadProfile().catch(() => {
-      if (!cancelled) setError('Could not load your profile. Reload to try again.');
+      if (!cancelled) setError('Could not load your profile.');
     });
     return () => { cancelled = true; };
-  }, []);
+  }, [userId, preferredUsername, githubUsername, attempt]);
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -73,8 +76,9 @@ export function UsernameGate({ children }: { children: ReactNode }) {
   return (
     <div className="grid min-h-screen place-items-center bg-slate-50 p-4">
       <section className="w-full max-w-sm space-y-4 rounded-2xl border border-slate-200 bg-white p-6 text-slate-900">
-        <h1 className="text-xl font-bold">{needsUsername ? 'Choose a username' : 'Loading your profile'}</h1>
+        <h1 className="text-xl font-bold" aria-live="polite">{needsUsername ? 'Choose a username' : 'Loading your profile'}</h1>
         {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
+        {error && !needsUsername && <button type="button" className="text-sm font-semibold text-blue-700" onClick={() => { setError(''); setAttempt((value) => value + 1); }}>Retry</button>}
         {needsUsername && (
           <form onSubmit={save} className="space-y-4">
             <label className="block space-y-1 text-sm font-medium">

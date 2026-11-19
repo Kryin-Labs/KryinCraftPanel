@@ -50,6 +50,42 @@ const ALLOWED_COMMANDS = new Set([
   'RENAME_FILE',
 ]);
 
+const uuid = /^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i;
+
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const serverId = searchParams.get('serverId');
+  const commandId = searchParams.get('commandId');
+  if (!serverId || !uuid.test(serverId) || !commandId || !uuid.test(commandId)) {
+    return NextResponse.json({ error: 'Valid server and command IDs are required.' }, { status: 400 });
+  }
+
+  const supabaseUser = await createServerClient();
+  const { data: { user }, error: authError } = await supabaseUser.auth.getUser();
+  if (authError || !user) return NextResponse.json({ error: 'Sign in required.' }, { status: 401 });
+  const { data: allowed, error: accessError } = await supabaseUser.rpc('has_server_permission', {
+    target_server: serverId,
+    permission: 'console',
+  });
+  if (accessError) return NextResponse.json({ error: 'Could not check command access.' }, { status: 503 });
+  if (!allowed) return NextResponse.json({ error: 'Console access is required.' }, { status: 403 });
+
+  const { data: command, error } = await getAdminClient().from('server_commands')
+    .select('status, expires_at, message:result->>message')
+    .eq('id', commandId)
+    .eq('server_id', serverId)
+    .eq('requested_by', user.id)
+    .eq('command_type', 'CONSOLE_CMD')
+    .maybeSingle();
+  if (error) return NextResponse.json({ error: 'Could not load command status.' }, { status: 502 });
+  if (!command) return NextResponse.json({ error: 'Command not found.' }, { status: 404 });
+
+  const expired = command.status === 'PENDING' && Date.parse(command.expires_at) <= Date.now();
+  return NextResponse.json({
+    status: expired ? 'EXPIRED' : command.status,
+    message: typeof command.message === 'string' ? command.message.slice(0, 4_000) : undefined,
+  }, { headers: { 'Cache-Control': 'no-store' } });
+}
 export async function POST(req: Request) {
   try {
     // 1. Authenticate user session

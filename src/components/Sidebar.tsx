@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -22,6 +22,8 @@ import {
 import { canVisitDashboardPage } from '@/lib/serverPermissions';
 import { useServerStore } from '@/lib/serverStore';
 import { StatusBadge } from './StatusBadge';
+import { usePanelUser } from './AuthGuard';
+import { usePanelUsername } from './UsernameGate';
 import { ServerSwitcher } from './ServerSwitcher';
 import { createClient } from '@/lib/supabase/client';
 
@@ -38,19 +40,11 @@ const navItems = [
 
 export const Sidebar: React.FC = () => {
   const pathname = usePathname();
-  const { serverInfo, players, permissions, serverRole } = useServerStore();
+  const { serverInfo, permissions, serverRole } = useServerStore();
   const [copied, setCopied] = useState(false);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const { email: userEmail } = usePanelUser();
+  const username = usePanelUsername();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-
-  useEffect(() => {
-    const supabase = createClient();
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user?.email) {
-        setUserEmail(user.email);
-      }
-    });
-  }, []);
 
   const handleSignOut = async () => {
     setIsLoggingOut(true);
@@ -59,7 +53,7 @@ export const Sidebar: React.FC = () => {
     window.location.href = '/login';
   };
 
-  const onlineCount = players.filter((p) => p.isOnline).length;
+  const onlineCount = serverInfo.onlinePlayers;
   const serverIp = serverInfo.publicTunnelJava || (serverInfo.localIp ? `${serverInfo.localIp}:25565` : '');
 
   const copyIp = () => {
@@ -188,11 +182,11 @@ export const Sidebar: React.FC = () => {
         <div className="pt-2.5 border-t border-[#1a1522]/10 flex items-center justify-between gap-2 px-1">
           <div className="flex items-center gap-2 min-w-0">
             <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[11px] font-bold shrink-0">
-              {userEmail ? userEmail.charAt(0).toUpperCase() : 'U'}
+              {(username || userEmail || 'U').charAt(0).toUpperCase()}
             </div>
             <div className="min-w-0">
               <span className="text-[11px] font-bold text-[#1a1522] truncate block" title={userEmail || 'Operator'}>
-                {userEmail ? userEmail.split('@')[0] : 'Operator'}
+                {username || userEmail?.split('@')[0] || 'Operator'}
               </span>
               <span className="text-[9px] text-[#1a1522]/50 truncate block" title={userEmail || ''}>
                 {userEmail || 'Active Session'}

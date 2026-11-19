@@ -37,8 +37,8 @@ export async function GET(request: Request) {
   const ascending = Boolean(since);
   const { data, error } = await query.order('created_at', { ascending }).order('id', { ascending }).limit(limit);
   if (error) return NextResponse.json({ error: 'Could not load console logs.' }, { status: 502 });
-  const logs = since ? data : data.toReversed();
-  const last = logs.at(-1);
+  const logs = since ? data : [...data].reverse();
+  const last = logs[logs.length - 1];
   return NextResponse.json({ logs, latestTimestamp: last?.created_at ?? since, latestId: last?.id ?? afterId }, {
     headers: { 'Cache-Control': 'no-store' },
   });
