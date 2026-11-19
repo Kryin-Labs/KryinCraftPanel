@@ -115,6 +115,9 @@ export function toMinecraftPlayer(row: PlayerRecord, now = Date.now()): Minecraf
       offhand: inventory?.offhand ?? null,
       main: Array.from({ length: 27 }, (_, i) => inventory?.main?.[i] ?? null),
       hotbar: Array.from({ length: 9 }, (_, i) => inventory?.hotbar?.[i] ?? null),
+      enderChest: Array.isArray(inventory?.enderChest)
+        ? Array.from({ length: 27 }, (_, i) => inventory.enderChest?.[i] ?? null)
+        : undefined,
     },
     inventoryAvailable: Boolean(Array.isArray(inventory?.hotbar) && Array.isArray(inventory?.main)),
     inventorySavedAt: inventory?.savedAt,

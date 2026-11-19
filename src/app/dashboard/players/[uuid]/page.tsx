@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -25,14 +25,21 @@ import {
 } from 'lucide-react';
 import { useServerStore } from '@/lib/serverStore';
 import { ConfirmModal } from '@/components/ConfirmModal';
+import { MinecraftItemIcon } from '@/components/MinecraftItemIcon';
 import { InventoryItem, MinecraftPlayer } from '@/types';
 import { formatLastSeen, playerUuid } from '@/lib/playerRecords';
 import {
-  getItemIconUrl,
+  isShulkerBox,
   getMobIconUrl,
   parseMinecraftStats,
 } from '@/lib/minecraftAssets';
 import { MinecraftHeart, MinecraftDrumstick } from '@/components/MinecraftIcons';
+
+interface OpenInventory {
+  title: string;
+  slots?: (InventoryItem | null)[];
+  parent?: OpenInventory;
+}
 
 export default function PlayerDetailPage() {
   const params = useParams<{ uuid: string }>();
@@ -60,12 +67,21 @@ export default function PlayerDetailPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [retry, setRetry] = useState(0);
+  const [openInventory, setOpenInventory] = useState<OpenInventory | null>(null);
+  const inventoryDialog = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    const dialog = inventoryDialog.current;
+    if (openInventory && dialog && !dialog.open) dialog.showModal();
+    else if (!openInventory && dialog?.open) dialog.close();
+  }, [openInventory]);
   const activeIdentity = player ? playerUuid(player.uuid) : uuid;
   const canControl = permissions.includes('console') && players.some((entry) =>
     activeIdentity ? playerUuid(entry.uuid) === activeIdentity : entry.uuid === player?.uuid);
 
   useEffect(() => {
     setPlayer(null);
+    setOpenInventory(null);
     setLoading(true);
     setLoadError('');
     if (!activeServerId) {
@@ -180,9 +196,24 @@ export default function PlayerDetailPage() {
   const displayUuid = player.uuid.toUpperCase();
 
   // Render Minecraft inventory slot
-  const renderItemSlot = (item: InventoryItem | null, isHotbar = false) => {
+  const renderItemSlot = (item: InventoryItem | null, compact = false) => {
+    const shulker = Boolean(item && isShulkerBox(item.id));
+    const Slot = shulker ? 'button' : 'div';
     return (
-      <div
+      <Slot
+        type={shulker ? 'button' : undefined}
+        aria-label={item && shulker ? 'Open ' + item.displayName : undefined}
+        title={item?.displayName}
+        onClick={item && shulker ? () => {
+          setHoveredItem(null);
+          const slots = Array.isArray(item.container) ? Array<InventoryItem | null>(27).fill(null) : undefined;
+          if (slots) {
+            for (const child of item.container ?? []) {
+              if (child && Number.isInteger(child.slot) && child.slot >= 0 && child.slot < slots.length) slots[child.slot] = child;
+            }
+          }
+          setOpenInventory({ title: item.displayName, slots, parent: openInventory ?? undefined });
+        } : undefined}
         onMouseEnter={(e) => {
           if (item) {
             const rect = e.currentTarget.getBoundingClientRect();
@@ -194,24 +225,13 @@ export default function PlayerDetailPage() {
           }
         }}
         onMouseLeave={() => setHoveredItem(null)}
-        className="relative w-10 h-10 sm:w-11 sm:h-11 bg-[#273242] border-2 border-t-[#18212e] border-l-[#18212e] border-b-[#3d4c60] border-r-[#3d4c60] flex items-center justify-center select-none cursor-pointer transition-colors hover:bg-[#324054]"
+        className={(compact ? 'size-8 sm:size-10' : 'w-10 h-10 sm:w-11 sm:h-11') +
+          ' relative bg-[#273242] border-2 border-t-[#18212e] border-l-[#18212e] border-b-[#3d4c60] border-r-[#3d4c60] flex items-center justify-center select-none cursor-pointer transition-colors hover:bg-[#324054]'}
       >
         {item && (
           <>
-            <img
-              src={item.iconUrl || getItemIconUrl(item.name || item.id)}
-              alt={item.displayName}
-              className="w-7 h-7 object-contain drop-shadow pointer-events-none"
-              style={{ imageRendering: 'pixelated' }}
-              onError={(e) => {
-                // Fallback to mcasset item texture if block failed
-                const target = e.currentTarget as HTMLImageElement;
-                if (!target.src.includes('/item/')) {
-                  target.src = `https://assets.mcasset.cloud/1.21.1/assets/minecraft/textures/item/${item.id.replace('minecraft:', '')}.png`;
-                }
-              }}
-            />
-
+            <MinecraftItemIcon id={item.id || item.name} alt={item.displayName}
+              className="w-7 h-7 object-contain drop-shadow pointer-events-none" />
             {/* Stack count in authentic Minecraft text shadow */}
             {item.count > 1 && (
               <span
@@ -244,7 +264,7 @@ export default function PlayerDetailPage() {
             )}
           </>
         )}
-      </div>
+      </Slot>
     );
   };
 
@@ -513,6 +533,14 @@ export default function PlayerDetailPage() {
             <p className="text-xs text-slate-300">
               {player.inventorySavedAt ? 'Saved ' + formatLastSeen(player.inventorySavedAt) : 'Last saved inventory'}
             </p>
+          ) : player.savedProfile ? (
+            <div className="space-y-2 text-xs text-slate-300">
+              <p>This player link opens an older UUID without an inventory snapshot.</p>
+              <Link href={'/dashboard/players/' + encodeURIComponent(player.savedProfile.uuid)}
+                className="inline-flex rounded-md border border-sky-500 px-3 py-2 font-bold text-sky-200">
+                Open saved inventory for {player.savedProfile.username}
+              </Link>
+            </div>
           ) : (
             <p role="status" className="text-xs text-slate-300">
               {deviceState === 'connected' ? 'The connected device has not uploaded a saved inventory for this player yet.' :
@@ -532,19 +560,18 @@ export default function PlayerDetailPage() {
 
             {/* 2. Middle Auxiliary Column (Ender Chest + Offhand) */}
             <div className="flex flex-col justify-between h-[178px] shrink-0">
-              {/* Top: Ender chest */}
-              <div
+              <button
+                type="button"
+                aria-label="Open Ender Chest"
                 title="Ender Chest"
+                onClick={() => {
+                  setHoveredItem(null);
+                  setOpenInventory({ title: 'Ender Chest', slots: player.inventory.enderChest });
+                }}
                 className="relative w-10 h-10 sm:w-11 sm:h-11 bg-[#273242] border-2 border-t-[#18212e] border-l-[#18212e] border-b-[#3d4c60] border-r-[#3d4c60] flex items-center justify-center cursor-pointer hover:bg-[#324054]"
               >
-                <img
-                  src="https://minecraft.wiki/images/Invicon_Ender_Chest.png"
-                  alt="Ender Chest"
-                  className="w-7 h-7 object-contain drop-shadow"
-                  style={{ imageRendering: 'pixelated' }}
-                />
-              </div>
-
+                <MinecraftItemIcon id="minecraft:ender_chest" alt="Ender Chest" className="w-7 h-7 object-contain drop-shadow" />
+              </button>
               {/* Bottom: Offhand slot */}
               <div>{renderItemSlot(player.inventory.offhand)}</div>
             </div>
@@ -562,7 +589,7 @@ export default function PlayerDetailPage() {
               <div className="p-0.5 rounded border-2 border-[#38bdf8] bg-sky-500/10 shadow-[0_0_10px_rgba(56,189,248,0.25)]">
                 <div className="grid grid-cols-9 gap-1 sm:gap-1.5">
                   {player.inventory.hotbar.map((item, idx) => (
-                    <React.Fragment key={idx}>{renderItemSlot(item, true)}</React.Fragment>
+                    <React.Fragment key={idx}>{renderItemSlot(item)}</React.Fragment>
                   ))}
                 </div>
               </div>
@@ -826,12 +853,7 @@ export default function PlayerDetailPage() {
                 parsedStats.blocksBrokenList.slice(0, 8).map((item, idx) => (
                   <div key={idx} className="flex items-center justify-between text-slate-300">
                     <div className="flex items-center gap-1.5 truncate pr-2">
-                      <img
-                        src={getItemIconUrl(item.rawKey)}
-                        alt={item.name}
-                        className="w-4 h-4 object-contain shrink-0"
-                        style={{ imageRendering: 'pixelated' }}
-                      />
+                      <MinecraftItemIcon id={item.rawKey} alt={item.name} className="w-4 h-4 object-contain shrink-0" />
                       <span className="truncate">{item.name}</span>
                     </div>
                     <span className="font-mono text-slate-200 shrink-0">
@@ -860,12 +882,7 @@ export default function PlayerDetailPage() {
                 parsedStats.itemsUsedList.slice(0, 8).map((item, idx) => (
                   <div key={idx} className="flex items-center justify-between text-slate-300">
                     <div className="flex items-center gap-1.5 truncate pr-2">
-                      <img
-                        src={getItemIconUrl(item.rawKey)}
-                        alt={item.name}
-                        className="w-4 h-4 object-contain shrink-0"
-                        style={{ imageRendering: 'pixelated' }}
-                      />
+                      <MinecraftItemIcon id={item.rawKey} alt={item.name} className="w-4 h-4 object-contain shrink-0" />
                       <span className="truncate">{item.name}</span>
                     </div>
                     <span className="font-mono text-slate-200 shrink-0">
@@ -946,6 +963,32 @@ export default function PlayerDetailPage() {
         </div>
       )}
 
+      <dialog ref={inventoryDialog} onClose={() => setOpenInventory(null)} aria-labelledby="opened-inventory-title"
+        className="m-auto max-w-[calc(100%-1rem)] rounded-xl border border-[#3a475a] bg-[#1b232f] p-4 text-slate-100 shadow-2xl backdrop:bg-black/60">
+        {openInventory && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <h2 id="opened-inventory-title" className="text-sm font-bold">{openInventory.title}</h2>
+              <form method="dialog">
+                <button type="submit" aria-label="Close inventory" className="rounded-lg p-2 hover:bg-slate-700">
+                  <X aria-hidden="true" className="h-4 w-4" />
+                </button>
+              </form>
+            </div>
+            {openInventory.parent && <button type="button" className="text-xs font-semibold text-sky-300 underline"
+              onClick={() => setOpenInventory(openInventory.parent ?? null)}>Back to {openInventory.parent.title}</button>}
+            {openInventory.slots ? (
+              <div className="max-w-full overflow-x-auto">
+                <div className="grid w-max grid-cols-9 gap-1">
+                  {openInventory.slots.map((item, index) => (
+                    <React.Fragment key={index}>{renderItemSlot(item, true)}</React.Fragment>
+                  ))}
+                </div>
+              </div>
+            ) : <p className="max-w-xs text-xs text-slate-300">This snapshot does not include these contents. They will appear after the updated agent syncs.</p>}
+          </div>
+        )}
+      </dialog>
       {/* Teleport Modal */}
       {canControl && tpModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">

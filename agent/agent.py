@@ -477,7 +477,7 @@ class PlayerNbt:
         return self.value(10)
 
 
-def player_item(stack, slot):
+def player_item(stack, slot, include_container=True):
     item_id = stack.get("id")
     count = stack.get("count", stack.get("Count", 1))
     if not isinstance(item_id, str) or len(item_id) > 180 or not re.fullmatch(r"[a-z0-9_.-]+:[a-z0-9_./-]+", item_id):
@@ -485,9 +485,29 @@ def player_item(stack, slot):
     if item_id == "minecraft:air" or not isinstance(count, int) or not 0 < count <= 999:
         return None
     name = item_id.split(":", 1)[1]
-    return {"id": item_id, "name": name, "displayName": name.rsplit("/", 1)[-1].replace("_", " ").title(),
+    item = {"id": item_id, "name": name, "displayName": name.rsplit("/", 1)[-1].replace("_", " ").title(),
             "count": count, "slot": slot}
-
+    if include_container and item_id.startswith("minecraft:") and (name == "shulker_box" or name.endswith("_shulker_box")):
+        components = stack.get("components")
+        modern = components.get("minecraft:container") if isinstance(components, dict) else None
+        tag = stack.get("tag")
+        block_entity = tag.get("BlockEntityTag") if isinstance(tag, dict) else None
+        legacy = block_entity.get("Items") if isinstance(block_entity, dict) else None
+        entries = modern if isinstance(modern, list) else legacy
+        slots = {}
+        if isinstance(entries, list):
+            for entry in entries[:27]:
+                if not isinstance(entry, dict):
+                    continue
+                index = entry.get("slot", entry.get("Slot"))
+                child_stack = entry.get("item", entry)
+                if not isinstance(index, int) or not 0 <= index < 27 or not isinstance(child_stack, dict):
+                    continue
+                child = player_item(child_stack, index, include_container=False)
+                if child:
+                    slots[index] = child
+        item["container"] = list(slots.values())
+    return item
 
 @lru_cache(maxsize=512)
 def read_player_save(path, modified_ns, file_size, world):
@@ -536,6 +556,17 @@ def read_player_save(path, modified_ns, file_size, world):
             offhand = equipment.get("offhand")
             if isinstance(offhand, dict):
                 inventory["offhand"] = player_item(offhand, 40)
+        ender = saved.get("EnderItems", saved.get("ender_items", []))
+        if isinstance(ender, list):
+            inventory["enderChest"] = [None] * 27
+            for entry in ender[:27]:
+                if not isinstance(entry, dict):
+                    continue
+                index = entry.get("Slot", entry.get("slot"))
+                if isinstance(index, int) and 0 <= index < 27:
+                    stack = entry.get("item", entry)
+                    if isinstance(stack, dict):
+                        inventory["enderChest"][index] = player_item(stack, index)
         result["inventory"] = inventory
 
     position = saved.get("Pos")
@@ -599,7 +630,7 @@ def saved_players():
                                 data = read_player_save(entry.path, modified, metadata.st_size, world_name)
                             else:
                                 stats = read_player_stats(entry.path, modified, metadata.st_size)
-                                data = {"statistics": stats} if stats else {}
+                                data = {"statistics": stats, "stats_version": modified} if stats else {}
                             if data:
                                 result.setdefault(uuid, {}).update(data)
                                 newest[uuid] = modified
@@ -617,6 +648,9 @@ def saved_players():
           for name in worlds for child in ("players/stats", "stats")], ".json")
     return result
 
+
+
+uploaded_player_files = {}
 
 
 def sync_players():
@@ -703,6 +737,7 @@ def sync_players():
         reverse=True,
     )
     players_list = []
+    version_changes = {}
     seen_online = set()
     for uuid in identities:
         snapshot = snapshots.get(uuid, {})
@@ -711,6 +746,10 @@ def sync_players():
         is_online = key in live_online_names and key not in seen_online
         if is_online:
             seen_online.add(key)
+        version = (snapshot.get("last_saved"), snapshot.get("stats_version"))
+        changed = any(value is not None for value in version) and uploaded_player_files.get(uuid) != version
+        if changed:
+            version_changes[uuid] = version
         players_list.append({
             "uuid": uuid,
             "username": name,
@@ -721,11 +760,18 @@ def sync_players():
             "is_banned": uuid in banned_set,
             "ban_reason": banned_info.get(uuid),
             "last_seen": "Online now" if is_online else snapshot.get("last_saved"),
-            **{key: value for key, value in snapshot.items() if key not in ("last_saved", "last_known_name")},
+            **{key: value for key, value in snapshot.items() if changed and key not in ("last_saved", "last_known_name", "stats_version")},
         })
 
-    for offset in range(0, len(players_list), 50):
-        api_post("/api/agent/players", {"players": players_list[offset:offset + 50]})
+    # Upload actual save data once per file revision. Status and ping remain cheap periodic updates.
+    batch_size = 5 if version_changes else 50
+    for offset in range(0, len(players_list), batch_size):
+        batch = players_list[offset:offset + batch_size]
+        response = api_post("/api/agent/players", {"players": batch})
+        if isinstance(response, dict) and response.get("success"):
+            for row in batch:
+                if row["uuid"] in version_changes:
+                    uploaded_player_files[row["uuid"]] = version_changes[row["uuid"]]
 
 def launch_minecraft():
     for filename in ("run.sh", "start.sh"):

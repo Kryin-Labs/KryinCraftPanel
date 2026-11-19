@@ -33,5 +33,17 @@ export async function GET(request: Request) {
   if (error) return NextResponse.json({ error: 'Could not load player details.' }, { status: 502 });
   const player = playerDetails(data ?? []);
   if (!player) return NextResponse.json({ error: 'Player not found.' }, { status: 404 });
-  return NextResponse.json({ player: toMinecraftPlayer(player) }, { headers: { 'Cache-Control': 'no-store' } });
+  const detail = toMinecraftPlayer(player);
+  if (!detail.inventoryAvailable && /^[a-z\d_.-]{1,64}$/i.test(player.username)) {
+    const { data: namesakes } = await supabase.from('server_players')
+      .select('uuid,username,inventory,is_online,last_seen,updated_at')
+      .eq('server_id', serverId)
+      .ilike('username', player.username.replaceAll('_', '\\_'))
+      .order('updated_at', { ascending: false }).limit(25);
+    const saved = playerDetails((namesakes ?? []).filter((row) =>
+      playerUuid(row.uuid) !== playerUuid(player.uuid)
+      && Array.isArray(row.inventory?.main) && Array.isArray(row.inventory?.hotbar)));
+    if (saved) detail.savedProfile = { uuid: saved.uuid, username: saved.username };
+  }
+  return NextResponse.json({ player: detail }, { headers: { 'Cache-Control': 'no-store' } });
 }

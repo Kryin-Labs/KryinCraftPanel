@@ -1,71 +1,28 @@
-// Minecraft Asset and Helper Utility
-// Resolves authentic textures, SVG hearts, food bars, and stats parsing
+import vanilla from './vanillaItemTextures.json';
+
+const vanillaTextures = vanilla.paths as Record<string, string[]>;
+const assetBase = 'https://assets.mcasset.cloud/' + vanilla.version + '/assets/minecraft/textures/';
+
+export function itemTextureSources(rawName: string): string[] {
+  const id = rawName.toLowerCase().trim();
+  if (!/^(?:minecraft:)?[a-z0-9_]+$/.test(id)) return [];
+  const item = id.replace(/^minecraft:/, '');
+  const textures = vanillaTextures[item] ?? [];
+  const properName = item.split('_').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join('_');
+  const wiki = 'https://minecraft.wiki/images/Invicon_' + properName + '.png';
+  const direct = textures.length ? textures : ['item/' + item, 'block/' + item];
+  const urls = direct.map((path) => assetBase + path + '.png');
+  if (item === 'ender_chest' || item === 'shulker_box' || item.endsWith('_shulker_box')) urls.unshift(wiki);
+  else if (!textures.length) urls.push(wiki);
+  return urls;
+}
 
 export function getItemIconUrl(rawName: string): string {
-  if (!rawName) return '';
-  const clean = rawName.replace(/^minecraft:/, '').toLowerCase().trim();
+  return rawName ? itemTextureSources(rawName)[0] ?? '' : '';
+}
 
-  // Special block/item icon overrides
-  const specialMap: Record<string, string> = {
-    yellow_bed: 'https://minecraft.wiki/images/Invicon_Yellow_Bed.png',
-    bed: 'https://minecraft.wiki/images/Invicon_Yellow_Bed.png',
-    white_bed: 'https://minecraft.wiki/images/Invicon_White_Bed.png',
-    red_bed: 'https://minecraft.wiki/images/Invicon_Red_Bed.png',
-    ender_chest: 'https://minecraft.wiki/images/Invicon_Ender_Chest.png',
-    chest: 'https://minecraft.wiki/images/Invicon_Chest.png',
-    furnace: 'https://minecraft.wiki/images/Invicon_Furnace.png',
-    crafting_table: 'https://minecraft.wiki/images/Invicon_Crafting_Table.png',
-    totem_of_undying: 'https://assets.mcasset.cloud/1.21.1/assets/minecraft/textures/item/totem_of_undying.png',
-  };
-
-  if (specialMap[clean]) {
-    return specialMap[clean];
-  }
-
-  // Common blocks that live in textures/block/
-  const blockItems = new Set([
-    'sand',
-    'dirt',
-    'cobblestone',
-    'stone',
-    'oak_log',
-    'birch_log',
-    'spruce_log',
-    'oak_planks',
-    'deepslate',
-    'netherrack',
-    'iron_ore',
-    'coal_ore',
-    'gold_ore',
-    'diamond_ore',
-    'emerald_ore',
-    'copper_ore',
-    'lapis_ore',
-    'redstone_ore',
-    'obsidian',
-    'gravel',
-    'glass',
-    'poppy',
-    'dandelion',
-    'torch',
-    'redstone_torch',
-    'oak_sapling',
-    'white_wool',
-    'yellow_wool',
-    'red_wool',
-    'tnt',
-    'bookshelf',
-    'mossy_cobblestone',
-    'bedrock',
-    'sponge',
-  ]);
-
-  if (blockItems.has(clean)) {
-    return `https://assets.mcasset.cloud/1.21.1/assets/minecraft/textures/block/${clean}.png`;
-  }
-
-  // Default to items
-  return `https://assets.mcasset.cloud/1.21.1/assets/minecraft/textures/item/${clean}.png`;
+export function isShulkerBox(id: string) {
+  return /^(?:minecraft:)?(?:[a-z_]+_)?shulker_box$/.test(id);
 }
 
 export function getMobIconUrl(rawMob: string): string {

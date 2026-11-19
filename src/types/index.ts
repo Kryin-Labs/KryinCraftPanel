@@ -37,6 +37,7 @@ export interface InventoryItem {
   lore?: string[];
   enchantments?: { name: string; level: number }[];
   iconUrl?: string;
+  container?: InventoryItem[];
 }
 
 export interface PlayerInventory {
@@ -49,6 +50,7 @@ export interface PlayerInventory {
   offhand: InventoryItem | null;
   main: (InventoryItem | null)[]; // 27 slots (3 rows of 9)
   hotbar: (InventoryItem | null)[]; // 9 slots
+  enderChest?: (InventoryItem | null)[];
 }
 
 export interface PlayerStatistics {
@@ -100,6 +102,7 @@ export interface MinecraftPlayer {
   inventory: PlayerInventory;
   inventoryAvailable?: boolean;
   inventorySavedAt?: string;
+  savedProfile?: { uuid: string; username: string };
   statistics: PlayerStatistics;
   lastSeen?: string;
   ipAddress?: string;
