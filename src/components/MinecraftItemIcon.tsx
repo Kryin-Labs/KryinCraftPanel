@@ -14,7 +14,7 @@ function Texture({ id, alt, className }: { id: string; alt: string; className: s
       </span>
     );
   }
-  return <img src={source} alt={alt} className={className} style={{ imageRendering: 'pixelated' }}
+  return <img src={source} alt={alt} className={className} referrerPolicy="no-referrer" style={{ imageRendering: 'pixelated' }}
     onError={() => setIndex((value) => value + 1)} />;
 }
 

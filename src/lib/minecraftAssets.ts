@@ -1,22 +1,20 @@
 import vanilla from './vanillaItemTextures.json';
 
-const vanillaTextures = vanilla.paths as Record<string, string[]>;
-const assetBase = 'https://assets.mcasset.cloud/' + vanilla.version + '/assets/minecraft/textures/';
+// Filenames from minecraft-textures/dist/textures/manifest/26.3.json.
+// Load the published rendered PNGs directly from the browser.
+const renderedIcons = vanilla.images as Record<string, string | undefined>;
+const assetPath = 'minecraft-textures@' + vanilla.packageVersion + '/dist/textures/assets/';
 
 export function itemTextureSources(rawName: string): string[] {
   const id = rawName.toLowerCase().trim();
   if (!/^(?:minecraft:)?[a-z0-9_]+$/.test(id)) return [];
-  const item = id.replace(/^minecraft:/, '');
-  const textures = vanillaTextures[item] ?? [];
-  const properName = item.split('_').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join('_');
-  const wiki = 'https://minecraft.wiki/images/Invicon_' + properName + '.png';
-  const direct = textures.length ? textures : ['item/' + item, 'block/' + item];
-  const urls = direct.map((path) => assetBase + path + '.png');
-  if (item === 'ender_chest' || item === 'shulker_box' || item.endsWith('_shulker_box')) urls.unshift(wiki);
-  else if (!textures.length) urls.push(wiki);
-  return urls;
+  const filename = renderedIcons[id.replace(/^minecraft:/, '')];
+  if (!filename || !/^[a-f\d]{16}\.png$/.test(filename)) return [];
+  return [
+    'https://cdn.jsdelivr.net/npm/' + assetPath + filename,
+    'https://unpkg.com/' + assetPath + filename,
+  ];
 }
-
 export function getItemIconUrl(rawName: string): string {
   return rawName ? itemTextureSources(rawName)[0] ?? '' : '';
 }
