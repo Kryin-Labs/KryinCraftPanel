@@ -504,7 +504,12 @@ def read_player_save(path, modified_ns, file_size, world):
 
     timestamp = datetime.fromtimestamp(modified_ns / 1_000_000_000, timezone.utc).isoformat()
     result = {"last_saved": timestamp}
-    contents = saved.get("Inventory")
+    bukkit = saved.get("bukkit")
+    if isinstance(bukkit, dict):
+        name = bukkit.get("lastKnownName")
+        if isinstance(name, str) and 0 < len(name.strip()) <= 64 and name.isprintable():
+            result["last_known_name"] = name.strip()
+    contents = saved.get("Inventory", [])
     if isinstance(contents, list):
         armor = dict.fromkeys(("helmet", "chestplate", "leggings", "boots"))
         armor_slots = {103: "helmet", 102: "chestplate", 101: "leggings", 100: "boots"}
@@ -521,6 +526,16 @@ def read_player_save(path, modified_ns, file_size, world):
                 armor[armor_slots[slot]] = player_item(stack, 36 + slot - 100)
             elif slot == 150:
                 inventory["offhand"] = player_item(stack, 40)
+        equipment = saved.get("equipment")
+        if isinstance(equipment, dict):
+            for name, armor_slot, slot in (("head", "helmet", 39), ("chest", "chestplate", 38),
+                                           ("legs", "leggings", 37), ("feet", "boots", 36)):
+                stack = equipment.get(name)
+                if isinstance(stack, dict):
+                    armor[armor_slot] = player_item(stack, slot)
+            offhand = equipment.get("offhand")
+            if isinstance(offhand, dict):
+                inventory["offhand"] = player_item(offhand, 40)
         result["inventory"] = inventory
 
     position = saved.get("Pos")
@@ -544,33 +559,64 @@ def read_player_save(path, modified_ns, file_size, world):
     return result
 
 
+@lru_cache(maxsize=512)
+def read_player_stats(path, modified_ns, file_size):
+    if file_size > 1024 * 1024:
+        return {}
+    try:
+        with open(path, encoding="utf-8") as handle:
+            stats = json.load(handle)
+        return stats if isinstance(stats, dict) and isinstance(stats.get("stats"), dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
 def saved_players():
     root = os.path.realpath(SERVER_DIR)
     world = read_server_properties().get("level-name") or "world"
-    base = os.path.realpath(os.path.join(root, world))
-    if os.path.commonpath([root, base]) != root:
-        return {}
-    playerdata = os.path.join(base, "playerdata")
-    if os.path.realpath(playerdata) != playerdata:
-        return {}
     result = {}
-    try:
-        with os.scandir(playerdata) as entries:
-            for entry in entries:
-                if not entry.name.endswith(".dat") or not entry.is_file(follow_symlinks=False):
-                    continue
-                stem = entry.name[:-4]
-                try:
-                    uuid = str(UUID(stem))
-                    metadata = entry.stat(follow_symlinks=False)
-                    snapshot = read_player_save(entry.path, metadata.st_mtime_ns, metadata.st_size, world)
-                    if snapshot:
-                        result[uuid] = snapshot
-                except (OSError, ValueError):
-                    continue
-    except OSError:
-        pass
+    visited = set()
+
+    def scan(folders, suffix):
+        newest = {}
+        for world_name, relative in folders:
+            folder = os.path.realpath(os.path.join(root, relative))
+            if folder in visited or os.path.commonpath([root, folder]) != root:
+                continue
+            visited.add(folder)
+            try:
+                with os.scandir(folder) as entries:
+                    for entry in entries:
+                        if not entry.name.endswith(suffix) or not entry.is_file(follow_symlinks=False):
+                            continue
+                        try:
+                            uuid = str(UUID(entry.name[:-len(suffix)]))
+                            metadata = entry.stat(follow_symlinks=False)
+                            modified = metadata.st_mtime_ns
+                            if modified <= newest.get(uuid, -1):
+                                continue
+                            if suffix == ".dat":
+                                data = read_player_save(entry.path, modified, metadata.st_size, world_name)
+                            else:
+                                stats = read_player_stats(entry.path, modified, metadata.st_size)
+                                data = {"statistics": stats} if stats else {}
+                            if data:
+                                result.setdefault(uuid, {}).update(data)
+                                newest[uuid] = modified
+                        except (OSError, ValueError):
+                            continue
+            except OSError:
+                continue
+
+    # Minecraft 26.1 moved playerdata and stats beneath players/.
+    # Keep the configured level, the default world and the older standalone layouts.
+    worlds = [world, "world", ""]
+    scan([(name or world, os.path.join(name, child))
+          for name in worlds for child in ("players/data", "playerdata")], ".dat")
+    scan([(name or world, os.path.join(name, child))
+          for name in worlds for child in ("players/stats", "stats")], ".json")
     return result
+
 
 
 def sync_players():
@@ -659,8 +705,8 @@ def sync_players():
     players_list = []
     seen_online = set()
     for uuid in identities:
-        name = known_players.get(uuid, uuid[:8])
         snapshot = snapshots.get(uuid, {})
+        name = known_players.get(uuid) or snapshot.get("last_known_name") or uuid[:8]
         key = name.lower()
         is_online = key in live_online_names and key not in seen_online
         if is_online:
@@ -675,7 +721,7 @@ def sync_players():
             "is_banned": uuid in banned_set,
             "ban_reason": banned_info.get(uuid),
             "last_seen": "Online now" if is_online else snapshot.get("last_saved"),
-            **{key: value for key, value in snapshot.items() if key != "last_saved"},
+            **{key: value for key, value in snapshot.items() if key not in ("last_saved", "last_known_name")},
         })
 
     for offset in range(0, len(players_list), 50):

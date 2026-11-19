@@ -486,13 +486,15 @@ public class KryinAgent {
 
             // 2. Discover stats directories and playerdata directories
             List<Path> statsDirs = new ArrayList<>();
-            for (String sub : Arrays.asList(levelName + "/stats", "world/stats", "stats")) {
+            for (String sub : Arrays.asList(levelName + "/players/stats", levelName + "/stats",
+                    "world/players/stats", "world/stats", "players/stats", "stats")) {
                 Path p = serverPath.resolve(sub);
                 if (Files.exists(p) && Files.isDirectory(p) && !statsDirs.contains(p)) statsDirs.add(p);
             }
 
             List<Path> playerdataDirs = new ArrayList<>();
-            for (String sub : Arrays.asList(levelName + "/playerdata", "world/playerdata", "playerdata")) {
+            for (String sub : Arrays.asList(levelName + "/players/data", levelName + "/playerdata",
+                    "world/players/data", "world/playerdata", "players/data", "playerdata")) {
                 Path p = serverPath.resolve(sub);
                 if (Files.exists(p) && Files.isDirectory(p) && !playerdataDirs.contains(p)) playerdataDirs.add(p);
             }
@@ -924,10 +926,25 @@ public class KryinAgent {
                             if (slot < 0) slot = slot & 0xFF; // Unsigned (e.g. -106 => 150 offhand)
                             Map<String, Object> it = new HashMap<>();
                             it.put("id", itemMap.get("id"));
-                            it.put("count", itemMap.get("Count") != null ? itemMap.get("Count") : 1);
+                            Object count = itemMap.get("count");
+                            it.put("count", count != null ? count : itemMap.get("Count") != null ? itemMap.get("Count") : 1);
                             it.put("slot", slot);
                             slotMap.put(slot, it);
                         }
+                    }
+                }
+            }
+
+            if (nbt.get("equipment") instanceof Map<?, ?> equipment) {
+                String[] keys = {"head", "chest", "legs", "feet", "offhand"};
+                int[] slots = {103, 102, 101, 100, 150};
+                for (int i = 0; i < keys.length; i++) {
+                    if (equipment.get(keys[i]) instanceof Map<?, ?> stack && stack.get("id") != null) {
+                        Map<String, Object> item = new HashMap<>();
+                        item.put("id", stack.get("id"));
+                        item.put("count", stack.get("count") != null ? stack.get("count") : 1);
+                        item.put("slot", slots[i]);
+                        slotMap.put(slots[i], item);
                     }
                 }
             }

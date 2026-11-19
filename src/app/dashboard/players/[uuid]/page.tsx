@@ -2,7 +2,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-
 import Link from 'next/link';
 import {
   ArrowLeft,
@@ -43,6 +42,7 @@ export default function PlayerDetailPage() {
   const {
     activeServerId,
     permissions,
+    deviceState,
     players,
     toggleOp,
     toggleWhitelist,
@@ -60,14 +60,12 @@ export default function PlayerDetailPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [retry, setRetry] = useState(0);
-  const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const activeIdentity = player ? playerUuid(player.uuid) : uuid;
   const canControl = permissions.includes('console') && players.some((entry) =>
     activeIdentity ? playerUuid(entry.uuid) === activeIdentity : entry.uuid === player?.uuid);
 
   useEffect(() => {
     setPlayer(null);
-    setSelectedItem(null);
     setLoading(true);
     setLoadError('');
     if (!activeServerId) {
@@ -154,7 +152,7 @@ export default function PlayerDetailPage() {
     return (
       <div className="p-16 text-center space-y-3">
         <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
-        <p className="text-xs text-slate-400">Loading player inventory…</p>
+        <p className="text-xs text-slate-400">Loading player statistics...</p>
       </div>
     );
   }
@@ -162,7 +160,7 @@ export default function PlayerDetailPage() {
   if (!player) {
     return (
       <div className="p-16 text-center space-y-4 bg-[#111722] border border-slate-800 rounded-2xl max-w-lg mx-auto">
-        <h2 className="text-lg font-bold text-white">Player inventory unavailable</h2>
+        <h2 className="text-lg font-bold text-white">Player Not Found</h2>
         <p className="text-xs text-slate-400">
           {loadError || 'The selected server does not have a record for this player.'}
         </p>
@@ -182,13 +180,9 @@ export default function PlayerDetailPage() {
   const displayUuid = player.uuid.toUpperCase();
 
   // Render Minecraft inventory slot
-  const renderItemSlot = (item: InventoryItem | null) => {
+  const renderItemSlot = (item: InventoryItem | null, isHotbar = false) => {
     return (
-      <button
-        type="button"
-        disabled={!item}
-        aria-label={item ? item.displayName + ', ' + item.count : 'Empty inventory slot'}
-        onClick={() => setSelectedItem(item)}
+      <div
         onMouseEnter={(e) => {
           if (item) {
             const rect = e.currentTarget.getBoundingClientRect();
@@ -200,14 +194,14 @@ export default function PlayerDetailPage() {
           }
         }}
         onMouseLeave={() => setHoveredItem(null)}
-        className="relative aspect-square w-[clamp(1.45rem,7vw,2.75rem)] bg-[#273242] border-2 border-t-[#18212e] border-l-[#18212e] border-b-[#3d4c60] border-r-[#3d4c60] flex items-center justify-center select-none cursor-pointer transition-colors hover:bg-[#324054]"
+        className="relative w-10 h-10 sm:w-11 sm:h-11 bg-[#273242] border-2 border-t-[#18212e] border-l-[#18212e] border-b-[#3d4c60] border-r-[#3d4c60] flex items-center justify-center select-none cursor-pointer transition-colors hover:bg-[#324054]"
       >
         {item && (
           <>
             <img
               src={item.iconUrl || getItemIconUrl(item.name || item.id)}
               alt={item.displayName}
-              className="h-[72%] w-[72%] object-contain drop-shadow pointer-events-none"
+              className="w-7 h-7 object-contain drop-shadow pointer-events-none"
               style={{ imageRendering: 'pixelated' }}
               onError={(e) => {
                 // Fallback to mcasset item texture if block failed
@@ -250,7 +244,7 @@ export default function PlayerDetailPage() {
             )}
           </>
         )}
-      </button>
+      </div>
     );
   };
 
@@ -516,31 +510,67 @@ export default function PlayerDetailPage() {
           </h2>
 
           {player.inventoryAvailable ? (
-            <>
-              <p className="text-xs text-slate-300">
-                {player.inventorySavedAt ? 'Saved ' + formatLastSeen(player.inventorySavedAt) : 'Last saved inventory'}
-              </p>
-              <div className="flex min-w-0 flex-col items-center gap-3 rounded-lg border border-slate-950 bg-[#1b232f] p-2 sm:flex-row sm:items-start sm:justify-center sm:p-4">
-                <div className="flex shrink-0 flex-wrap justify-center gap-1.5 sm:flex-col">
-                  {renderItemSlot(player.inventory.armor.helmet)}
-                  {renderItemSlot(player.inventory.armor.chestplate)}
-                  {renderItemSlot(player.inventory.armor.leggings)}
-                  {renderItemSlot(player.inventory.armor.boots)}
-                  {renderItemSlot(player.inventory.offhand)}
-                </div>
-                <div className="min-w-0 max-w-full space-y-2 overflow-x-auto">
-                  <div className="grid w-max grid-cols-9 gap-0.5 sm:gap-1">
-                    {player.inventory.main.map((item, idx) => <React.Fragment key={idx}>{renderItemSlot(item)}</React.Fragment>)}
-                  </div>
-                  <div className="grid w-max grid-cols-9 gap-0.5 border-t border-sky-500 pt-2 sm:gap-1">
-                    {player.inventory.hotbar.map((item, idx) => <React.Fragment key={idx}>{renderItemSlot(item)}</React.Fragment>)}
-                  </div>
+            <p className="text-xs text-slate-300">
+              {player.inventorySavedAt ? 'Saved ' + formatLastSeen(player.inventorySavedAt) : 'Last saved inventory'}
+            </p>
+          ) : (
+            <p role="status" className="text-xs text-slate-300">
+              {deviceState === 'connected' ? 'The connected device has not uploaded a saved inventory for this player yet.' :
+                'The device needs to reconnect before it can send a saved inventory.'}
+            </p>
+          )}
+          {/* Minecraft Inventory Frame Layout */}
+          {player.inventoryAvailable && (
+          <div className="bg-[#1b232f] border-2 border-[#161d27] rounded-lg p-3 sm:p-4 flex flex-wrap md:flex-nowrap items-start justify-center gap-3 sm:gap-4 overflow-x-auto">
+            {/* 1. Armor Slots (Vertical 4 slots) */}
+            <div className="flex flex-col gap-1.5 shrink-0">
+              {renderItemSlot(player.inventory.armor.helmet)}
+              {renderItemSlot(player.inventory.armor.chestplate)}
+              {renderItemSlot(player.inventory.armor.leggings)}
+              {renderItemSlot(player.inventory.armor.boots)}
+            </div>
+
+            {/* 2. Middle Auxiliary Column (Ender Chest + Offhand) */}
+            <div className="flex flex-col justify-between h-[178px] shrink-0">
+              {/* Top: Ender chest */}
+              <div
+                title="Ender Chest"
+                className="relative w-10 h-10 sm:w-11 sm:h-11 bg-[#273242] border-2 border-t-[#18212e] border-l-[#18212e] border-b-[#3d4c60] border-r-[#3d4c60] flex items-center justify-center cursor-pointer hover:bg-[#324054]"
+              >
+                <img
+                  src="https://minecraft.wiki/images/Invicon_Ender_Chest.png"
+                  alt="Ender Chest"
+                  className="w-7 h-7 object-contain drop-shadow"
+                  style={{ imageRendering: 'pixelated' }}
+                />
+              </div>
+
+              {/* Bottom: Offhand slot */}
+              <div>{renderItemSlot(player.inventory.offhand)}</div>
+            </div>
+
+            {/* 3. Main 3x9 Inventory + Hotbar (1x9) */}
+            <div className="space-y-3 shrink-0">
+              {/* 3x9 Main Inventory Grid */}
+              <div className="grid grid-cols-9 gap-1 sm:gap-1.5">
+                {player.inventory.main.map((item, idx) => (
+                  <React.Fragment key={idx}>{renderItemSlot(item)}</React.Fragment>
+                ))}
+              </div>
+
+              {/* 1x9 Hotbar Grid (Prominent Blue Border Selection) */}
+              <div className="p-0.5 rounded border-2 border-[#38bdf8] bg-sky-500/10 shadow-[0_0_10px_rgba(56,189,248,0.25)]">
+                <div className="grid grid-cols-9 gap-1 sm:gap-1.5">
+                  {player.inventory.hotbar.map((item, idx) => (
+                    <React.Fragment key={idx}>{renderItemSlot(item, true)}</React.Fragment>
+                  ))}
                 </div>
               </div>
-              {selectedItem && <p role="status" className="text-xs font-semibold text-white">{selectedItem.displayName} · {selectedItem.count}</p>}
-            </>
-          ) : <p className="text-sm text-slate-300">Waiting for the device to sync a saved inventory for this player.</p>}
+            </div>
+          </div>
+          )}
         </div>
+
         {/* Information Card (5 Cols) */}
         <div className="lg:col-span-5 bg-[#212c3b] border border-[#2d3a4d] rounded-xl p-4 space-y-3 shadow-md">
           <h2 className="text-xs font-bold text-white uppercase tracking-wider">
