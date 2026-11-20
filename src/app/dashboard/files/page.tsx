@@ -18,11 +18,21 @@ import {
   RefreshCw,
   Loader2,
   FileText,
-  Settings2,
+  UploadCloud,
 } from 'lucide-react';
 import { useServerStore } from '@/lib/serverStore';
 import { ServerFile } from '@/types';
 import { ConfigBackups } from '@/components/ConfigBackups';
+import { UploadQueue, useUploadQueue } from '@/components/FileUploadQueue';
+import { maxTextFileBytes, validFileName } from '@/lib/fileManagerLimits';
+
+const message = (error: unknown) => error instanceof Error ? error.message : 'The file operation failed.';
+const hasDraggedFiles = (event: DragEvent | React.DragEvent) => event.dataTransfer?.types.includes('Files');
+
+function canEdit(file: ServerFile) {
+  return !['jar', 'zip', 'gz', 'tar', '7z', 'rar', 'mca', 'dat', 'png', 'jpg', 'jpeg', 'webp', 'gif', 'pdf']
+    .includes(file.extension || '') && file.sizeBytes <= maxTextFileBytes;
+}
 
 export default function FileManagerPage() {
   const { activeServerId, permissions, isLoading } = useServerStore();
@@ -32,25 +42,26 @@ export default function FileManagerPage() {
     return <p className="text-sm">File access is required to manage server files.</p>;
   }
 
-  return <FileManager key={activeServerId} />;
+  if (!activeServerId) return <p className="text-sm">Select a server to manage its files.</p>;
+  return <FileManager key={activeServerId} serverId={activeServerId} />;
 }
 
-function FileManager() {
+function FileManager({ serverId }: { serverId: string }) {
   const {
-    files,
+
     fetchDirectory,
     fetchFileContent,
     saveFileContent,
     deleteFile,
     createFolder,
     createFile,
-    serverInfo,
+
     activeServerId,
     serverRole,
   } = useServerStore();
 
   const [currentPath, setCurrentPath] = useState('/');
-  const [editingFile, setEditingFile] = useState<{ path: string; name: string; content: string } | null>(null);
+  const [editingFile, setEditingFile] = useState<{ path: string; name: string; content: string; original: string } | null>(null);
   const [isNewFolderOpen, setIsNewFolderOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [isNewFileOpen, setIsNewFileOpen] = useState(false);
@@ -65,38 +76,83 @@ function FileManager() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const lineNumbersRef = useRef<HTMLDivElement>(null);
 
-  const currentFiles = files[currentPath] || [];
+  const [listing, setListing] = useState<{ path: string; entries: ServerFile[] }>();
+  const [directoryError, setDirectoryError] = useState<string | null>(null);
+  const [editorError, setEditorError] = useState<string | null>(null);
+  const [isChangingFiles, setIsChangingFiles] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragDepth = useRef(0);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const requestNumber = useRef(0);
+  const pathRef = useRef(currentPath);
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const currentFiles = listing?.path === currentPath ? listing.entries : [];
 
-  const showNotice = (msg: string) => {
-    setNotice(msg);
-    setTimeout(() => setNotice(null), 3500);
-  };
+  function showNotice(text: string) {
+    setNotice(text);
+    clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => setNotice(null), 3500);
+  }
 
-  // Sync directory from Indian Node whenever path changes
-  useEffect(() => {
-    let isMounted = true;
-    async function loadDir() {
-      setIsLoadingDir(true);
-      try {
-        await fetchDirectory(currentPath);
-      } finally {
-        if (isMounted) setIsLoadingDir(false);
-      }
+  async function loadDirectory(path: string) {
+    const request = ++requestNumber.current;
+    setIsLoadingDir(true);
+    setDirectoryError(null);
+    try {
+      const entries = await fetchDirectory(path);
+      if (request === requestNumber.current) setListing({ path, entries });
+    } catch (error) {
+      if (request === requestNumber.current) setDirectoryError(message(error));
+    } finally {
+      if (request === requestNumber.current) setIsLoadingDir(false);
     }
-    loadDir();
-    return () => {
-      isMounted = false;
-    };
+  }
+
+  const refreshAfterUpload = (path: string) => {
+    if (path === pathRef.current) void loadDirectory(path);
+  };
+  const queue = useUploadQueue(serverId, refreshAfterUpload);
+
+  useEffect(() => {
+    pathRef.current = currentPath;
+    void loadDirectory(currentPath);
+    return () => { requestNumber.current++; };
   }, [currentPath]);
 
-  // Handle Ctrl+S keyboard shortcut inside editor
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-        if (editingFile && !isSaving) {
-          e.preventDefault();
-          handleSaveEditor();
-        }
+    const preventBrowserDrop = (event: DragEvent) => {
+      if (hasDraggedFiles(event)) event.preventDefault();
+    };
+    const reset = () => {
+      dragDepth.current = 0;
+      setIsDragging(false);
+    };
+    window.addEventListener('dragover', preventBrowserDrop);
+    window.addEventListener('drop', preventBrowserDrop);
+    window.addEventListener('drop', reset);
+    window.addEventListener('dragend', reset);
+    return () => {
+      window.removeEventListener('dragover', preventBrowserDrop);
+      window.removeEventListener('drop', preventBrowserDrop);
+      window.removeEventListener('drop', reset);
+      window.removeEventListener('dragend', reset);
+      clearTimeout(noticeTimer.current);
+    };
+  }, []);
+
+  function closeEditor() {
+    if (!editingFile || isSaving) return;
+    if (editingFile.content !== editingFile.original && !window.confirm('Discard unsaved changes?')) return;
+    setEditingFile(null);
+  }
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!editingFile) return;
+      if (event.key === 'Escape') closeEditor();
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        void handleSaveEditor();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -113,66 +169,85 @@ function FileManager() {
   const handleOpenItem = async (item: ServerFile) => {
     if (item.isDirectory) {
       setCurrentPath(item.path);
-    } else {
-      setIsLoadingFile(item.path);
-      try {
-        const content = await fetchFileContent(item.path);
-        setEditingFile({
-          path: item.path,
-          name: item.name,
-          content: content || `# Content of ${item.name}\n`,
-        });
-      } finally {
-        setIsLoadingFile(null);
-      }
+      return;
+    }
+    if (isLoadingFile) return;
+    if (!canEdit(item)) {
+      showNotice('The editor supports UTF-8 text files up to 1 MB.');
+      return;
+    }
+    setIsLoadingFile(item.path);
+    setEditorError(null);
+    try {
+      const content = await fetchFileContent(item.path);
+      setEditingFile({ path: item.path, name: item.name, content, original: content });
+    } catch (error) {
+      showNotice(message(error));
+    } finally {
+      setIsLoadingFile(null);
     }
   };
 
   const handleSaveEditor = async () => {
-    if (!editingFile || isSaving) return;
+    if (!editingFile || isSaving || editingFile.content === editingFile.original) return;
     setIsSaving(true);
+    setEditorError(null);
     try {
       await saveFileContent(editingFile.path, editingFile.content);
-      showNotice(`Successfully saved ${editingFile.name} to Indian Node.`);
-    } catch (err: any) {
-      showNotice(`Failed to save ${editingFile.name}: ${err?.message || 'Error'}`);
+      setEditingFile({ ...editingFile, original: editingFile.content });
+      showNotice(`Saved ${editingFile.name}.`);
+      refreshAfterUpload(editingFile.path.slice(0, editingFile.path.lastIndexOf('/')) || '/');
+    } catch (error) {
+      setEditorError(message(error));
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleCreateFolder = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newFolderName.trim()) return;
-    await createFolder(currentPath, newFolderName.trim());
-    showNotice(`Created folder "${newFolderName.trim()}".`);
-    setNewFolderName('');
-    setIsNewFolderOpen(false);
-  };
-
-  const handleCreateFile = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const fname = newFileName.trim();
-    if (!fname) return;
-    await createFile(currentPath, fname, '');
-    showNotice(`Created file "${fname}".`);
-    setNewFileName('');
-    setIsNewFileOpen(false);
-    const cleanParent = currentPath === '/' ? '' : currentPath;
-    const fullPath = `${cleanParent}/${fname}`;
-    setEditingFile({
-      path: fullPath,
-      name: fname,
-      content: '',
-    });
+  const handleCreate = async (event: React.FormEvent, kind: 'file' | 'folder') => {
+    event.preventDefault();
+    if (isChangingFiles) return;
+    const name = (kind === 'file' ? newFileName : newFolderName).trim();
+    if (!validFileName(name)) {
+      showNotice('Enter a valid file or folder name.');
+      return;
+    }
+    setIsChangingFiles(true);
+    try {
+      if (kind === 'folder') {
+        await createFolder(currentPath, name);
+        setNewFolderName('');
+        setIsNewFolderOpen(false);
+      } else {
+        await createFile(currentPath, name);
+        setNewFileName('');
+        setIsNewFileOpen(false);
+        setEditorError(null);
+        setEditingFile({ path: currentPath.replace(/\/$/, '') + '/' + name, name, content: '', original: '' });
+      }
+      showNotice(`Created ${name}.`);
+      refreshAfterUpload(currentPath);
+    } catch (error) {
+      showNotice(message(error));
+    } finally {
+      setIsChangingFiles(false);
+    }
   };
 
   const handleConfirmDelete = async () => {
-    if (!deletingPath) return;
-    const p = deletingPath;
-    setDeletingPath(null);
-    await deleteFile(p);
-    showNotice(`Deleted ${p.split('/').pop()}.`);
+    if (!deletingPath || isChangingFiles) return;
+    setIsChangingFiles(true);
+    try {
+      await deleteFile(deletingPath);
+      showNotice(`Deleted ${deletingPath.split('/').pop()}.`);
+      setDeletingPath(null);
+      refreshAfterUpload(deletingPath.slice(0, deletingPath.lastIndexOf('/')) || '/');
+    } catch (error) {
+      setDeletingPath(null);
+      showNotice(message(error));
+    } finally {
+      setIsChangingFiles(false);
+    }
   };
 
   const handleNavigateUp = () => {
@@ -180,16 +255,6 @@ function FileManager() {
     const parts = currentPath.split('/').filter(Boolean);
     parts.pop();
     setCurrentPath(parts.length === 0 ? '/' : '/' + parts.join('/'));
-  };
-
-  const handleRefreshDirectory = async () => {
-    setIsLoadingDir(true);
-    try {
-      await fetchDirectory(currentPath);
-      showNotice(`Synchronized directory with Indian Node.`);
-    } finally {
-      setIsLoadingDir(false);
-    }
   };
 
   const formatFileSize = (bytes: number) => {
@@ -223,10 +288,56 @@ function FileManager() {
   const fileExt = editingFile ? editingFile.name.split('.').pop()?.toUpperCase() || 'TXT' : '';
 
   return (
-    <div className="space-y-6 font-mono text-[#1a1522]">
+    <div
+      className="space-y-6 font-mono text-[#1a1522]"
+      onDragEnter={(event) => {
+        if (!hasDraggedFiles(event) || editingFile || deletingPath) return;
+        event.preventDefault();
+        dragDepth.current++;
+        setIsDragging(true);
+      }}
+      onDragOver={(event) => {
+        if (!hasDraggedFiles(event)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = editingFile || deletingPath ? 'none' : 'copy';
+      }}
+      onDragLeave={() => {
+        dragDepth.current = Math.max(0, dragDepth.current - 1);
+        if (dragDepth.current === 0) setIsDragging(false);
+      }}
+      onDrop={(event) => {
+        if (!hasDraggedFiles(event)) return;
+        event.preventDefault();
+        dragDepth.current = 0;
+        setIsDragging(false);
+        if (editingFile || deletingPath) return;
+        const items = Array.from(event.dataTransfer.items);
+        const containsFolder = items.some((item) => item.webkitGetAsEntry?.()?.isDirectory);
+        if (!containsFolder) {
+          queue.enqueue(Array.from(event.dataTransfer.files), currentPath);
+          return;
+        }
+        const files = items.flatMap((item) => {
+          if (item.webkitGetAsEntry?.()?.isDirectory) return [];
+          const file = item.getAsFile();
+          return file ? [file] : [];
+        });
+        queue.enqueue(files, currentPath);
+        showNotice('Folders were skipped. Select the files inside to upload them.');
+      }}
+    >
+      {isDragging && (
+        <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-40 !m-0 flex items-center justify-center bg-blue-950/65 p-5 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-3xl border-2 border-dashed border-blue-300 bg-blue-950/90 px-6 py-12 text-center text-white shadow-2xl">
+            <UploadCloud className="mx-auto mb-5 size-12 motion-safe:animate-bounce text-blue-300" />
+            <p className="text-xl font-bold">Release to queue your files</p>
+            <p className="mt-2 break-all text-sm text-blue-100">Destination {currentPath}</p>
+          </div>
+        </div>
+      )}
       {/* Toast Notice */}
       {notice && (
-        <div className="p-3.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs font-semibold flex items-center justify-between shadow-xs animate-fade-in">
+        <div role="status" className="p-3.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs font-semibold flex items-center justify-between shadow-xs animate-fade-in">
           <span className="flex items-center gap-2">
             <Check className="w-4 h-4 text-blue-600 flex-shrink-0" />
             {notice}
@@ -251,16 +362,35 @@ function FileManager() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Refresh Button */}
           <button
-            onClick={handleRefreshDirectory}
+            onClick={() => void loadDirectory(currentPath)}
             disabled={isLoadingDir}
             className="p-2.5 rounded-xl bg-[#f8f9fd] hover:bg-slate-100 text-[#1a1522]/70 hover:text-[#1a1522] border border-[#1a1522]/15 text-xs transition-colors"
             title="Reload directory from node"
           >
             <RefreshCw className={`w-4 h-4 ${isLoadingDir ? 'animate-spin text-blue-600' : ''}`} />
           </button>
+
+          <button
+            type="button"
+            onClick={() => fileInput.current?.click()}
+            className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1.5"
+          >
+            <UploadCloud className="w-4 h-4" />
+            Upload files
+          </button>
+          <input
+            ref={fileInput}
+            type="file"
+            multiple
+            hidden
+            onChange={(event) => {
+              queue.enqueue(Array.from(event.currentTarget.files ?? []), currentPath);
+              event.currentTarget.value = '';
+            }}
+          />
 
           {/* New Folder */}
           <button
@@ -290,7 +420,7 @@ function FileManager() {
 
       {/* New File Input Dropdown */}
       {isNewFileOpen && (
-        <form onSubmit={handleCreateFile} className="p-4 rounded-2xl bg-white border border-[#1a1522]/10 shadow-xs flex items-center gap-3 animate-fade-in">
+        <form onSubmit={(event) => void handleCreate(event, 'file')} className="p-4 rounded-2xl bg-white border border-[#1a1522]/10 shadow-xs flex items-center gap-3 animate-fade-in">
           <FileCode className="w-4 h-4 text-emerald-600" />
           <input
             type="text"
@@ -302,6 +432,7 @@ function FileManager() {
           />
           <button
             type="submit"
+            disabled={isChangingFiles}
             className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs font-mono transition-all shadow-xs"
           >
             Create File
@@ -318,7 +449,7 @@ function FileManager() {
 
       {/* New Folder Input Dropdown */}
       {isNewFolderOpen && (
-        <form onSubmit={handleCreateFolder} className="p-4 rounded-2xl bg-white border border-[#1a1522]/10 shadow-xs flex items-center gap-3 animate-fade-in">
+        <form onSubmit={(event) => void handleCreate(event, 'folder')} className="p-4 rounded-2xl bg-white border border-[#1a1522]/10 shadow-xs flex items-center gap-3 animate-fade-in">
           <Folder className="w-4 h-4 text-blue-600" />
           <input
             type="text"
@@ -330,6 +461,7 @@ function FileManager() {
           />
           <button
             type="submit"
+            disabled={isChangingFiles}
             className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs font-mono transition-all shadow-xs"
           >
             Create
@@ -394,6 +526,22 @@ function FileManager() {
         </div>
       </div>
 
+      <button
+        type="button"
+        onClick={() => fileInput.current?.click()}
+        className="w-full rounded-2xl border-2 border-dashed border-blue-200 bg-blue-50/70 px-4 py-5 text-center hover:border-blue-400 hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-blue-600"
+      >
+        <span className="flex items-center justify-center gap-2 text-sm font-bold text-blue-900">
+          <UploadCloud className="w-5 h-5" /> Drop files here or browse
+        </span>
+        <span className="mt-1 block text-xs text-blue-800">Multiple files · Up to 64 MB each · JARs go in /plugins</span>
+      </button>
+      <UploadQueue {...queue} />
+
+      {directoryError && (
+        <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{directoryError}</p>
+      )}
+
       {/* Files List Table */}
       <div className="rounded-2xl bg-white border border-[#1a1522]/10 shadow-xs overflow-hidden">
         {currentFiles.length === 0 ? (
@@ -404,7 +552,7 @@ function FileManager() {
                 <span>Reading directory from Indian Node...</span>
               </div>
             ) : (
-              'This directory is empty or syncing from server.'
+              directoryError ? 'Directory listing unavailable.' : 'This directory is empty.'
             )}
           </div>
         ) : (
@@ -414,10 +562,14 @@ function FileManager() {
               return (
                 <div
                   key={file.path}
-                  className="p-3.5 sm:p-4 flex items-center justify-between gap-4 hover:bg-[#f8f9fd] transition-colors group cursor-pointer"
-                  onClick={() => handleOpenItem(file)}
+                  className="p-3.5 sm:p-4 flex items-center justify-between gap-4 hover:bg-[#f8f9fd] transition-colors group"
+
                 >
-                  <div className="flex items-center gap-3.5 min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => void handleOpenItem(file)}
+                    className="flex flex-1 items-center gap-3.5 min-w-0 text-left"
+                  >
                     <div className="p-2 rounded-xl bg-[#f8f9fd] border border-[#1a1522]/10 flex-shrink-0">
                       {isReading ? (
                         <Loader2 className="w-4 h-4 text-blue-600 animate-spin" />
@@ -433,15 +585,15 @@ function FileManager() {
                         {file.modifiedAt}
                       </span>
                     </div>
-                  </div>
+                  </button>
 
                   <div className="flex items-center gap-4 text-xs text-[#1a1522]/60 flex-shrink-0">
                     <span className="font-mono text-[11px]">
                       {file.isDirectory ? 'Folder' : formatFileSize(file.sizeBytes)}
                     </span>
 
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {!file.isDirectory && (
+                    <div className="flex items-center gap-1 sm:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                      {!file.isDirectory && canEdit(file) && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -494,17 +646,22 @@ function FileManager() {
                 <button
                   type="button"
                   onClick={async () => {
-                    if (!editingFile) return;
+                    if (isSaving) return;
+                    if (editingFile.content !== editingFile.original && !window.confirm('Discard unsaved changes and reload?')) return;
+                    setEditorError(null);
                     setIsSaving(true);
                     try {
                       const c = await fetchFileContent(editingFile.path);
-                      setEditingFile({ ...editingFile, content: c });
+                      setEditingFile({ ...editingFile, content: c, original: c });
                       showNotice(`Reloaded ${editingFile.name} from disk.`);
+                    } catch (error) {
+                      setEditorError(message(error));
                     } finally {
                       setIsSaving(false);
                     }
                   }}
                   className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-zinc-200 text-xs font-bold flex items-center gap-1.5 transition-all font-mono"
+                  disabled={isSaving}
                   title="Reload content from server"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
@@ -513,7 +670,7 @@ function FileManager() {
 
                 <button
                   onClick={handleSaveEditor}
-                  disabled={isSaving}
+                  disabled={isSaving || editingFile.content === editingFile.original}
                   className="px-4 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white font-bold text-xs flex items-center gap-1.5 transition-all font-mono shadow-sm cursor-pointer"
                 >
                   <Save className="w-3.5 h-3.5" />
@@ -521,7 +678,7 @@ function FileManager() {
                 </button>
 
                 <button
-                  onClick={() => setEditingFile(null)}
+                  onClick={closeEditor}
                   className="p-1.5 rounded-lg hover:bg-white/10 text-zinc-400 hover:text-white transition-colors"
                   title="Close editor (Esc)"
                 >
@@ -545,6 +702,9 @@ function FileManager() {
               {/* Textarea Code Body */}
               <textarea
                 ref={textareaRef}
+                aria-label={"Contents of " + editingFile.name}
+                readOnly={isSaving}
+                wrap="off"
                 value={editingFile.content}
                 onChange={(e) =>
                   setEditingFile({ ...editingFile, content: e.target.value })
@@ -557,15 +717,16 @@ function FileManager() {
               />
             </div>
 
+            {editorError && <p role="alert" className="px-4 py-2 bg-red-950 text-sm text-red-200">{editorError}</p>}
             {/* Editor Status Footer */}
             <div className="px-4 py-2 bg-[#161b22] border-t border-white/10 flex items-center justify-between text-[11px] text-zinc-400">
               <div className="flex items-center gap-4">
                 <span>Lines: <strong className="text-zinc-200">{linesCount}</strong></span>
-                <span>Size: <strong className="text-zinc-200">{formatFileSize(editingFile.content.length)}</strong></span>
+                <span>Size: <strong className="text-zinc-200">{formatFileSize(new TextEncoder().encode(editingFile.content).length)}</strong></span>
               </div>
               <span className="text-emerald-400 font-semibold flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                Atomic write ready
+                {editingFile.content === editingFile.original ? 'Saved' : 'Unsaved changes'}
               </span>
             </div>
           </div>
@@ -599,6 +760,7 @@ function FileManager() {
               </button>
               <button
                 onClick={handleConfirmDelete}
+                disabled={isChangingFiles}
                 className="px-4 py-2 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-700 text-white shadow-sm flex items-center gap-1.5"
               >
                 <Trash2 className="w-3.5 h-3.5" />

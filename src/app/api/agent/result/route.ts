@@ -46,16 +46,20 @@ export async function POST(req: Request) {
       }
     }
 
-    const { error: updateError } = await supabase
+    const isUpload = body.file_upload === true;
+    const update = supabase
       .from('server_commands')
       .update({
         status,
         result: finalResult,
         executed_at: new Date().toISOString(),
+        ...(isUpload && { payload: { action: 'UPLOAD_FILE_CHUNK', file_manager: true } }),
       })
       .eq('id', command_id)
       .eq('server_id', server.id)
       .eq('status', 'FETCHED');
+    if (isUpload) update.eq('payload->>action', 'UPLOAD_FILE_CHUNK');
+    const { error: updateError } = await update;
 
     if (updateError) {
       return NextResponse.json({ error: updateError.message }, { status: 500 });
