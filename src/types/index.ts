@@ -36,6 +36,7 @@ export interface InventoryItem {
   maxDurability?: number;
   lore?: string[];
   enchantments?: { name: string; level: number }[];
+  enchantmentGlint?: boolean;
   iconUrl?: string;
   container?: InventoryItem[];
   containerPartial?: boolean;

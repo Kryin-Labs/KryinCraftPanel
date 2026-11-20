@@ -31,10 +31,17 @@ import { InventoryItem, MinecraftPlayer } from '@/types';
 import { formatLastSeen, playerUuid } from '@/lib/playerRecords';
 import { itemContainerKind, itemInventoryPreview, type InventoryPreview } from '@/lib/inventoryPreview';
 import {
+  formatEnchantmentLevel,
   getMobIconUrl,
+  minecraftStatGroups,
   parseMinecraftStats,
 } from '@/lib/minecraftAssets';
 import { MinecraftHeart, MinecraftDrumstick } from '@/components/MinecraftIcons';
+
+function itemHasGlint(item: InventoryItem) {
+  return item.enchantmentGlint ?? (Boolean(item.enchantments?.length) ||
+    item.id === 'minecraft:enchanted_book' || item.id === 'minecraft:enchanted_golden_apple');
+}
 
 export default function PlayerDetailPage() {
   const params = useParams<{ uuid: string }>();
@@ -63,6 +70,7 @@ export default function PlayerDetailPage() {
   const [loadError, setLoadError] = useState('');
   const [retry, setRetry] = useState(0);
   const [openInventories, setOpenInventories] = useState<InventoryPreview[]>([]);
+  const [showAllStats, setShowAllStats] = useState(false);
   const activeIdentity = player ? playerUuid(player.uuid) : uuid;
   const canControl = permissions.includes('console') && players.some((entry) =>
     activeIdentity ? playerUuid(entry.uuid) === activeIdentity : entry.uuid === player?.uuid);
@@ -70,6 +78,7 @@ export default function PlayerDetailPage() {
   useEffect(() => {
     setPlayer(null);
     setOpenInventories([]);
+    setShowAllStats(false);
     setLoading(true);
     setLoadError('');
     if (!activeServerId) {
@@ -150,10 +159,9 @@ export default function PlayerDetailPage() {
     action: async () => {},
   });
 
-  // Parse statistics from Minecraft JSON stats format
-  const parsedStats = useMemo(() => {
-    return parseMinecraftStats(player?.statistics?.rawStats || player?.statistics);
-  }, [player]);
+  const rawStats = player?.statistics?.rawStats ?? player?.statistics;
+  const parsedStats = useMemo(() => parseMinecraftStats(rawStats), [rawStats]);
+  const allStats = useMemo(() => showAllStats ? minecraftStatGroups(rawStats) : [], [rawStats, showAllStats]);
 
   if (loading) {
     return (
@@ -193,8 +201,9 @@ export default function PlayerDetailPage() {
 
   function showItemPreview(item: InventoryItem, target: HTMLElement, preview?: InventoryPreview) {
     const rect = target.getBoundingClientRect();
-    const below = rect.top < (preview || itemContainerKind(item.id) ? 210 : 75);
-    const edge = Math.min(108, window.innerWidth / 2);
+    const tooltipHeight = (preview || itemContainerKind(item.id) ? 116 : 36) + (item.enchantments?.length ?? 0) * 17;
+    const below = rect.top < tooltipHeight && window.innerHeight - rect.bottom > rect.top;
+    const edge = Math.min(132, window.innerWidth / 2);
     setHoveredItem({
       item, below, preview,
       x: Math.max(edge, Math.min(window.innerWidth - edge, rect.left + rect.width / 2)),
@@ -204,26 +213,30 @@ export default function PlayerDetailPage() {
   // Render Minecraft inventory slot
   const renderItemSlot = (item: InventoryItem | null, compact = false) => {
     const canPreview = Boolean(item && itemContainerKind(item.id));
-    const Slot = canPreview ? 'button' : 'div';
+    const hasEnchantments = Boolean(item?.enchantments?.length);
+    const interactive = canPreview || hasEnchantments;
+    const Slot = interactive ? 'button' : 'div';
     return (
       <Slot
-        type={canPreview ? 'button' : undefined}
-        aria-label={item && canPreview ? 'Open ' + item.displayName : undefined}
+        type={interactive ? 'button' : undefined}
+        aria-label={item && interactive ? (canPreview ? 'Open ' : 'Inspect ') + item.displayName : undefined}
+        aria-describedby={item && hoveredItem?.item === item ? 'player-inventory-tooltip' : undefined}
         title={item?.displayName}
-        onClick={item && canPreview ? () => {
+        onClick={item && interactive ? (event) => {
           const preview = itemInventoryPreview(item);
           if (preview) openPreview(preview);
+          else showItemPreview(item, event.currentTarget);
         } : undefined}
-        onMouseEnter={(event) => { if (item) showItemPreview(item, event.currentTarget); }}
-        onMouseLeave={() => setHoveredItem(null)}
-        onFocus={item && canPreview ? (event) => showItemPreview(item, event.currentTarget) : undefined}
+        onPointerEnter={(event) => { if (item && event.pointerType !== 'touch') showItemPreview(item, event.currentTarget); }}
+        onPointerLeave={(event) => { if (event.pointerType !== 'touch') setHoveredItem(null); }}
+        onFocus={item && interactive ? (event) => showItemPreview(item, event.currentTarget) : undefined}
         onBlur={() => setHoveredItem(null)}
         className={(compact ? 'size-8 sm:size-10' : 'w-10 h-10 sm:w-11 sm:h-11') +
           ' relative bg-[#273242] border-2 border-t-[#18212e] border-l-[#18212e] border-b-[#3d4c60] border-r-[#3d4c60] flex items-center justify-center select-none cursor-pointer transition-colors hover:bg-[#324054]'}
       >
         {item && (
           <>
-            <MinecraftItemIcon id={item.id || item.name} alt={item.displayName}
+            <MinecraftItemIcon id={item.id || item.name} alt={item.displayName} glint={itemHasGlint(item)}
               className="w-7 h-7 object-contain drop-shadow pointer-events-none" />
             {/* Stack count in authentic Minecraft text shadow */}
             {item.count > 1 && (
@@ -282,7 +295,9 @@ export default function PlayerDetailPage() {
   const hoveredPreview = hoveredItem ? hoveredItem.preview ?? itemInventoryPreview(hoveredItem.item) : null;
   const itemTooltip = hoveredItem && (
     <div
-      className={'fixed pointer-events-none z-50 -translate-x-1/2 rounded border-2 border-[#5000ff] bg-[#100010] px-2.5 py-1 text-white shadow-2xl space-y-0.5 ' +
+      role="tooltip"
+      id="player-inventory-tooltip"
+      className={'fixed pointer-events-none z-50 -translate-x-1/2 max-w-[min(16rem,calc(100vw_-_1rem))] rounded border-2 border-[#5000ff] bg-[#100010] px-2.5 py-1 text-white shadow-2xl space-y-0.5 ' +
         (hoveredItem.below ? '' : '-translate-y-full')}
       style={{ left: hoveredItem.x, top: hoveredItem.y }}
     >
@@ -294,7 +309,7 @@ export default function PlayerDetailPage() {
           <div className="mt-1 grid grid-cols-9 gap-0.5">
             {hoveredPreview.slots.slice(0, 27).map((item, index) => (
               <div key={index} className="relative grid size-5 place-items-center rounded-sm bg-white/10">
-                {item && <MinecraftItemIcon id={item.id} alt={item.displayName} className="size-4 object-contain" />}
+                {item && <MinecraftItemIcon id={item.id} alt={item.displayName} glint={itemHasGlint(item)} className="size-4 object-contain" />}
                 {item && item.count > 1 && <span className="absolute bottom-0 right-0 text-[8px] font-bold leading-none">{item.count}</span>}
               </div>
             ))}
@@ -320,7 +335,7 @@ export default function PlayerDetailPage() {
         <div className="pt-0.5 border-t border-[#3d0080]/60 space-y-0.5">
           {hoveredItem.item.enchantments.map((ench, i) => (
             <div key={i} className="text-[10px] text-[#c084fc]">
-              {ench.name} {ench.level}
+              {ench.name} {formatEnchantmentLevel(ench.level)}
             </div>
           ))}
         </div>
@@ -329,7 +344,8 @@ export default function PlayerDetailPage() {
   );
 
   return (
-    <div className="space-y-4 max-w-7xl mx-auto pb-12 font-sans text-slate-200">
+    <div className="space-y-4 max-w-7xl mx-auto pb-12 font-sans text-slate-200"
+      onPointerDown={() => setHoveredItem(null)}>
       {/* Back button */}
       <div>
         <Link
@@ -775,9 +791,15 @@ export default function PlayerDetailPage() {
       {/* 4. BOTTOM FULL-WIDTH: Statistics (Exact Match to Minecraft JSON stats) */}
       {/* ========================================================================= */}
       <div className="bg-[#212c3b] border border-[#2d3a4d] rounded-xl p-5 space-y-6 shadow-md">
-        <h2 className="text-xs font-bold text-white uppercase tracking-wider">
-          Statistics
-        </h2>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-xs font-bold text-white uppercase tracking-wider">Statistics</h2>
+          <button type="button" aria-expanded={showAllStats} aria-controls="player-statistics"
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-600 px-3 text-xs font-semibold text-sky-200 hover:bg-slate-700"
+            onClick={() => setShowAllStats((expanded) => !expanded)}>
+            {showAllStats ? 'Show less' : 'Show all'}
+            {showAllStats ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+          </button>
+        </div>
 
         {/* Top 4 Highlight Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -834,8 +856,25 @@ export default function PlayerDetailPage() {
           </div>
         </div>
 
-        {/* 4 Categorized Columns: Distance, Blocks Broken, Items Used, Entities Killed */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 pt-3 border-t border-slate-700/40">
+        {showAllStats && (
+          <div id="player-statistics" className="grid grid-cols-1 items-start gap-4 border-t border-slate-700/40 pt-4 sm:grid-cols-2 lg:grid-cols-3">
+            {allStats.length === 0 && <p className="text-xs text-slate-400">No saved statistics for this player yet.</p>}
+            {allStats.map((group) => (
+              <section key={group.key} className="min-w-0 rounded-lg border border-slate-700/60 bg-[#182331] p-3">
+                <h3 className="mb-2 text-xs font-bold text-sky-300">{group.name}</h3>
+                <dl className="divide-y divide-slate-700/40 text-xs">
+                  {group.rows.map((stat) => (
+                    <div key={stat.id} className="flex justify-between gap-3 py-1.5">
+                      <dt className="min-w-0 break-words text-slate-300">{stat.name}</dt>
+                      <dd className="shrink-0 font-mono text-slate-100">{stat.count.toLocaleString()}{stat.unit}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </section>
+            ))}
+          </div>
+        )}
+        {!showAllStats && <div id="player-statistics" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 pt-3 border-t border-slate-700/40">
           {/* Column 1: Distance travelled (in blocks) */}
           <div className="space-y-2">
             <h3 className="text-xs font-bold text-[#38bdf8]">
@@ -972,7 +1011,7 @@ export default function PlayerDetailPage() {
               )}
             </div>
           </div>
-        </div>
+        </div>}
       </div>
 
       {openInventories.length === 0 && itemTooltip}

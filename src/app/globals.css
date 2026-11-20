@@ -251,3 +251,26 @@ body {
     max-width: 100% !important;
   }
 }
+
+.minecraft-item-glint {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: url("https://assets.mcasset.cloud/26.3/assets/minecraft/textures/misc/enchanted_glint_item.png");
+  background-size: 180% 180%;
+  mask-position: center;
+  mask-repeat: no-repeat;
+  mask-size: contain;
+  image-rendering: pixelated;
+  mix-blend-mode: screen;
+  animation: minecraft-item-glint 4s linear infinite;
+}
+
+@keyframes minecraft-item-glint {
+  from { background-position: 0 0; }
+  to { background-position: 450% -225%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .minecraft-item-glint { animation: none; }
+}

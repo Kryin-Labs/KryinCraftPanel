@@ -78,6 +78,56 @@ export function formatMinecraftName(raw: string): string {
     .join(' ');
 }
 
+export function formatEnchantmentLevel(level: number): string {
+  if (!Number.isInteger(level) || level < 1 || level > 3999) return String(level);
+  let remaining = level;
+  let roman = '';
+  for (const [value, symbol] of [
+    [1000, 'M'], [900, 'CM'], [500, 'D'], [400, 'CD'], [100, 'C'], [90, 'XC'], [50, 'L'],
+    [40, 'XL'], [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I'],
+  ] as const) {
+    roman += symbol.repeat(Math.floor(remaining / value));
+    remaining %= value;
+  }
+  return roman;
+}
+
+const statGroupNames = new Map([
+  ['custom', 'General'],
+  ['mined', 'Blocks broken'],
+  ['crafted', 'Items crafted'],
+  ['used', 'Items used'],
+  ['broken', 'Items broken'],
+  ['picked_up', 'Items picked up'],
+  ['dropped', 'Items dropped'],
+  ['killed', 'Entities killed'],
+  ['killed_by', 'Killed by'],
+]);
+
+export function minecraftStatGroups(raw: unknown) {
+  if (!isStatObject(raw)) return [];
+  const stats = isStatObject(raw.stats) ? raw.stats : raw;
+  return Object.entries(stats).flatMap(([key, values]) => {
+    if (!isStatObject(values)) return [];
+    const category = key.replace(/^minecraft:/, '');
+    const rows = Object.entries(values)
+      .flatMap(([id, count]) => {
+        if (typeof count !== 'number' || !Number.isFinite(count)) return [];
+        const distance = category === 'custom' && id.endsWith('_one_cm');
+        const time = category === 'custom' &&
+          /^(?:minecraft:)?(?:play_time|play_one_minute|total_world_time|time_since_death|time_since_rest|sneak_time)$/.test(id);
+        const name = formatMinecraftName(distance ? id.slice(0, -'_one_cm'.length) : id);
+        return [{ id, name, count, unit: distance ? ' cm' : time ? ' ticks' : '' }];
+      })
+      .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name));
+    return rows.length ? [{ key, name: statGroupNames.get(category) ?? formatMinecraftName(key), rows }] : [];
+  });
+}
+
+function isStatObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
 // Parse real Minecraft stats file (world/stats/<UUID>.json)
 export interface ParsedPlayerStats {
   playtimeText: string;

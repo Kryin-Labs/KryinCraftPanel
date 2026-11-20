@@ -477,6 +477,35 @@ class PlayerNbt:
         return self.value(10)
 
 
+def player_item_enchantments(components, tag):
+    levels = {}
+    for key in ("enchantments", "stored_enchantments"):
+        component = components.get("minecraft:" + key, components.get(key))
+        if isinstance(component, dict):
+            values = component.get("levels", component)
+            if isinstance(values, dict):
+                for enchantment_id, level in values.items():
+                    if type(level) is int and level >= 0:
+                        levels[enchantment_id.removeprefix("minecraft:")] = level
+
+    for key in ("Enchantments", "StoredEnchantments"):
+        entries = tag.get(key)
+        if isinstance(entries, list):
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+                enchantment_id, level = entry.get("id"), entry.get("lvl")
+                if isinstance(enchantment_id, str) and type(level) is int and level >= 0:
+                    levels.setdefault(enchantment_id.removeprefix("minecraft:"), level)
+
+    return [
+        {"name": key.rsplit(":", 1)[-1].rsplit("/", 1)[-1].replace("_", " ").title(), "level": level}
+        for key, level in levels.items()
+        if len(key) <= 180 and re.fullmatch(r"(?:[a-z0-9_.-]+:)?[a-z0-9_./-]+", key)
+        and key != "show_in_tooltip"
+    ]
+
+
 def player_item(stack, slot, depth=0, container_budget=None):
     item_id = stack.get("id")
     count = stack.get("count", stack.get("Count", 1))
@@ -487,6 +516,17 @@ def player_item(stack, slot, depth=0, container_budget=None):
     name = item_id.split(":", 1)[1]
     item = {"id": item_id, "name": name, "displayName": name.rsplit("/", 1)[-1].replace("_", " ").title(),
             "count": count, "slot": slot}
+    components = stack.get("components")
+    components = components if isinstance(components, dict) else {}
+    tag = stack.get("tag")
+    tag = tag if isinstance(tag, dict) else {}
+    enchantments = player_item_enchantments(components, tag)
+    if enchantments:
+        item["enchantments"] = enchantments
+    glint = components.get("minecraft:enchantment_glint_override", components.get("enchantment_glint_override"))
+    if glint in (0, 1):
+        item["enchantmentGlint"] = bool(glint)
+
     bundle = item_id.startswith("minecraft:") and (name == "bundle" or name.endswith("_bundle"))
     container = item_id.startswith("minecraft:") and (
         name in ("chest", "trapped_chest", "barrel", "shulker_box") or name.endswith("_shulker_box")
@@ -494,11 +534,9 @@ def player_item(stack, slot, depth=0, container_budget=None):
     if not (bundle or container):
         return item
 
-    components = stack.get("components")
-    component = "minecraft:bundle_contents" if bundle else "minecraft:container"
-    modern = components.get(component, components.get(component.split(":", 1)[1])) if isinstance(components, dict) else None
-    tag = stack.get("tag")
-    legacy_parent = tag if bundle else tag.get("BlockEntityTag") if isinstance(tag, dict) else None
+    component = "bundle_contents" if bundle else "container"
+    modern = components.get("minecraft:" + component, components.get(component))
+    legacy_parent = tag if bundle else tag.get("BlockEntityTag")
     legacy = legacy_parent.get("Items") if isinstance(legacy_parent, dict) else None
     entries = modern if isinstance(modern, list) else legacy
     if not isinstance(entries, list) or not entries:

@@ -3,7 +3,9 @@
 import { useState } from 'react';
 import { itemTextureSources } from '@/lib/minecraftAssets';
 
-function Texture({ id, alt, className }: { id: string; alt: string; className: string }) {
+type ItemIconProps = { id: string; alt: string; className: string; glint?: boolean };
+
+function Texture({ id, alt, className, glint }: ItemIconProps) {
   const [index, setIndex] = useState(0);
   const source = itemTextureSources(id)[index];
   if (!source) {
@@ -14,10 +16,18 @@ function Texture({ id, alt, className }: { id: string; alt: string; className: s
       </span>
     );
   }
-  return <img src={source} alt={alt} className={className} referrerPolicy="no-referrer" style={{ imageRendering: 'pixelated' }}
+  const icon = <img src={source} alt={alt} className={glint ? 'size-full object-contain' : className}
+    referrerPolicy="no-referrer" style={{ imageRendering: 'pixelated' }}
     onError={() => setIndex((value) => value + 1)} />;
+
+  return glint ? (
+    <span className={className + ' relative isolate inline-grid'}>
+      {icon}
+      <span aria-hidden="true" className="minecraft-item-glint" style={{ maskImage: `url("${source}")` }} />
+    </span>
+  ) : icon;
 }
 
-export function MinecraftItemIcon({ id, alt, className }: { id: string; alt: string; className: string }) {
-  return <Texture key={id} id={id} alt={alt} className={className} />;
+export function MinecraftItemIcon(props: ItemIconProps) {
+  return <Texture key={props.id} {...props} />;
 }
