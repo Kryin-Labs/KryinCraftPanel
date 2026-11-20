@@ -33,6 +33,7 @@ import { toMinecraftPlayer, type PlayerRecord } from './playerRecords';
 import { confirmPowerAction, deliverPanelCommand, type CommandReceipt, type PowerAction } from './commandDelivery';
 import { deviceWindowMs, type DeviceState } from './deviceStatus';
 import { requestJson } from './requestJson';
+import { runFileCommand } from './fileManagerClient';
 
 interface PowerProgress {
   action: PowerAction;
@@ -414,40 +415,25 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
   const stopServer = () => runPowerAction('STOP');
   const restartServer = () => runPowerAction('RESTART');
   const killServer = () => runPowerAction('KILL');
-  const fetchDirectory = async (dir: string): Promise<ServerFile[]> => {
-    try {
-      const serverParam = activeServerId ? `&serverId=${encodeURIComponent(activeServerId)}` : '';
-      const res = await fetch(`/api/server/files?action=list&dir=${encodeURIComponent(dir)}${serverParam}`);
-      if (!res.ok) {
-        setFiles((prev) => ({ ...prev, [dir]: [] }));
-        return [];
-      }
-      const json = await res.json();
-      if (json.success && json.data && Array.isArray(json.data.files)) {
-        const fetchedFiles: ServerFile[] = json.data.files;
-        setFiles((prev) => ({ ...prev, [dir]: fetchedFiles }));
-        return fetchedFiles;
-      }
-    } catch (e) {
-      console.warn('Directory fetch warning:', e);
-    }
-    return files[dir] || [];
+  const fetchDirectory = async (directory: string): Promise<ServerFile[]> => {
+    const result = await runFileCommand<{
+      files: (Omit<ServerFile, 'sizeBytes' | 'modifiedAt'> & { size: number; modified: string })[];
+    }>(activeServerId || '', { read: { action: 'list', dir: directory } });
+    if (!Array.isArray(result?.files)) throw new Error('The device did not return a directory listing.');
+    const entries = result.files.map(({ size, modified, ...entry }) => ({
+      ...entry,
+      extension: entry.extension?.toLowerCase(),
+      sizeBytes: size,
+      modifiedAt: modified,
+    }));
+    setFiles((prev) => ({ ...prev, [directory]: entries }));
+    return entries;
   };
 
   const fetchFileContent = async (path: string): Promise<string> => {
-    try {
-      const serverParam = activeServerId ? `&serverId=${encodeURIComponent(activeServerId)}` : '';
-      const res = await fetch(`/api/server/files?action=read&path=${encodeURIComponent(path)}${serverParam}`);
-      if (!res.ok) return '';
-      const json = await res.json();
-      if (json.success && json.data?.content !== undefined) {
-        const content = json.data.content;
-        return content;
-      }
-    } catch (e) {
-      console.warn('File read warning:', e);
-    }
-    return '';
+    const result = await runFileCommand<{ content: string }>(activeServerId || '', { read: { action: 'read', path } });
+    if (typeof result?.content !== 'string') throw new Error('The device did not return the file contents.');
+    return result.content;
   };
 
   const sendConsoleCommand = async (cmd: string, onStage?: (message: string) => void) => {
@@ -567,98 +553,30 @@ export function ServerStoreProvider({ children }: { children: React.ReactNode })
     addAudit('PLAYER_GAMEMODE', target, `Changed gamemode to ${mode}`);
   };
 
+  const writeServerFile = async (write: Record<string, unknown>) => {
+    const result = await runFileCommand<{ success?: boolean }>(activeServerId || '', { write });
+    if (!result?.success) throw new Error('The device did not confirm the file change.');
+  };
+
   const saveFileContent = async (path: string, content: string) => {
+    await writeServerFile({ action: 'save', path, content });
     setFileContents((prev) => ({ ...prev, [path]: content }));
-    await fetch('/api/server/files', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'save',
-        serverId: activeServerId || serverInfo.id,
-        path,
-        content,
-      }),
-    });
     addAudit('FILE_SAVE', path, `Saved file (${content.length} characters)`);
   };
 
   const deleteFile = async (path: string) => {
-    const parentDir = path.substring(0, path.lastIndexOf('/')) || '/';
-    setFiles((prev) => {
-      const existing = prev[parentDir] || [];
-      return {
-        ...prev,
-        [parentDir]: existing.filter((f) => f.path !== path),
-      };
-    });
-    await fetch('/api/server/files', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'delete',
-        serverId: activeServerId || serverInfo.id,
-        path,
-      }),
-    });
+    await writeServerFile({ action: 'delete', path });
     addAudit('FILE_DELETE', path, 'Deleted file from server');
   };
 
-  const createFolder = async (parentPath: string, name: string) => {
-    const cleanParent = parentPath === '/' ? '' : parentPath;
-    const fullPath = `${cleanParent}/${name}`;
-    const newDir: ServerFile = {
-      name,
-      path: fullPath,
-      isDirectory: true,
-      sizeBytes: 4096,
-      modifiedAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
-    };
-    setFiles((prev) => ({
-      ...prev,
-      [parentPath]: [...(prev[parentPath] || []), newDir],
-      [fullPath]: [],
-    }));
-    await fetch('/api/server/files', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'create_folder',
-        serverId: activeServerId || serverInfo.id,
-        directory: parentPath,
-        name,
-      }),
-    });
-    addAudit('CREATE_FOLDER', fullPath, 'Created directory');
+  const createFolder = async (directory: string, name: string) => {
+    await writeServerFile({ action: 'create_folder', directory, name });
+    addAudit('CREATE_FOLDER', directory.replace(/\/$/, '') + '/' + name, 'Created directory');
   };
 
-  const createFile = async (parentPath: string, name: string, content = '') => {
-    const cleanParent = parentPath === '/' ? '' : parentPath;
-    const fullPath = `${cleanParent}/${name}`;
-    const newF: ServerFile = {
-      name,
-      path: fullPath,
-      isDirectory: false,
-      sizeBytes: content.length,
-      modifiedAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
-      extension: name.split('.').pop() || '',
-    };
-    setFiles((prev) => ({
-      ...prev,
-      [parentPath]: [...(prev[parentPath] || []), newF],
-    }));
-    setFileContents((prev) => ({ ...prev, [fullPath]: content }));
-    await fetch('/api/server/files', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'create_file',
-        serverId: activeServerId || serverInfo.id,
-        directory: parentPath,
-        name,
-        content,
-      }),
-    });
-    addAudit('CREATE_FILE', fullPath, 'Created file');
+  const createFile = async (directory: string, name: string, content = '') => {
+    await writeServerFile({ action: 'create_file', directory, name, content });
+    addAudit('CREATE_FILE', directory.replace(/\/$/, '') + '/' + name, 'Created file');
   };
 
   const addWhitelistPlayer = async (username: string) => {

@@ -855,6 +855,175 @@ def launch_minecraft():
                 raise
             time.sleep(0.5)
 
+UPLOAD_CHUNK_BYTES = 2 * 1024 * 1024
+UPLOAD_PART_PREFIX = ".kryin-upload-"
+MAX_EDITOR_BYTES = 1024 * 1024
+
+
+def valid_file_name(name):
+    return (isinstance(name, str) and name not in ("", ".", "..")
+            and not name.startswith(UPLOAD_PART_PREFIX)
+            and len(name.encode("utf-8")) <= 255
+            and not any(c in "/\\" or ord(c) < 32 or ord(c) == 127 for c in name))
+
+
+def server_file_path(path):
+    if not isinstance(path, str) or not path.startswith("/"):
+        raise ValueError("Invalid server path.")
+    root = os.path.realpath(SERVER_DIR)
+    parts = path[1:].split("/") if path != "/" else []
+    if not all(valid_file_name(part) for part in parts):
+        raise ValueError("Invalid server path.")
+    target = os.path.join(root, *parts)
+    if os.path.commonpath((root, target)) != root:
+        raise ValueError("Invalid server path.")
+    if os.path.realpath(target) != target:
+        raise ValueError("Symbolic links are unavailable in the file manager.")
+    return target
+
+
+def read_editable_file(target):
+    if not os.path.isfile(target):
+        raise ValueError("File not found.")
+    with open(target, "rb") as file:
+        data = file.read(MAX_EDITOR_BYTES + 1)
+    if len(data) > MAX_EDITOR_BYTES:
+        raise ValueError("The editor supports text files up to 1 MB.")
+    if b"\0" in data or data.startswith((b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08")):
+        raise ValueError("Binary files cannot be edited.")
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        raise ValueError("Only UTF-8 text files can be edited.") from None
+
+
+def upload_file_chunk(directory, name, payload):
+    size, offset = payload.get("size"), payload.get("offset")
+    upload_id, encoded = payload.get("upload_id"), payload.get("chunk")
+    if (type(size) is not int or not 0 <= size <= 64 * 1024 * 1024
+            or type(offset) is not int or not 0 <= offset <= size
+            or (size and offset == size) or offset % UPLOAD_CHUNK_BYTES
+            or not isinstance(upload_id, str) or not re.fullmatch(r"[a-f0-9-]{36}", upload_id)
+            or not isinstance(encoded, str) or len(encoded) > 4 * ((UPLOAD_CHUNK_BYTES + 2) // 3)):
+        raise ValueError("Invalid upload chunk.")
+    data = base64.b64decode(encoded, validate=True)
+    if len(data) != min(UPLOAD_CHUNK_BYTES, size - offset):
+        raise ValueError("Unexpected upload chunk length.")
+
+    target = os.path.join(directory, name)
+    if os.path.lexists(target):
+        raise ValueError("A file or folder with this name already exists.")
+
+    # Keep partial uploads beside their destination for atomic publication.
+    key = hashlib.sha256(f"{upload_id}/{name}/{size}".encode("utf-8")).hexdigest()
+    stage = os.path.join(directory, UPLOAD_PART_PREFIX + key + ".part")
+    if offset == 0:
+        with os.scandir(directory) as entries:
+            for entry in entries:
+                if (re.fullmatch(r"\.kryin-upload-[a-f0-9]{64}\.part", entry.name)
+                        and entry.is_file(follow_symlinks=False)
+                        and entry.stat(follow_symlinks=False).st_mtime < time.time() - 3600):
+                    os.unlink(entry.path)
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    else:
+        flags = os.O_WRONLY
+
+    if os.path.islink(stage):
+        raise ValueError("Invalid upload staging file.")
+    flags |= getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
+    with os.fdopen(os.open(stage, flags, 0o600), "wb") as file:
+        info = os.fstat(file.fileno())
+        if not stat.S_ISREG(info.st_mode) or info.st_size != offset:
+            raise ValueError("Upload is incomplete. Retry the file from the beginning.")
+        file.seek(offset)
+        file.write(data)
+    received = offset + len(data)
+    if received == size:
+        if os.name == "nt":
+            # Windows rename refuses to replace an existing destination.
+            os.rename(stage, target)
+        else:
+            try:
+                os.link(stage, target)
+            finally:
+                os.unlink(stage)
+    return {"received": received, "complete": received == size}
+
+
+def run_file_operation(action, payload):
+    if action in {"LIST_FILES", "CREATE_FOLDER", "CREATE_FILE", "UPLOAD_FILE_CHUNK"}:
+        path = payload.get("directory", "/")
+        directory = server_file_path(path)
+        if not os.path.isdir(directory):
+            raise ValueError("Directory not found.")
+        if action == "LIST_FILES":
+            entries = []
+            with os.scandir(directory) as iterator:
+                for entry in iterator:
+                    if not valid_file_name(entry.name) or entry.is_symlink():
+                        continue
+                    try:
+                        info = entry.stat(follow_symlinks=False)
+                    except FileNotFoundError:
+                        continue
+                    is_dir = stat.S_ISDIR(info.st_mode)
+                    if not is_dir and not stat.S_ISREG(info.st_mode):
+                        continue
+                    entries.append({
+                        "name": entry.name,
+                        "path": path.rstrip("/") + "/" + entry.name,
+                        "isDirectory": is_dir,
+                        "size": 0 if is_dir else info.st_size,
+                        "modified": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(info.st_mtime)),
+                        "extension": "" if is_dir else os.path.splitext(entry.name)[1].lstrip("."),
+                    })
+            entries.sort(key=lambda entry: (not entry["isDirectory"], entry["name"].lower()))
+            return {"directory": path, "files": entries}
+
+        name = payload.get("name")
+        if not valid_file_name(name):
+            raise ValueError("Invalid file or folder name.")
+        target = os.path.join(directory, name)
+        if action == "UPLOAD_FILE_CHUNK":
+            return upload_file_chunk(directory, name, payload)
+        if action == "CREATE_FOLDER":
+            os.mkdir(target)
+        else:
+            content = payload.get("content", "").encode("utf-8")
+            with open(target, "xb") as file:
+                file.write(content)
+        return {"success": True}
+
+    path = payload.get("path", "")
+    target = server_file_path(path)
+    if path == "/":
+        raise ValueError("Select a file or folder inside the server directory.")
+    if action == "READ_FILE":
+        return {"path": path, "name": os.path.basename(target), "content": read_editable_file(target)}
+    if action == "DELETE_FILE":
+        if os.path.isdir(target):
+            import shutil
+            shutil.rmtree(target)
+        else:
+            os.unlink(target)
+        return {"success": True}
+
+    read_editable_file(target)
+    content = payload.get("content", "").encode("utf-8")
+    temporary_path = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=os.path.dirname(target), prefix=UPLOAD_PART_PREFIX, delete=False) as file:
+            temporary_path = file.name
+            file.write(content)
+        os.chmod(temporary_path, stat.S_IMODE(os.stat(target).st_mode))
+        os.replace(temporary_path, target)
+        temporary_path = None
+    finally:
+        if temporary_path is not None:
+            os.unlink(temporary_path)
+    return {"success": True}
+
+
 def poll_and_execute_commands():
     global current_status, transition_start_time, log_file_pos
     res = api_get("/api/agent/commands")
@@ -1139,143 +1308,20 @@ def poll_and_execute_commands():
                 if temporary_path is not None:
                     os.unlink(temporary_path)
 
-        elif cmd_type == "SAVE_FILE":
-            rel_path = payload.get("path", "").lstrip("/\\")
-            content = payload.get("content", "")
-            target_path = os.path.abspath(os.path.join(SERVER_DIR, rel_path))
-            server_root = os.path.abspath(SERVER_DIR)
-            if target_path.startswith(server_root):
-                try:
-                    os.makedirs(os.path.dirname(target_path), exist_ok=True)
-                    temp_path = f"{target_path}.tmp.{int(time.time())}"
-                    with open(temp_path, "w", encoding="utf-8") as f:
-                        f.write(content)
-                    os.replace(temp_path, target_path)
-                    output = json.dumps({"success": True, "path": ("/" + rel_path).replace("\\", "/"), "size": len(content)})
-                except Exception as e:
-                    output = f"Failed to save file: {e}"
-                    success = False
-            else:
-                output = "Security error: File path outside server directory."
+        elif cmd_type in {"LIST_FILES", "READ_FILE", "SAVE_FILE", "DELETE_FILE",
+                          "CREATE_FOLDER", "CREATE_FILE", "UPLOAD_FILE_CHUNK"}:
+            try:
+                output = json.dumps(run_file_operation(cmd_type, payload))
+            except (OSError, ValueError, TypeError) as e:
                 success = False
-
-        elif cmd_type == "LIST_FILES":
-            rel_dir = payload.get("directory", "").strip().lstrip("/\\")
-            target_dir = os.path.abspath(os.path.join(SERVER_DIR, rel_dir)) if rel_dir else os.path.abspath(SERVER_DIR)
-            server_root = os.path.abspath(SERVER_DIR)
-            if target_dir.startswith(server_root) and os.path.isdir(target_dir):
-                try:
-                    entries = []
-                    with os.scandir(target_dir) as it:
-                        for entry in it:
-                            try:
-                                stat = entry.stat()
-                                is_dir = entry.is_dir()
-                                entries.append({
-                                    "name": entry.name,
-                                    "path": ("/" + os.path.relpath(entry.path, server_root)).replace("\\", "/"),
-                                    "isDirectory": is_dir,
-                                    "size": 0 if is_dir else stat.st_size,
-                                    "modified": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(stat.st_mtime)),
-                                    "extension": "" if is_dir else os.path.splitext(entry.name)[1].lstrip("."),
-                                })
-                            except Exception:
-                                continue
-                    entries.sort(key=lambda x: (not x["isDirectory"], x["name"].lower()))
-                    output = json.dumps({
-                        "directory": ("/" + rel_dir).rstrip("/") if rel_dir else "/",
-                        "files": entries,
-                    })
-                except Exception as e:
-                    output = f"Failed to list directory: {e}"
-                    success = False
-            else:
-                # If target directory doesn't exist yet, return empty list
-                output = json.dumps({
-                    "directory": ("/" + rel_dir).rstrip("/") if rel_dir else "/",
-                    "files": [],
-                })
-
-        elif cmd_type == "READ_FILE":
-            rel_path = payload.get("path", "").strip().lstrip("/\\")
-            target_path = os.path.abspath(os.path.join(SERVER_DIR, rel_path))
-            server_root = os.path.abspath(SERVER_DIR)
-            if target_path.startswith(server_root) and os.path.isfile(target_path):
-                try:
-                    max_bytes = 4 * 1024 * 1024  # 4MB max text read
-                    with open(target_path, "r", encoding="utf-8", errors="replace") as f:
-                        file_content = f.read(max_bytes)
-                    output = json.dumps({
-                        "path": ("/" + rel_path).replace("\\", "/"),
-                        "name": os.path.basename(target_path),
-                        "content": file_content,
-                    })
-                except Exception as e:
-                    output = f"Failed to read file: {e}"
-                    success = False
-            else:
-                output = "File not found or outside server directory."
-                success = False
-
-        elif cmd_type == "DELETE_FILE":
-            rel_path = payload.get("path", "").strip().lstrip("/\\")
-            target_path = os.path.abspath(os.path.join(SERVER_DIR, rel_path))
-            server_root = os.path.abspath(SERVER_DIR)
-            if target_path.startswith(server_root) and target_path != server_root:
-                try:
-                    if os.path.isdir(target_path):
-                        import shutil
-                        shutil.rmtree(target_path)
-                    elif os.path.isfile(target_path):
-                        os.remove(target_path)
-                    output = json.dumps({"success": True, "path": ("/" + rel_path).replace("\\", "/")})
-                except Exception as e:
-                    output = f"Failed to delete: {e}"
-                    success = False
-            else:
-                output = "Cannot delete: target outside server directory."
-                success = False
-
-        elif cmd_type == "CREATE_FOLDER":
-            rel_dir = payload.get("directory", "").strip().lstrip("/\\")
-            name = payload.get("name", "").strip().replace("/", "").replace("\\", "")
-            target_dir = os.path.abspath(os.path.join(SERVER_DIR, rel_dir, name))
-            server_root = os.path.abspath(SERVER_DIR)
-            if target_dir.startswith(server_root) and name:
-                try:
-                    os.makedirs(target_dir, exist_ok=True)
-                    output = json.dumps({"success": True, "path": ("/" + os.path.relpath(target_dir, server_root)).replace("\\", "/")})
-                except Exception as e:
-                    output = f"Failed to create folder: {e}"
-                    success = False
-            else:
-                output = "Invalid folder path."
-                success = False
-
-        elif cmd_type == "CREATE_FILE":
-            rel_dir = payload.get("directory", "").strip().lstrip("/\\")
-            name = payload.get("name", "").strip().replace("/", "").replace("\\", "")
-            content = payload.get("content", "")
-            target_file = os.path.abspath(os.path.join(SERVER_DIR, rel_dir, name))
-            server_root = os.path.abspath(SERVER_DIR)
-            if target_file.startswith(server_root) and name:
-                try:
-                    os.makedirs(os.path.dirname(target_file), exist_ok=True)
-                    with open(target_file, "w", encoding="utf-8") as f:
-                        f.write(content)
-                    output = json.dumps({"success": True, "path": ("/" + os.path.relpath(target_file, server_root)).replace("\\", "/")})
-                except Exception as e:
-                    output = f"Failed to create file: {e}"
-                    success = False
-            else:
-                output = "Invalid file path."
-                success = False
+                output = str(e)
 
         # Report result back with EXECUTED (satisfies server_commands check constraint)
         api_post("/api/agent/result", {
             "command_id": cmd_id,
             "status": "EXECUTED" if success else "FAILED",
             "result_output": output,
+            "file_upload": cmd_type == "UPLOAD_FILE_CHUNK",
         })
         print(f"[✓] Command {cmd_id} finished: {output[:120]}")
 
